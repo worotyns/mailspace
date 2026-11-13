@@ -24,3 +24,5 @@ Deployment procedure and limits: SERVER_SETUP.md. Record actual validation in VA
 Optional JEV (ADR-0020), consented selected-excerpt classification (ADR-0021) and Litestream overlay (ADR-0022) are testing features, not a completed security audit or hosted-provider availability guarantee. Litestream covers SQLite only; keyring/browser exports remain separate.
 
 1.0 work is tracked in [RELEASE_1_0_PLAN.md](RELEASE_1_0_PLAN.md). Binary OpenPGP/MIME read support is implemented in ADR-0023 and detached signature reading in ADR-0024; detached-only sending, secure quoting and the real Thunderbird matrix remain open.
+
+The testing branch also implements explicit cached-message Jev previews and an incoming Unsorted queue with an inbox-zero state (ADR-0025), fresh new connections with explicit bounded recent import (ADR-0026), and reviewed local header rules (ADR-0027). HTML-only readers automatically show inert text; formatted preview is optional. Two synthetic live Jev Decisions requests passed under explicit user authorization; this is not a production-mail accuracy or general provider availability claim.
