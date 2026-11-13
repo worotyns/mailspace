@@ -40,6 +40,7 @@ func TestClassifierStartupErrorsIdentifyMissingConfigurationWithoutSecrets(t *te
 	for _, tc := range []struct{ name, provider, model, token, endpoint, want string }{
 		{"missing model", "openrouter", "", "synthetic-secret-canary", "", "MAILSPACE_JEV_MODEL"},
 		{"missing token", "openrouter", "typesafe-ai/jev-1.3", "", "", "OpenRouter requires MAILSPACE_JEV_API_TOKEN"},
+		{"wrong namespace", "openrouter", "typesafe-ai/jev-1.3", "synthetic-secret-canary", "", "wrong OpenRouter namespace"},
 		{"missing local endpoint", "local", "synthetic/model", "", "", "MAILSPACE_JEV_ENDPOINT is required"},
 		{"unsafe local endpoint", "local", "synthetic/model", "synthetic-secret-canary", "http://remote.example.test/v1/chat/completions", "invalid MAILSPACE_JEV_ENDPOINT"},
 	} {

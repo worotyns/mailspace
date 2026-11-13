@@ -64,7 +64,16 @@ func decisions(store *identity.Store, a *accounts.Service, syncer *mailsync.Serv
 	if strings.ContainsAny(key, "\r\n\x00") {
 		return nil, errors.New("JEV API token must not contain embedded line breaks or NUL")
 	}
-	provider, err := decision.NewChatProvider(endpoint, model, key, kind == "openrouter")
+	var provider decision.Provider
+	var err error
+	if kind == "openrouter" {
+		if strings.HasPrefix(model, "typesafe-ai/jev") {
+			return nil, errors.New("MAILSPACE_JEV_MODEL uses the wrong OpenRouter namespace: use an exact typesafe/jev model ID from the OpenRouter catalog, for example typesafe/jev-1.13")
+		}
+		provider, err = decision.NewOpenRouterProvider(model, key)
+	} else {
+		provider, err = decision.NewChatProvider(endpoint, model, key, false)
+	}
 	if err != nil {
 		return nil, errors.New("invalid MAILSPACE_JEV_ENDPOINT: use a full HTTPS chat-completions URL without credentials, query or fragment; HTTP is allowed only on numeric loopback for a local provider")
 	}

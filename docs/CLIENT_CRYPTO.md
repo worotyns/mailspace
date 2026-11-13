@@ -14,7 +14,7 @@ Interface sketch (internal design, not public SDK): decryptMime(ciphertext), ver
 
 Mail encryption/decryption/MIME remains MS-006: `localKeyVault=true` does not imply `openpgp=true`. Existing encrypted mail stays opaque and ordinary compose still requires explicit plaintext consent.
 
-MS-006 integrated alpha is now available at `/secure/compose` and `/secure/read`: signed encrypted text, authorized opaque MIME submission, local decryption and embedded-signature labels. No server/private-key/decrypted-content API or plaintext autosave. Full compatibility/detached-signature/Thunderbird gates remain open; see ADR-0013.
+MS-006 integrated alpha is now available at `/secure/compose` and `/secure/read`: signed encrypted text, authorized opaque MIME submission, local decryption and embedded-signature labels. No private-key API or plaintext autosave. The later ADR-0021 adds a dedicated consented selected-excerpt classification API, separate from generic crypto/HTMX flows. Full compatibility/detached-signature/Thunderbird gates remain open; see ADR-0013.
 
 `web/crypto/drafts.mjs` stores only signed ciphertext (20 drafts / 16 MiB) in a separate user namespace; subject/recipients/body/attachment bytes and filenames are inside encryption. Explicit save/load only, no server/IMAP drafts. File input is unnamed and attachments enter the same locally encrypted MIME; ADR-0014.
 
@@ -23,3 +23,7 @@ Text-first HTML handling is defined in ADR-0015. The only approved decrypted HTM
 ## Inline timeline composer (ADR-0018)
 
 Write first, choose Encrypt beside Send. Ordinary replies require the explicit Send unencrypted action. Encrypted mode removes the textarea name, disables HTMX for the form and captures submission; only explicit metadata plus encrypted MIME enters JSON. A compact local key/passphrase dialog has no named private controls. Missing/changed/untrusted recipient keys block encryption and link to Local keys. Unlocking does not send. Encrypted-parent replies cannot switch to ordinary plaintext. Hidden page, lock broadcast, expiry, inactivity, navigation and HTMX replacement lock/dispose the local controller. An uncertain ciphertext POST stays submitted; check Outbox before any new attempt. Attachments and encrypted local drafts remain in the advanced composer in this slice.
+
+## Explicit selected-excerpt exception
+
+See [ADR-0021](adr/0021.md) and [AUTOMATION.md](AUTOMATION.md). After local decryption, a user can approve one exact excerpt for the displayed classifier. Only that excerpt crosses the backend in memory; keys/passphrases/rest of mail stay local. No excerpt/hash/headers persist in trace. Results always require human approval. This does not permit generic decrypted exports, named form fields, HTMX serialization or silent background calls.

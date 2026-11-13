@@ -23,3 +23,9 @@ jobs:
       - run: go test -race ./...
       - run: docker compose config --quiet
       - run: docker compose build
+      - name: Validate optional backup overlay
+        run: docker compose -f compose.yaml -f compose.backup.yaml config --quiet
+        env:
+          LITESTREAM_REPLICA_URL: file:///backups/mailspace
+      - name: Replicate and restore ongoing SQLite writes
+        run: scripts/check-backup.sh

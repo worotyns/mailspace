@@ -38,8 +38,8 @@ All JEV variables are optional. Empty `MAILSPACE_JEV_PROVIDER` means no classifi
 
 | Variable | Meaning | Example / default |
 |---|---|---|
-| `MAILSPACE_JEV_PROVIDER` | Classifier adapter. `openrouter` uses the fixed HTTPS OpenRouter chat-completions endpoint; `local` uses the explicit compatible endpoint below. | Empty = disabled; `openrouter` or `local`. |
-| `MAILSPACE_JEV_MODEL` | Exact model identifier understood by that endpoint. Must support strict structured JSON responses. OpenRouter routing additionally requires support for the configured privacy policy. No default model or automatic fallback to a weaker policy. | Your chosen provider/model identifier; required when provider enabled. |
+| `MAILSPACE_JEV_PROVIDER` | Classifier adapter. `openrouter` uses fixed HTTPS OpenRouter endpoints (Decisions for TypeSafe Jev, chat completions for ordinary models); `local` uses the explicit compatible endpoint below. | Empty = disabled; `openrouter` or `local`. |
+| `MAILSPACE_JEV_MODEL` | Exact model identifier understood by that endpoint. Use a TypeSafe Jev Decisions model or an ordinary model supporting strict structured JSON responses. OpenRouter routing additionally requires support for the configured privacy policy. No default model or automatic fallback to a weaker policy. | For Jev: `typesafe/jev-1.13`; required when provider enabled. |
 | `MAILSPACE_JEV_API_TOKEN` | Direct API token supplied by the operator. Passed only to the classifier request; never shown in settings or stored in decision traces. Environment values may be visible to container administrators through inspection. Keep the real value only in ignored `.env` or a secret manager. | Empty; set this **or** KEY_FILE. |
 | `MAILSPACE_JEV_KEY_FILE` | Alternative private token file readable by the app user, with mode `0600`. Path is inside the container. Avoids exposing the token value in container environment inspection. Setting both token and file is rejected. | `/app/data/openrouter-api-key`; empty when using API_TOKEN. |
 | `MAILSPACE_JEV_ENDPOINT` | Used only for `local`: full OpenAI-compatible **chat-completions** endpoint URL. No redirects/proxy inheritance. Plain HTTP is allowed only for numeric loopback addresses; all other endpoints require verified HTTPS. It is an operator-controlled endpoint, never a user-supplied fetch URL. Ignored for OpenRouter. | Native/same-container local example: `http://127.0.0.1:11434/v1/chat/completions`. |
@@ -48,13 +48,13 @@ Minimal OpenRouter configuration:
 
 ```dotenv
 MAILSPACE_JEV_PROVIDER=openrouter
-MAILSPACE_JEV_MODEL=your-selected-provider/model-id
+MAILSPACE_JEV_MODEL=typesafe/jev-1.13
 MAILSPACE_JEV_API_TOKEN=your-token-in-this-private-env-file
 MAILSPACE_JEV_KEY_FILE=
 MAILSPACE_JEV_ENDPOINT=
 ```
 
-The model/token above are placeholders. Choose a model supporting JSON schema and the required OpenRouter routing policy. Set a provider spending limit before enabling automatic mode. OpenRouter requests use `data_collection: deny`, `zdr: true` and `require_parameters: true`; unsupported routes fail closed.
+The token is a placeholder. The Jev model ID uses the OpenRouter `typesafe/` namespace, not `typesafe-ai/`. Jev uses typed Decisions requests; ordinary models require JSON-schema support. Both retain the required routing policy. Set a provider spending limit before enabling automatic mode. OpenRouter requests use `data_collection: deny`, `zdr: true` and `require_parameters: true`; unsupported routes fail closed.
 
 For the file alternative, leave API_TOKEN empty. To populate an app-owned file from an existing private file on the server (without putting the token in command arguments):
 
@@ -83,3 +83,5 @@ docker compose -f compose.yaml -f compose.backup.yaml up -d --build
 ```
 
 Litestream backs up SQLite, **not installation credential-key files, browser OpenPGP keys or local drafts**. Preserve the server keyring separately on installation/rotation, and export browser keys separately. Keep a separate keyring backup and verify recovery into a fresh installation before relying on replication. Configuring a replica is not proof that backups are current; monitor and periodically restore-test them.
+
+If startup reports missing JEV credentials/model, verify they reach the container, not just the host `.env`. After pulling changes run `docker compose up -d --build --force-recreate mailspace`. Never paste `docker compose config` or container inspection output containing real tokens into an issue. Disable classification temporarily with blank `MAILSPACE_JEV_PROVIDER`.

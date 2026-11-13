@@ -49,3 +49,10 @@ No real accounts, authentication, IMAP/SMTP, storage or cryptographic operations
 - Ordinary SMTP compose/reply with explicit plaintext choice, durable single-attempt outbox, Bcc-safe CRLF MIME, accepted/rejected/unknown outcomes and independent Sent copy. No automatic resend. ADR 0010.
 
 - Responsive independent pane scrolling, System/Light/Dark, cached-mail Calendar with IANA timezone, functional profile/organization management and repeatable real-service synthetic sandbox. Spaces contract separates matching from sharing. ADR 0011.
+
+## Optional automation and backups (testing)
+
+- Built-in JEV proposal/validation/apply contract, optional local/OpenRouter adapter, per-user Off/Manual/Review/Auto, metadata/text consent, dry-run, trace, replay, stale/manual-override protection.
+- Explicit per-excerpt encrypted-reader classification with local decryption, one-request consent, in-memory relay and separate human approval; no generic decrypted export.
+- Opt-in pinned Litestream sidecar, continuous SQLite replication, restore drill and keyring/browser backup limitations.
+- Environment reference, deployment/automation/backup instructions, synthetic README screenshots and consent/ownership/lifecycle regression tests.

@@ -82,6 +82,32 @@ test("decrypted selection requires explicit per-excerpt consent and never upload
     assert.equal(controller.consent.checked, false);
     assert.equal(controller.result.textContent, "");
     assert.equal(dialog.open, false);
+    // An old response must not clear a newly reviewed excerpt after close/reopen.
+    let finishOldRequest;
+    globalThis.fetch = () =>
+      new Promise((resolve) => {
+        finishOldRequest = resolve;
+      });
+    controller.enable();
+    controller.open();
+    controller.excerpt.value = "FIRST_APPROVED_EXCERPT";
+    controller.consent.checked = true;
+    const pending = controller.send();
+    controller.clear();
+    controller.enable();
+    controller.open();
+    controller.excerpt.value = "NEW_UNSUBMITTED_EXCERPT";
+    finishOldRequest({
+      ok: true,
+      json: async () => ({
+        id: "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        spaces: [],
+        confidence: 1,
+      }),
+    });
+    await pending;
+    assert.equal(controller.excerpt.value, "NEW_UNSUBMITTED_EXCERPT");
+    assert.equal(controller.result.textContent, "");
   } finally {
     controller?.clear();
     dom.window.close();

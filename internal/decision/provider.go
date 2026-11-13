@@ -65,26 +65,9 @@ func (p *ChatProvider) Propose(ctx context.Context, input Input) (Proposal, erro
 	if p.OpenRouter {
 		request["provider"] = map[string]any{"data_collection": "deny", "zdr": true, "require_parameters": true}
 	}
-	body, _ := json.Marshal(request)
-	req, err := http.NewRequestWithContext(ctx, "POST", p.Endpoint, bytes.NewReader(body))
+	data, err := p.exchange(ctx, p.Endpoint, request)
 	if err != nil {
-		return result, ErrProvider
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if p.Key != "" {
-		req.Header.Set("Authorization", "Bearer "+p.Key)
-	}
-	response, err := p.client.Do(req)
-	if err != nil {
-		return result, ErrProvider
-	}
-	defer response.Body.Close()
-	if response.StatusCode != 200 {
-		return result, ErrProvider
-	}
-	data, err := io.ReadAll(io.LimitReader(response.Body, (64<<10)+1))
-	if err != nil || len(data) > 64<<10 {
-		return result, ErrProvider
+		return result, err
 	}
 	var envelope struct {
 		Choices []struct {
@@ -106,4 +89,33 @@ func (p *ChatProvider) Propose(ctx context.Context, input Input) (Proposal, erro
 		return result, ErrProvider
 	}
 	return result, nil
+}
+
+// exchange has no retries, redirects, proxy inheritance or raw response logging.
+func (p *ChatProvider) exchange(ctx context.Context, endpoint string, request any) ([]byte, error) {
+	body, err := json.Marshal(request)
+	if err != nil || len(body) > 64<<10 {
+		return nil, ErrInput
+	}
+	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
+	if err != nil {
+		return nil, ErrProvider
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if p.Key != "" {
+		req.Header.Set("Authorization", "Bearer "+p.Key)
+	}
+	response, err := p.client.Do(req)
+	if err != nil {
+		return nil, ErrProvider
+	}
+	defer response.Body.Close()
+	if response.StatusCode != 200 {
+		return nil, ErrProvider
+	}
+	data, err := io.ReadAll(io.LimitReader(response.Body, (64<<10)+1))
+	if err != nil || len(data) > 64<<10 {
+		return nil, ErrProvider
+	}
+	return data, nil
 }

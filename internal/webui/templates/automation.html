@@ -54,6 +54,12 @@
                 Off
               </option>
               <option
+                value="manual"
+                {{ if eq .Settings.Mode "manual" }}selected{{ end }}
+              >
+                Manual previews only
+              </option>
+              <option
                 value="review"
                 {{ if eq .Settings.Mode "review" }}selected{{ end }}
               >
@@ -88,10 +94,13 @@
           <p class="text-xs leading-relaxed text-muted">
             The configured provider receives the selected fields and the first
             512 bytes of each Space description. OpenRouter is an external
-            service. Encrypted messages, attachments and browser-decrypted
-            content are always excluded. Only incoming, supported cached mail is
-            eligible. Manual assignments win. Up to three new requests per
-            minute per enabled user; model usage may incur charges. Configure
+            service. Automatic classification excludes encrypted messages,
+            attachments and browser-decrypted content. The secure reader has a
+            separate, per-excerpt consent action; its results always require
+            approval. Only incoming, supported cached mail is eligible for the
+            worker. Manual assignments win. The worker makes up to three new
+            requests per minute per enabled user; manual requests share a limit
+            of six attempts per minute. Model usage may incur charges. Configure
             provider spending limits before enabling automatic mode.
           </p>
           <label class="flex items-start gap-2 text-sm"
@@ -101,8 +110,8 @@
               value="allow"
               class="mt-1"
             />I allow this provider to receive the chosen fields for my eligible
-            mail and Space descriptions. Required for review or automatic
-            mode.</label
+            mail and Space descriptions. Required for manual, review or
+            automatic mode.</label
           ><button class="rounded-lg bg-action px-4 py-2 text-sm text-white">
             Save settings
           </button>

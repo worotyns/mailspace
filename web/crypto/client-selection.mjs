@@ -105,6 +105,7 @@ export class ClientSelection {
         body: JSON.stringify(payload),
         signal: this.request.signal,
       });
+      if (epoch !== this.epoch) return;
       this.excerpt.value = "";
       if (!response.ok) throw new Error("classification failed");
       const result = await response.json();

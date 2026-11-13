@@ -14,7 +14,7 @@ flowchart LR
   Identity --> Keys[Installation credential keyring outside SQLite]
 ```
 
-These are implemented boundaries. PostgreSQL, team source ACLs, JEV/provider adapters, Drive and content/semantic indexing remain separate roadmap modules, not runtime dependencies.
+These are implemented boundaries. PostgreSQL, team source ACLs, Drive and content/semantic indexing remain separate roadmap modules, not runtime dependencies.
 
 ## Modules
 
@@ -37,7 +37,7 @@ The synthetic dev sandbox runs the same product against loopback-only TLS fixtur
 
 A typed source is either current owned IMAP (account, connection revision, exact mailbox, UIDVALIDITY, UID) or outbox (account, revision, outgoing id). Logical identity hashes the account/config namespace, Message-ID and original MIME content hash; missing IDs use a physical fallback. Exact byte copies may collapse; conflicting IDs or transit-modified copies are not guessed equal. Sources are authorized again when read, assigned or replied to. Retaining an old membership never grants access to a reconfigured mailbox.
 
-A Space is a relevance brief and a set of individual message references, not a provider folder, account or original email thread. Membership is many-to-many and does not copy/move remote mail. Private labels follow the same source boundary. Removing a collection deletes only its definition/assignments. Manual operations have revisions for a future decision gate; no provider/model is active now.
+A Space is a relevance brief and a set of individual message references, not a provider folder, account or original email thread. Membership is many-to-many and does not copy/move remote mail. Private labels follow the same source boundary. Removing a collection deletes only its definition/assignments. Manual operations have revisions for the optional decision gate (ADR-0020); no provider/model is required.
 
 The dialog's compact adjacent-author groups and own-message alignment are presentation only. They never combine send targets, memberships or ACLs. Original thread preview follows only unambiguous cached Message-ID/References within the same current account, across folders/outbox. Cycles terminate; equal subjects do not join messages. It resolves up to 100 cached entries around the selected anchor, not full remote history. Switching Space/person/label leaves that context; Reply selects one original source. Server-derived From and References/In-Reply-To are preserved regardless of the Space.
 
@@ -53,11 +53,11 @@ The outbox commits before dispatch, uses nonce uniqueness and a prepared→sendi
 
 ## Crypto and hostile mail
 
-Private OpenPGP keys remain protected in the user's browser vault; passphrases and unlocked objects stay in memory and lock on inactivity/hidden page/session lifecycle. Browser vaults/drafts are separate per user/origin/device and require protected exports. The backend stores ordinary mail and OpenPGP ciphertext; it never receives decrypted client material or private keys. Subject/addressing metadata remains visible to mail transport.
+Private OpenPGP keys remain protected in the user's browser vault; passphrases and unlocked objects stay in memory and lock on inactivity/hidden page/session lifecycle. Browser vaults/drafts are separate per user/origin/device and require protected exports. The backend stores ordinary mail and OpenPGP ciphertext; it never receives private keys. Decrypted material stays local except a separately consented selected-excerpt request (ADR-0021), relayed in memory without persistence. Subject/addressing metadata remains visible to mail transport.
 
 Native text/plain is preferred. HTML-only converts to inert text; explicit HTML preview uses the reviewed DOMPurify boundary and an empty-sandbox iframe srcdoc, restrictive CSP, fixed-style hash and no remote resources/navigation. Closing/locking removes preview/source material. Generic templates never cast mail to trusted HTML. See CLIENT_CRYPTO.md and ADR-0015 for the narrow renderer exception.
 
-No optional module may silently consume client-decrypted bodies, index them, place them in a trace or call an AI/webhook. Any future explicit per-fragment export needs its own reviewed consent/provenance boundary. Global opt-in does not authorize hidden decrypted-content egress.
+No optional module may silently consume client-decrypted bodies, index them, place them in a trace or call an AI/webhook. The sole implemented selected-excerpt classification boundary is ADR-0021; no generic decrypted export is enabled. Global opt-in does not authorize hidden decrypted-content egress.
 
 ## Persistence, operations and trust
 

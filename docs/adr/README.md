@@ -35,3 +35,7 @@ Accepted oznacza decyzję projektową, nie gotową implementację. Zmiany przez 
 - [0018 — Unified timeline and compact inline encryption](0018.md)
 
 - [0019 — Product root, dialog runs and original cached thread preview](0019.md)
+
+- [0020 — JEV proposals and deterministic assignment](0020.md)
+- [0021 — Explicit selected decrypted excerpt classification](0021.md)
+- [0022 — Optional Litestream replication](0022.md)

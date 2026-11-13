@@ -22,6 +22,15 @@ Built with Go, HTMX, Tailwind and SQLite. Fully open source. No mandatory AI, in
 
 The local preview uses the same authenticated application with synthetic mail and isolated TLS providers.
 
+![Mailspace Space dialog in light mode, using synthetic mail](docs/images/space-dialog-light.png)
+
+<details>
+<summary>Dark mode on mobile</summary>
+
+<img src="docs/images/space-dialog-mobile-dark.png" width="390" alt="Mailspace mobile Space dialog in dark mode, synthetic messages only">
+
+</details>
+
 ## Try locally
 
 Development requirements: Go 1.27.4+, Node 24.15+ (or 26), npm.
@@ -57,7 +66,7 @@ The main Compose settings mean:
 | `MAILSPACE_PRIVATE_MAIL_ENDPOINTS` | Separate explicit allowlist for private/LAN/container mail servers. Empty denies private mail connections. |
 | `MAILSPACE_MAIL_CA_FILE` | Optional public CA certificate PEM **inside the container** for a private mail CA. Mount the file read-only as well; TLS hostname verification stays enabled. Empty uses system CAs. |
 | `MAILSPACE_JEV_PROVIDER` | Optional classifier: empty disables its client and worker; `openrouter` or `local` selects an adapter. Each user must also opt in under Space automation. |
-| `MAILSPACE_JEV_MODEL` | Exact model identifier for the chosen provider; required when classification is configured. There is no default model. |
+| `MAILSPACE_JEV_MODEL` | Exact model identifier, e.g. `typesafe/jev-1.13` for OpenRouter Jev Decisions; required when classification is configured. There is no default model. |
 | `MAILSPACE_JEV_API_TOKEN` | Provider token supplied directly through the environment. Use this **or** `MAILSPACE_JEV_KEY_FILE`, never both. Keep secrets in ignored `.env` or a secret manager. |
 | `MAILSPACE_JEV_KEY_FILE` | Alternative token file, readable by the app, mode `0600`; this is a container path, e.g. `/app/data/openrouter-api-key`. It is not an OpenPGP key. |
 | `MAILSPACE_JEV_ENDPOINT` | Full compatible chat-completions URL for `local` only. OpenRouter uses its fixed endpoint. HTTPS is required except for numeric loopback HTTP. |
@@ -81,7 +90,9 @@ Compose binds only to localhost and persists `/app/data` in a named volume. Put 
 
 Recent bounded read-only IMAP cache, not full archive synchronization or remote flag/delete/archive management. SMTP uses password authentication over verified TLS; OAuth-only providers are not implemented. One app process per SQLite installation. OpenPGP compatibility is alpha, with the Thunderbird/detached-signature matrix still open. Browser vaults/drafts need separate exports; server backup does not recover them.
 
-Team sharing, JEV/optional providers, attachment Drive, full-text/semantic search, PostgreSQL and YunoHost remain roadmap work. None is mandatory or displayed as connected. Encrypted content cannot silently enter backend indexing, AI, webhook or trace. Modules are reviewed built-in contributions: fork → PR → review → merge; no public plugin loader/API.
+Optional [Space automation](docs/AUTOMATION.md) uses local/OpenRouter proposals behind a deterministic JEV gate. It defaults to Off and supports dry-run, review, auto-assignment and replay. [Continuous SQLite backup](docs/BACKUPS.md) uses an explicit Litestream overlay and is also off by default.
+
+Team sharing, attachment Drive, full-text/semantic search, PostgreSQL and YunoHost remain roadmap work. None is mandatory or displayed as connected. Encrypted content cannot silently enter backend indexing, AI, webhook or trace. Modules are reviewed built-in contributions: fork → PR → review → merge; no public plugin loader/API.
 
 ## Contributing and source
 

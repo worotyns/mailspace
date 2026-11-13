@@ -28,7 +28,7 @@ Granice: internet→TLS edge; browser→Go; Go→IMAP/SMTP; Go→storage/backup;
 
 - `metadata` także jest wrażliwe. Wyjście do dodatkowego modułu wymaga enablement i zgody; unknown class/destination odrzucane.
 - `ciphertext` nie jest materiałem do modeli ani indeksu treści.
-- `client-decrypted` nigdy nie trafia przez backendowy eksport. Potencjalny przyszły eksport z klienta wymaga osobnej specyfikacji, widocznego odbiorcy i zakresu.
+- `client-decrypted` nigdy nie trafia przez backendowy eksport. Jedyny jawny wyjątek to ADR-0021: konkretny fragment, provider/model i zgoda na jeden request; backend relay w pamięci, bez zapisu treści.
 - Lokalny model na serwerze nadal jest poza browser trust boundary. Słowo „local” nie jest zgodą na odszyfrowany upload.
 - Trace/replay reguł zawiera decyzje i minimalne referencje, nie body i klucze. Zrzuty debugowania również podlegają polityce.
 
@@ -42,7 +42,7 @@ W personal mode wdrożono local users/Argon2id, SQLite/session digests, __Host- 
 
 ## Status MS-002
 
-Mail endpoints są domyślnie zablokowane; admin zatwierdza exact host:port, osobno LAN. DNS jest walidowany i pinowany do połączenia, TLS/SNI zweryfikowane, brak plaintext fallback, debug transcripts wyłączone. Provider login data jest szyfrowane AES-GCM z AAD owner/account/protocol i kluczem spoza DB. Klucze GPG oraz decrypted mail nadal wyłącznie w browser. Pełny backend/process compromise nie jest objęty ochroną server credential vault; DB-only disclosure jest.
+Mail endpoints są domyślnie zablokowane; admin zatwierdza exact host:port, osobno LAN. DNS jest walidowany i pinowany do połączenia, TLS/SNI zweryfikowane, brak plaintext fallback, debug transcripts wyłączone. Provider login data jest szyfrowane AES-GCM z AAD owner/account/protocol i kluczem spoza DB. Klucze GPG nadal wyłącznie w browser; odszyfrowany fragment może zostać jawnie przekazany według ADR-0021. Pełny backend/process compromise nie jest objęty ochroną server credential vault; DB-only disclosure jest.
 
 Read-only cache: original ordinary MIME and plain-text previews are sensitive unencrypted SQLite data. OpenPGP parts remain opaque; any encrypted sibling suppresses the whole plaintext preview. No HTML/remote resources, decryption or content index. UIDVALIDITY and account revisions prevent stale identity reuse; partial network failures do not authorize cache-wide deletes. Local DB or host compromise can expose cached ordinary mail. Limits and remaining native-IDLE/full-history work: ADR 0009 / MS-018.
 
@@ -51,3 +51,5 @@ Outgoing ambiguity: a missing final SMTP response is unknown, not failed-and-ret
 Workspace boundaries: organization members can read the member roster but gain no private account, credential, outbox or send-as permission. Revoked memberships fail subsequent reads/switches; active context falls back to Personal. Names are untrusted escaped text; all changes require Origin/CSRF. Theme localStorage contains only a color preference. Calendar receives authorized metadata, not decrypted content. The development sandbox is numeric-loopback-only and permits only its synthetic mail endpoints.
 
 Browser OpenPGP/MIME alpha: secure controls have no form/names and only explicitly constructed ciphertext JSON can reach submission. All recipients plus own key require current explicit bindings. Raw downloads are owner/generation/UID-scoped. Decryption and attachment Blob URLs remain local; textContent, no HTML/remote resources, lock clears DOM/URLs. Structural MIME validation does not prove crypto validity; only the client verifies signatures/trust. Full compatibility and Thunderbird remain pending (ADR-0013), so this is not a production crypto audit.
+
+Selected-excerpt classification explicitly adds the operator backend/proxy and provider to the trust boundary for that excerpt. Server/provider compromise and retention remain risks; closing a dialog cannot recall transmitted bytes. No body logging at proxies/APM is allowed. Model IDs/confidence are untrusted, bounded and cannot authorize sending/sharing. Continuous replicas contain sensitive plaintext mail/metadata and require private storage, access limits and verified restoration with the separate credential keyring.
