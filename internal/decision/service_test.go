@@ -421,3 +421,21 @@ func TestExplicitUnassignedCheckHonorsSavedAutoAndSkipsAssigned(t *testing.T) {
 		t.Fatal("assigned input re-exported")
 	}
 }
+
+func TestSavedModeBatchSkipsManualUnassignedWithoutProviderCall(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	if err := f.groups.Assign(ctx, f.owner, "space", f.space.ID, f.ref, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.groups.Assign(ctx, f.owner, "space", f.space.ID, f.ref, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.engine.Save(ctx, f.owner, "auto", "metadata"); err != nil {
+		t.Fatal(err)
+	}
+	n, err := f.engine.CheckUnassigned(ctx, f.owner)
+	if err != nil || n != 0 || f.provider.calls != 0 {
+		t.Fatal("manual veto blocked batch or exported mail", n, err, f.provider.calls)
+	}
+}

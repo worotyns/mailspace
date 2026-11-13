@@ -607,6 +607,9 @@ func (s *Service) checkUnassigned(ctx context.Context, owner string, preview boo
 			continue
 		}
 		if _, err = s.Evaluate(ctx, owner, record.Ref, preview || settings.Mode == "manual"); err != nil {
+			if errors.Is(err, ErrChanged) {
+				continue
+			} // Manual veto/stale source must not block later eligible mail.
 			return count, err
 		}
 		count++
