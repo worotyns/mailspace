@@ -71,10 +71,16 @@ export async function extractEncrypted(raw) {
     decoder.decode(control.content).trim() !== "Version: 1"
   )
     throw new VaultError("invalid-mime");
-  const armored = decoder.decode(data.content);
-  if (!armored.startsWith("-----BEGIN PGP MESSAGE-----"))
-    throw new VaultError("unsupported-encryption");
-  return armored;
+  const bytes = new Uint8Array(data.content);
+  if (!bytes.length || bytes.length > 4 << 20)
+    throw new VaultError("message-limit");
+  // Preserve binary packet octets: decoding ciphertext through UTF-8 corrupts it.
+  // OpenPGP.js validates packet structure and authenticated encryption locally.
+  const armorPrefix = encoder.encode("-----BEGIN PGP MESSAGE-----");
+  if (armorPrefix.every((value, index) => bytes[index] === value))
+    return decoder.decode(bytes);
+  if ((bytes[0] & 0x80) === 0) throw new VaultError("unsupported-encryption");
+  return bytes;
 }
 
 function base64Lines(data) {

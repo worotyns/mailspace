@@ -39,3 +39,5 @@ Accepted oznacza decyzję projektową, nie gotową implementację. Zmiany przez 
 - [0020 — JEV proposals and deterministic assignment](0020.md)
 - [0021 — Explicit selected decrypted excerpt classification](0021.md)
 - [0022 — Optional Litestream replication](0022.md)
+
+- [0023 — Local binary OpenPGP/MIME input](0023.md)

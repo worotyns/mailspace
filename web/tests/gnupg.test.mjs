@@ -167,6 +167,27 @@ test(
       );
       assert.deepEqual(fromGnuPG.data, plaintext);
       assert.equal(fromGnuPG.signatures[0].trustedSender, true);
+      const binaryFile = join(home, "gpg-encrypted-binary.pgp");
+      gpg([
+        "--trust-model",
+        "always",
+        "--local-user",
+        generated.fingerprint,
+        "--recipient",
+        generated.fingerprint,
+        "--output",
+        binaryFile,
+        "--sign",
+        "--encrypt",
+        plainFile,
+      ]);
+      const binary = new Uint8Array(await readFile(binaryFile));
+      const fromBinary = await vault.decryptSigned(
+        binary,
+        "interop@example.test",
+      );
+      assert.deepEqual(fromBinary.data, plaintext);
+      assert.equal(fromBinary.signatures[0].trustedSender, true);
       gpg([
         "--quick-generate-key",
         "GnuPG Fixture <gpg@example.test>",

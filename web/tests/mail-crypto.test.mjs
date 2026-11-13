@@ -266,3 +266,63 @@ test("encrypted multipart attachments preserve Unicode names and exact file octe
     await alice.vault.close();
   }
 });
+
+test("binary OpenPGP/MIME preserves ciphertext octets through base64 and quoted-printable transport", async () => {
+  const alice = await person("binary@example.test");
+  try {
+    const secret = await pgp.decryptKey({
+      privateKey: await pgp.readPrivateKey({
+        armoredKey: await alice.vault.exportPrivate(alice.key.fingerprint),
+      }),
+      passphrase: password,
+      config: cryptoConfig,
+    });
+    const plain = composeEntity("Binary legacy transport: Zażółć", [
+      { name: "octets.bin", data: new Uint8Array([0, 255, 128, 13, 10]) },
+    ]);
+    const binary = await pgp.encrypt({
+      message: await pgp.createMessage({ binary: plain }),
+      encryptionKeys: secret.toPublic(),
+      signingKeys: secret,
+      format: "binary",
+      config: cryptoConfig,
+    });
+    for (const transfer of ["base64", "quoted-printable"]) {
+      const body =
+        transfer === "base64"
+          ? Buffer.from(binary)
+              .toString("base64")
+              .match(/.{1,76}/g)
+              .join("\r\n")
+          : Array.from(
+              binary,
+              (n) => "=" + n.toString(16).padStart(2, "0").toUpperCase(),
+            ).join("=\r\n");
+      const raw = new TextEncoder().encode(
+        `Content-Type: multipart/encrypted; protocol="application/pgp-encrypted"; boundary="binary"\r\n\r\n--binary\r\nContent-Type: application/pgp-encrypted\r\n\r\nVersion: 1\r\n--binary\r\nContent-Type: application/octet-stream\r\nContent-Transfer-Encoding: ${transfer}\r\n\r\n${body}\r\n--binary--\r\n`,
+      );
+      const extracted = await extractEncrypted(raw);
+      assert.ok(extracted instanceof Uint8Array);
+      assert.deepEqual(extracted, binary);
+      const result = await alice.vault.decryptSigned(extracted, alice.address);
+      assert.deepEqual(result.data, plain);
+      assert.equal(result.signatures[0].trustedSender, true);
+      const parsed = await parseLocalMime(result.data);
+      assert.deepEqual(
+        new Uint8Array(parsed.attachments[0].content),
+        new Uint8Array([0, 255, 128, 13, 10]),
+      );
+    }
+    const corrupted = new Uint8Array(binary);
+    corrupted[corrupted.length - 1] ^= 1;
+    await assert.rejects(alice.vault.decryptSigned(corrupted, alice.address), {
+      code: "decryption-failed",
+    });
+    alice.vault.lock();
+    await assert.rejects(alice.vault.decryptSigned(binary, alice.address), {
+      code: "locked",
+    });
+  } finally {
+    await alice.vault.close();
+  }
+});

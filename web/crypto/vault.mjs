@@ -388,8 +388,14 @@ export class LocalVault {
   async decryptSigned(armoredMessage, claimedSender) {
     if (!this.#unlocked) throw new VaultError("locked");
     if (
-      typeof armoredMessage !== "string" ||
-      encoder.encode(armoredMessage).length > 6 << 20
+      !(
+        typeof armoredMessage === "string" ||
+        armoredMessage instanceof Uint8Array
+      ) ||
+      (typeof armoredMessage === "string"
+        ? encoder.encode(armoredMessage).length
+        : armoredMessage.length) >
+        6 << 20
     )
       throw new VaultError("message-limit");
     const epoch = this.#epoch;
@@ -410,7 +416,9 @@ export class LocalVault {
     try {
       result = await pgp.decrypt({
         message: await pgp.readMessage({
-          armoredMessage,
+          ...(typeof armoredMessage === "string"
+            ? { armoredMessage }
+            : { binaryMessage: armoredMessage }),
           config: cryptoConfig,
         }),
         decryptionKeys: this.#unlocked,
