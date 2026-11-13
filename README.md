@@ -44,6 +44,26 @@ Build assets before compiling Go. Run `make build` after committing: its source 
 
 ## Deploy on your server
 
+See the [environment variable reference](docs/CONFIGURATION.md) for every setting, its default and examples.
+
+The main Compose settings mean:
+
+| Setting | What it controls |
+|---|---|
+| `MAILSPACE_MODE=personal` | The authenticated installation mode. `personal` is currently the only supported value; it is not an organization selector, UI preference or AI switch. Multiple provisioned logins can have separate private data, but shared team mail access is not implemented. Leave this unchanged. |
+| `MAILSPACE_DB=/app/data/mailspace.db` | SQLite file **inside the container**, persisted in the data volume. This is not a host path. |
+| `MAILSPACE_ORIGIN` | Exact browser-facing HTTPS origin, e.g. `https://mail.example.com`, used for secure cookies and request validation. Required, including behind a reverse proxy. |
+| `MAILSPACE_MAIL_ENDPOINTS` | Exact comma-separated public IMAP/SMTP destinations, e.g. `imap.example.com:993,smtp.example.com:465`. Empty denies public mail connections. Account credentials are entered in the app. |
+| `MAILSPACE_PRIVATE_MAIL_ENDPOINTS` | Separate explicit allowlist for private/LAN/container mail servers. Empty denies private mail connections. |
+| `MAILSPACE_MAIL_CA_FILE` | Optional public CA certificate PEM **inside the container** for a private mail CA. Mount the file read-only as well; TLS hostname verification stays enabled. Empty uses system CAs. |
+| `MAILSPACE_JEV_PROVIDER` | Optional classifier: empty disables its client and worker; `openrouter` or `local` selects an adapter. Each user must also opt in under Space automation. |
+| `MAILSPACE_JEV_MODEL` | Exact model identifier for the chosen provider; required when classification is configured. There is no default model. |
+| `MAILSPACE_JEV_API_TOKEN` | Provider token supplied directly through the environment. Use this **or** `MAILSPACE_JEV_KEY_FILE`, never both. Keep secrets in ignored `.env` or a secret manager. |
+| `MAILSPACE_JEV_KEY_FILE` | Alternative token file, readable by the app, mode `0600`; this is a container path, e.g. `/app/data/openrouter-api-key`. It is not an OpenPGP key. |
+| `MAILSPACE_JEV_ENDPOINT` | Full compatible chat-completions URL for `local` only. OpenRouter uses its fixed endpoint. HTTPS is required except for numeric loopback HTTP. |
+
+`MAILSPACE_MODE` and `MAILSPACE_DB` are fixed in the supplied Compose file: adding them to `.env` does not override those literals. The other settings are substituted from `.env`. Blank `${NAME:-}` values mean unset/empty; `${NAME:?message}` rejects missing required values. The native binary does not read `.env` automatically.
+
 Follow [SERVER_SETUP.md](docs/SERVER_SETUP.md) for the complete procedure: HTTPS, persistent volume, provisioning users, configuring IMAP/SMTP, local keys, offline backup/restore, upgrades and account recovery.
 
 ```sh
