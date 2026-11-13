@@ -184,11 +184,17 @@ document.addEventListener("htmx:beforeRequest", () => {
   document.getElementById("request-error")?.setAttribute("hidden", "");
 });
 for (const event of ["htmx:responseError", "htmx:sendError", "htmx:timeout"])
-  document.addEventListener(event, () => {
+  document.addEventListener(event, (failure) => {
+    const notice = failure.detail?.xhr?.getResponseHeader(
+      "X-Mailspace-Decision-Notice",
+    );
     window.dispatchEvent(
       new CustomEvent("mailspace:toast", {
         detail: {
+          // Only this server-controlled diagnostic header is displayed, never
+          // arbitrary response bodies which may contain private message data.
           message:
+            notice?.slice(0, 600) ||
             "Unable to finish this action. Check the connection and try again.",
           kind: "error",
         },

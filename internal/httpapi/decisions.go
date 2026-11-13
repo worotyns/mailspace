@@ -179,6 +179,7 @@ func decisionRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 		}
 		if r.Header.Get("HX-Request") == "true" {
 			if err != nil {
+				w.Header().Set("X-Mailspace-Decision-Notice", decisionFailureMessage(decisionFailureNotice(err)))
 				http.Error(w, decisionFailureMessage(decisionFailureNotice(err)), 422)
 				return
 			}

@@ -227,6 +227,21 @@ func TestClassificationHTTPConsentScopeAndSelection(t *testing.T) {
 	if provider.calls != 1 {
 		t.Fatal("approval re-exported content")
 	}
+
+	t.Run("inline check exposes only fixed diagnostics", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/automation/preview", strings.NewReader(url.Values{"reference": {reference}}.Encode()))
+		req.Header.Set("Origin", "https://mail.example.test")
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("X-CSRF-Token", session.CSRF)
+		req.Header.Set("HX-Request", "true")
+		req.AddCookie(&http.Cookie{Name: "__Host-mailspace", Value: token})
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		notice := response.Header().Get("X-Mailspace-Decision-Notice")
+		if response.Code != 422 || notice == "" || strings.Contains(notice, "CANARY") {
+			t.Fatal("inline check missing safe diagnostics", response.Code, notice)
+		}
+	})
 	t.Run("local rules consent and ownership", func(t *testing.T) {
 		form := url.Values{"kind": {"sender"}, "value": {"sender@example.test"}, "space": {space.ID}}.Encode()
 		if request("POST", "/rules", token, "", "application/x-www-form-urlencoded", form).Code != 403 {
