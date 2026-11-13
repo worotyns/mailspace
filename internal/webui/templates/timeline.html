@@ -714,9 +714,25 @@
                     {{ template "timeline-icon" "lock" }}Encrypted message
                   </p>
                 {{ else }}
-                  <p class="whitespace-pre-wrap break-words">
-                    {{- .Preview.Text -}}
-                  </p>
+                  {{ range .QuoteParts }}
+                    {{ if .Quoted }}
+                      <details class="message-quote">
+                        <summary
+                          aria-label="Show or hide quoted text"
+                          title="Quoted text"
+                        >
+                          <span aria-hidden="true">…</span>
+                        </summary>
+                        <p class="whitespace-pre-wrap break-words">
+                          {{- .Text -}}
+                        </p>
+                      </details>
+                    {{ else }}
+                      <p class="whitespace-pre-wrap break-words">
+                        {{- .Text -}}
+                      </p>
+                    {{ end }}
+                  {{ end }}
                 {{ end }}
               </div>
               <div
