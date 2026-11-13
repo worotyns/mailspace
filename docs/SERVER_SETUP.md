@@ -153,4 +153,4 @@ See [Local rules](RULES.md). Save a sender/domain/subject rule disabled, preview
 
 ## Schema 10 workflow upgrade
 
-Back up the database and installation credential keyring before upgrading. Schema 10 adds reference-only local archives and a 16-color Space palette without rebuilding/deleting old collections. Labels are retired from the interface; old stored label data is preserved. Archive does not move mail remotely. See [workflow](WORKFLOW.md) for drawer, People, command and attachment limits. Rollback requires a pre-upgrade database/keyring and matching image.
+Back up the database and installation credential keyring before upgrading. Schema 11 adds metadata ordering/FK indexes on top of schema 10 local archives and the 16-color palette, without indexing message bodies. Existing labels are available again as private status metadata in Settings, filters and scoped actions; they are not shown in the sidebar. Archive does not move mail remotely. See [workflow](WORKFLOW.md) for drawer, People, command and attachment limits. Rollback requires a pre-upgrade database/keyring and matching image.
