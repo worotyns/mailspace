@@ -4,10 +4,10 @@ COPY web/package*.json ./
 RUN npm ci
 COPY web/ ./
 COPY internal/webui/templates/ /src/internal/webui/templates/
-COPY internal/webui/timeline.go /src/internal/webui/timeline.go
+COPY internal/webui/*.go /src/internal/webui/
 COPY internal/webui/assets/theme.js internal/webui/assets/session.js /src/internal/webui/assets/
 COPY licenses/ /src/licenses/
-RUN npm run build
+RUN npm run build && node verify-palette.mjs
 FROM golang:1.27.4-alpine AS backend
 WORKDIR /src
 COPY go.mod go.sum ./
