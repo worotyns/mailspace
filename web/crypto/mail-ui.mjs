@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { AttachmentViewer } from "./attachments.mjs";
 import { messageText, MailHTMLPreview } from "./mail-html.mjs";
 import { LocalDrafts } from "./drafts.mjs";
 import { extractSigned } from "./signed-mime.mjs";
@@ -33,7 +34,9 @@ let vault,
   lastActivity = Date.now(),
   submitted = false,
   request;
-const downloads = [];
+const attachmentViewer = reading
+  ? new AttachmentViewer(el("decrypted-attachments"), document)
+  : null;
 let drafts,
   activeDraft = null,
   restoredFiles = [];
@@ -109,8 +112,7 @@ function lock() {
     el("secure-compose-fields").disabled = true;
   }
   draftButtons();
-  for (const url of downloads) URL.revokeObjectURL(url);
-  downloads.length = 0;
+  attachmentViewer?.clear();
   notify(
     reading
       ? "Locked. Decrypted content was cleared."
@@ -369,24 +371,7 @@ try {
                         : "Unknown signing key · signature not verified",
                   )
                   .join("; ");
-        const attachments = el("decrypted-attachments");
-        attachments.replaceChildren();
-        for (const attachment of parsed.attachments) {
-          const url = URL.createObjectURL(
-            new Blob([attachment.content], {
-              type: "application/octet-stream",
-            }),
-          );
-          downloads.push(url);
-          const link = document.createElement("a");
-          link.href = url;
-          link.download = (attachment.filename || "attachment.bin")
-            .replace(/[\/\\\x00-\x1f]/g, "_")
-            .slice(0, 180);
-          link.textContent = `Download local attachment: ${attachment.filename || "unnamed"}`;
-          link.className = "block text-sm text-accent [overflow-wrap:anywhere]";
-          attachments.append(link);
-        }
+        attachmentViewer.render(parsed.attachments);
         el("decrypted-content").hidden = false;
         selectionClassifier?.enable();
         notify(

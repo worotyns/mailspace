@@ -35,3 +35,7 @@ Schema 9 adds disabled-by-default exact sender/domain and subject-phrase rules, 
 ### MS-006 local signing foundation
 
 ADR-0028 implements local detached signing and exact-byte multipart/signed composition, with application → GnuPG verification and tamper rejection. No signed-only submission endpoint or visible send control is connected by this slice. Signing-only send UX, secure quoting and actual Thunderbird acceptance remain open.
+
+### Spaces workflow slice (ADR-0029)
+
+Thread drawer/original-target replies, immediate Space chips, latest overall Jev score, bounded explicit preview or saved-mode command, 50/page People, retired label UI, 16-color swatches, local archive/restore and attachment downloads/text/PNG previews are implemented. Schema 10 is additive; upgrade requires the usual pre-upgrade SQLite/keyring backup. No remote archive move, general document preview, team ACL or stable 1.0 claim follows.

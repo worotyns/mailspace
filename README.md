@@ -25,6 +25,10 @@ The local preview uses the same authenticated application with synthetic mail an
 
 ![Mailspace Space dialog in light mode, using synthetic mail](docs/images/space-dialog-light.png)
 
+Thread drawer with direct Space assignment and local attachment download/preview (synthetic mail):
+
+![Mailspace thread drawer and attachment controls](docs/images/thread-drawer.png)
+
 <details>
 <summary>Dark mode on mobile</summary>
 
@@ -100,3 +104,5 @@ Team sharing, attachment Drive, full-text/semantic search, PostgreSQL and YunoHo
 [Agent guidelines](AGENTS.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Roadmap](docs/ROADMAP.md) · [Backlog](docs/BACKLOG.md) · [Architecture](docs/ARCHITECTURE.md) · [Threat model](docs/THREAT_MODEL.md) · [ADRs](docs/adr/README.md) · [Validation](docs/VALIDATION.md).
 
 Own code is **AGPL-3.0-only**, with no closed paid core. Dependencies retain their licenses/notices. The running app serves corresponding build sources at `/source.tar.gz`; Docker/release builds include them. Release workflows are prepared, but publication is a separate reviewed action. Report reproducible bugs and usability feedback through [GitHub Issues](https://github.com/worotyns/mailspace/issues). Keep real mail, credentials and private keys out of reports. See [SECURITY.md](SECURITY.md) for vulnerability reporting.
+
+The main timeline has direct Space chips, a thread drawer, a searchable People directory (50/page), a 16-color Space palette and Cmd/Ctrl K commands. Archive/Restore is local to Mailspace; provider folders are unchanged. Attachments load on demand with local downloads and bounded text/JSON/PNG previews. Other formats remain downloadable. Optional Jev displays recent overall confidence; its command previews at most three unassigned cached messages, never an unlimited paid batch. See [workflow details](docs/WORKFLOW.md).

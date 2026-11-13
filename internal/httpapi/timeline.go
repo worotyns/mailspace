@@ -10,6 +10,7 @@ import (
 	"errors"
 	"io"
 	"mailspace.local/mailspace/internal/collections"
+	"mailspace.local/mailspace/internal/decision"
 	"mailspace.local/mailspace/internal/identity"
 	"mailspace.local/mailspace/internal/mail"
 	"mailspace.local/mailspace/internal/outbox"
@@ -64,6 +65,14 @@ func timelineReturn(value string) string {
 }
 func (c *timelineController) data(r *http.Request, s identity.Session) (webui.TimelineData, error) {
 	q := r.URL.Query()
+	page, err := strconv.Atoi(q.Get("people_page"))
+	if q.Get("people_page") == "" {
+		page = 0
+		err = nil
+	}
+	if err != nil || page < 0 || page > 10000 || len(q.Get("people_q")) > 200 {
+		return webui.TimelineData{}, timeline.ErrInput
+	}
 	data := webui.TimelineData{Email: s.User.Email, UserID: s.User.ID, CSRF: s.CSRF, SessionExpires: s.ExpiresAt.UnixMilli(), Synthetic: c.config.Synthetic, AccountID: q.Get("account"), SpaceID: q.Get("space"), LabelID: q.Get("label"), Person: q.Get("person"), Filter: q.Get("filter"), Query: strings.TrimSpace(q.Get("q")), Day: q.Get("day"), Timezone: s.User.Timezone, ComposeNew: q.Get("compose") == "new", ThreadKey: q.Get("thread"), Nonce: rand.Text(), Title: "Your timeline", Description: "Messages, people and context. One place to keep things moving."}
 	// The default queue contains only incoming mail still needing a Space.
 	// All activity is an explicit view, never a second physical IMAP Inbox.
@@ -71,7 +80,35 @@ func (c *timelineController) data(r *http.Request, s identity.Session) (webui.Ti
 		data.Filter = "unsorted"
 	}
 	data.Classifier = c.config.Decisions != nil && c.config.Decisions.Available()
-	if len(data.Query) > 200 || len(data.Person) > 254 || (data.Filter != "" && data.Filter != "all" && data.Filter != "unsorted" && data.Filter != "unread") {
+	if data.Classifier {
+		data.Provider = c.config.Decisions.ProviderName()
+	}
+	data.PeopleOffset = page * 50
+	data.PeopleSearch = strings.TrimSpace(q.Get("people_q"))
+	data.Archived, err = c.collections.Archived(r.Context(), s.User.ID)
+	if err != nil {
+		return data, err
+	}
+	data.Decisions = map[string]decision.Run{}
+	if c.config.Decisions != nil {
+		runs, e := c.config.Decisions.Runs(r.Context(), s.User.ID)
+		if e != nil {
+			return data, e
+		}
+		for _, run := range runs {
+			if _, ok := data.Decisions[run.MessageKey()]; !ok {
+				data.Decisions[run.MessageKey()] = run
+			}
+		}
+	}
+	if data.LabelID != "" {
+		return data, timeline.ErrInput
+	}
+	if data.Filter == "archived" {
+		data.Title = "Archived"
+		data.Description = "Archived in Mailspace. Original server folders and Space assignments are unchanged."
+	}
+	if len(data.Query) > 200 || len(data.Person) > 254 || (data.Filter != "" && data.Filter != "all" && data.Filter != "unsorted" && data.Filter != "unread" && data.Filter != "archived") {
 		return data, timeline.ErrInput
 	}
 	if data.ThreadKey != "" {
@@ -88,10 +125,7 @@ func (c *timelineController) data(r *http.Request, s identity.Session) (webui.Ti
 	if err != nil {
 		return data, err
 	}
-	labels, err := c.collections.List(r.Context(), s.User.ID, "label")
-	if err != nil {
-		return data, err
-	}
+	var labels []collections.Item
 	if data.SpaceID != "" {
 		item, err := c.collections.Get(r.Context(), s.User.ID, "space", data.SpaceID)
 		if err != nil {
@@ -169,7 +203,7 @@ func (c *timelineController) data(r *http.Request, s identity.Session) (webui.Ti
 			}
 			related[i] = resolved.Record
 		}
-		threadData := webui.TimelineData{Classifier: data.Classifier, Timezone: data.Timezone, CSRF: data.CSRF, ThreadKey: data.ThreadKey}
+		threadData := webui.TimelineData{Archived: data.Archived, Decisions: data.Decisions, Classifier: data.Classifier, Timezone: data.Timezone, CSRF: data.CSRF, ThreadKey: data.ThreadKey}
 		webui.FormatTimeline(related, spaces, labels, memberships, &threadData)
 		data.Messages = threadData.Messages
 		data.Total = len(data.Messages)
@@ -243,7 +277,7 @@ func (c *timelineController) render(w http.ResponseWriter, r *http.Request, s id
 		http.Error(w, "UI assets unavailable", 503)
 		return
 	}
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self' "+hash+"; img-src 'none'; connect-src 'self'; frame-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self' "+hash+"; img-src blob:; connect-src 'self'; frame-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 	if err = webui.RenderTimeline(w, r, c.config.Dev, data); err != nil {
 		http.Error(w, "Unable to render timeline", 500)
 	}
@@ -255,6 +289,36 @@ func timelineRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 	source := timeline.New(store, config.Accounts, config.Sync, config.Outbox)
 	c := &timelineController{config: config, store: store, sources: source, collections: collections.New(store.Database(), source)}
 	mux.HandleFunc("GET /{$}", protected(c.render))
+	mux.HandleFunc("GET /people", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
+		data, err := c.data(r, s)
+		if err != nil {
+			http.Error(w, "People unavailable", 400)
+			return
+		}
+		webui.RenderPeople(w, r, config.Dev, data)
+	}))
+	mux.HandleFunc("POST /messages/archive", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
+		if !mutation(w, r, s) {
+			return
+		}
+		value := strings.TrimSpace(r.FormValue("archived"))
+		if value != "0" && value != "1" {
+			http.Error(w, "Explicit archive state required", 400)
+			return
+		}
+		ref, err := decodeSource(r.FormValue("reference"))
+		if err != nil || c.collections.Archive(r.Context(), s.User.ID, ref, value == "1") != nil {
+			http.NotFound(w, r)
+			return
+		}
+		target, _ := url.Parse(timelineReturn(r.FormValue("return_to")))
+		q := target.Query()
+		q.Del("thread")
+		q.Del("reply")
+		q.Del("compose")
+		target.RawQuery = q.Encode()
+		http.Redirect(w, r, target.String(), 303)
+	}))
 	mux.HandleFunc("GET /timeline", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
 		destination := timelineReturn("/?" + r.URL.RawQuery)
 		if r.Header.Get("HX-Request") == "true" {
@@ -322,7 +386,7 @@ func timelineRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 		parsed.RawQuery = q.Encode()
 		http.Redirect(w, r, parsed.String(), 303)
 	}))
-	for _, kind := range []string{"space", "label"} {
+	for _, kind := range []string{"space"} {
 		prefix := "/spaces"
 		if kind == "label" {
 			prefix = "/labels"
@@ -395,6 +459,10 @@ func timelineRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 			return
 		}
 		kind := r.FormValue("kind")
+		if kind != "space" {
+			http.Error(w, "Use Spaces; labels are retired", 400)
+			return
+		}
 		selected := r.FormValue("selected")
 		if selected != "0" && selected != "1" {
 			http.Error(w, "Explicit membership selection required", 400)
@@ -495,17 +563,29 @@ func (c *timelineController) renderMembership(w http.ResponseWriter, r *http.Req
 		http.Error(w, "Collections unavailable", 503)
 		return
 	}
-	labels, err := c.collections.List(r.Context(), s.User.ID, "label")
-	if err != nil {
-		http.Error(w, "Collections unavailable", 503)
-		return
-	}
+	var labels []collections.Item
 	members, err := c.collections.Memberships(r.Context(), s.User.ID)
 	if err != nil {
 		http.Error(w, "Assignments unavailable", 503)
 		return
 	}
-	message := webui.TimelineMessage{Classifier: c.config.Decisions != nil && c.config.Decisions.Available() && !resolved.Record.Own && !resolved.Record.Preview.Encrypted && resolved.Record.Preview.Status == "ready", Record: resolved.Record, Token: webui.EncodeSource(ref), CSRF: s.CSRF, ReturnURL: timelineReturn(r.FormValue("return_to")), Expanded: true}
+	archived, e := c.collections.Archived(r.Context(), s.User.ID)
+	if e != nil {
+		http.Error(w, "Archive unavailable", 503)
+		return
+	}
+	message := webui.TimelineMessage{Archived: archived[resolved.Record.Identity.Key], Classifier: !archived[resolved.Record.Identity.Key] && c.config.Decisions != nil && c.config.Decisions.Available() && !resolved.Record.Own && !resolved.Record.Preview.Encrypted && resolved.Record.Preview.Status == "ready", Record: resolved.Record, Token: webui.EncodeSource(ref), CSRF: s.CSRF, ReturnURL: timelineReturn(r.FormValue("return_to")), Expanded: true}
+	if c.config.Decisions != nil {
+		runs, e := c.config.Decisions.Runs(r.Context(), s.User.ID)
+		if e == nil {
+			for _, run := range runs {
+				if run.MessageKey() == resolved.Record.Identity.Key {
+					message.Decision = webui.DecisionSummary(run, spaces)
+					break
+				}
+			}
+		}
+	}
 	for _, item := range spaces {
 		message.Spaces = append(message.Spaces, webui.CollectionView{Item: item})
 	}

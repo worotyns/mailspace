@@ -35,7 +35,7 @@ func renderSecurePage(w http.ResponseWriter, config AuthConfig, data webui.AuthP
 		// the exact fixed stylesheet is permitted, never styles supplied by mail.
 		framePolicy = "frame-src 'self'; frame-ancestors 'none';"
 	}
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; "+stylePolicy+" img-src 'none'; connect-src 'self'; "+framePolicy+" base-uri 'none'; form-action 'none'")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; "+stylePolicy+" img-src blob:; connect-src 'self'; "+framePolicy+" base-uri 'none'; form-action 'none'")
 	if err := webui.RenderAuth(w, config.Dev, "secure-mail", data); err != nil {
 		http.Error(w, "Unable to render secure mail", 500)
 	}

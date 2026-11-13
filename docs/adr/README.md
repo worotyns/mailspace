@@ -51,3 +51,5 @@ Accepted oznacza decyzję projektową, nie gotową implementację. Zmiany przez 
 - [0027 — Reviewed local header rules](0027.md)
 
 - [0028 — Local detached signing foundation](0028.md)
+
+- [0029 — Spaces-only workflow, bounded dialogs and local archive](0029.md)

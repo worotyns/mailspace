@@ -214,3 +214,43 @@ func TestSpaceDefinitionsAreVersionedAndMembershipWritesAreAtomic(t *testing.T) 
 		t.Fatal("partial assignment committed without manual epoch", err)
 	}
 }
+
+func TestArchiveRestoreOwnershipAndPalettePreserveAssignments(t *testing.T) {
+	s, _, _, owner, other, _, first, _ := setup(t)
+	ctx := context.Background()
+	item, err := s.Create(ctx, owner, "space", "Teal work", "Work", "teal")
+	if err != nil || item.Color != "teal" {
+		t.Fatal("new palette rejected", err)
+	}
+	if err = s.Assign(ctx, owner, "space", item.ID, first, true); err != nil {
+		t.Fatal(err)
+	}
+	if s.Archive(ctx, other, first, true) == nil {
+		t.Fatal("foreign archive accepted")
+	}
+	if err = s.Archive(ctx, owner, first, true); err != nil {
+		t.Fatal(err)
+	}
+	archived, err := s.Archived(ctx, owner)
+	if err != nil || len(archived) != 1 {
+		t.Fatal("archive missing", err)
+	}
+	foreign, err := s.Archived(ctx, other)
+	if err != nil || len(foreign) != 0 {
+		t.Fatal("foreign archive disclosed")
+	}
+	if err = s.Archive(ctx, owner, first, false); err != nil {
+		t.Fatal(err)
+	}
+	archived, _ = s.Archived(ctx, owner)
+	if len(archived) != 0 {
+		t.Fatal("restore failed")
+	}
+	memberships, _ := s.Memberships(ctx, owner)
+	if len(memberships) != 1 {
+		t.Fatal("archive/restore removed assignments")
+	}
+	if _, err = s.resolver.Identity(ctx, owner, first); err != nil {
+		t.Fatal("archive removed original")
+	}
+}

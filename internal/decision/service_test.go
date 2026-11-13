@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"mailspace.local/mailspace/internal/accounts"
 	"mailspace.local/mailspace/internal/collections"
 	"mailspace.local/mailspace/internal/identity"
@@ -360,5 +361,63 @@ func TestExplicitHistoricalPreviewIncludesManuallyOrganizedCachedMail(t *testing
 	}
 	if _, err = f.engine.Evaluate(ctx, f.owner, f.ref, true); err != nil || f.provider.calls != 1 {
 		t.Fatal("unchanged historical preview re-billed")
+	}
+}
+
+func TestExplicitUnassignedPreviewIsBoundedCachedAndArchiveAware(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	if _, err := f.engine.PreviewUnassigned(ctx, f.owner); !errors.Is(err, ErrDisabled) {
+		t.Fatal("consent bypass")
+	}
+	if err := f.engine.Save(ctx, f.owner, "manual", "metadata"); err != nil {
+		t.Fatal(err)
+	}
+	for i := 2; i <= 5; i++ {
+		raw := []byte(fmt.Sprintf("From: sender@example.test\r\nTo: owner@example.test\r\nMessage-ID: <batch-%d@example.test>\r\nSubject: Synthetic batch\r\n\r\nSynthetic body", i))
+		preview, _ := json.Marshal(mailsync.Parse(raw))
+		if _, err := f.db.Database().Exec("INSERT INTO mail_messages(account_id,mailbox,uid,flags,size,received_at,raw,preview) VALUES(?,'INBOX',?,'[]',?,?,?,?)", f.config.ID, i, len(raw), i, raw, string(preview)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ref := f.ref
+	ref.UID = 5
+	if err := f.groups.Archive(ctx, f.owner, ref, true); err != nil {
+		t.Fatal(err)
+	}
+	n, err := f.engine.PreviewUnassigned(ctx, f.owner)
+	if err != nil || n != 3 || f.provider.calls != 3 {
+		t.Fatal("batch not bounded", n, err, f.provider.calls)
+	}
+	n, err = f.engine.PreviewUnassigned(ctx, f.owner)
+	if err != nil || n != 3 || f.provider.calls != 3 {
+		t.Fatal("duplicate batch incurred calls", n, err, f.provider.calls)
+	}
+	memberships, _ := f.groups.Memberships(ctx, f.owner)
+	if len(memberships) != 0 {
+		t.Fatal("preview applied assignments")
+	}
+	if _, err = f.engine.Evaluate(ctx, f.owner, ref, true); !errors.Is(err, ErrChanged) {
+		t.Fatal("archived input exported")
+	}
+}
+
+func TestExplicitUnassignedCheckHonorsSavedAutoAndSkipsAssigned(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	if err := f.engine.Save(ctx, f.owner, "auto", "metadata"); err != nil {
+		t.Fatal(err)
+	}
+	n, err := f.engine.CheckUnassigned(ctx, f.owner)
+	if err != nil || n != 1 || f.provider.calls != 1 {
+		t.Fatal("saved-mode check failed", n, err)
+	}
+	members, _ := f.groups.Memberships(ctx, f.owner)
+	if len(members) != 1 {
+		t.Fatal("saved Auto did not apply")
+	}
+	n, err = f.engine.CheckUnassigned(ctx, f.owner)
+	if err != nil || n != 0 || f.provider.calls != 1 {
+		t.Fatal("assigned input re-exported")
 	}
 }

@@ -43,7 +43,7 @@ func fields(kind, name, description, color string) error {
 		return ErrInput
 	}
 	switch color {
-	case "lilac", "blue", "green", "peach", "rose", "amber":
+	case "lilac", "blue", "green", "peach", "rose", "amber", "red", "pink", "fuchsia", "purple", "indigo", "cyan", "teal", "lime", "yellow", "slate":
 		return nil
 	}
 	return ErrInput
@@ -52,7 +52,7 @@ func (s *Service) List(ctx context.Context, owner, kind string) ([]Item, error) 
 	if !kindOK(kind) {
 		return nil, ErrInput
 	}
-	rows, err := s.db.QueryContext(ctx, "SELECT id,kind,name,description,color,revision FROM message_collections WHERE owner_id=? AND kind=? ORDER BY created_at,id", owner, kind)
+	rows, err := s.db.QueryContext(ctx, "SELECT id,kind,name,description,coalesce(palette_color,color),revision FROM message_collections WHERE owner_id=? AND kind=? ORDER BY created_at,id", owner, kind)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +69,7 @@ func (s *Service) List(ctx context.Context, owner, kind string) ([]Item, error) 
 }
 func (s *Service) Get(ctx context.Context, owner, kind, id string) (Item, error) {
 	var item Item
-	err := s.db.QueryRowContext(ctx, "SELECT id,kind,name,description,color,revision FROM message_collections WHERE id=? AND owner_id=? AND kind=?", id, owner, kind).Scan(&item.ID, &item.Kind, &item.Name, &item.Description, &item.Color, &item.Revision)
+	err := s.db.QueryRowContext(ctx, "SELECT id,kind,name,description,coalesce(palette_color,color),revision FROM message_collections WHERE id=? AND owner_id=? AND kind=?", id, owner, kind).Scan(&item.ID, &item.Kind, &item.Name, &item.Description, &item.Color, &item.Revision)
 	if errors.Is(err, sql.ErrNoRows) {
 		return item, ErrNotFound
 	}
@@ -99,7 +99,7 @@ func (s *Service) Create(ctx context.Context, owner, kind, name, description, co
 	}
 	id := rand.Text()
 	now := time.Now().Unix()
-	_, err = tx.ExecContext(ctx, "INSERT INTO message_collections(id,owner_id,kind,name,description,color,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)", id, owner, kind, name, description, color, now, now)
+	_, err = tx.ExecContext(ctx, "INSERT INTO message_collections(id,owner_id,kind,name,description,color,palette_color,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)", id, owner, kind, name, description, legacyColor(color), color, now, now)
 	if err != nil {
 		return Item{}, ErrInput
 	}
@@ -117,7 +117,7 @@ func (s *Service) Update(ctx context.Context, owner, kind, id, name, description
 	if err := fields(kind, name, description, color); err != nil {
 		return Item{}, err
 	}
-	result, err := s.db.ExecContext(ctx, "UPDATE message_collections SET name=?,description=?,color=?,revision=revision+1,updated_at=? WHERE id=? AND owner_id=? AND kind=? AND revision=?", name, description, color, time.Now().Unix(), id, owner, kind, revision)
+	result, err := s.db.ExecContext(ctx, "UPDATE message_collections SET name=?,description=?,color=?,palette_color=?,revision=revision+1,updated_at=? WHERE id=? AND owner_id=? AND kind=? AND revision=?", name, description, legacyColor(color), color, time.Now().Unix(), id, owner, kind, revision)
 	if err != nil {
 		return Item{}, ErrInput
 	}
@@ -227,4 +227,12 @@ func (s *Service) Memberships(ctx context.Context, owner string) (map[string][]s
 		result[key] = append(result[key], id)
 	}
 	return result, rows.Err()
+}
+
+func legacyColor(color string) string {
+	switch color {
+	case "lilac", "blue", "green", "peach", "rose", "amber":
+		return color
+	}
+	return "lilac"
 }

@@ -14,9 +14,9 @@ export class InlineEncryption {
     this.select = this.dialog.querySelector("select");
     this.pass = this.dialog.querySelector("input");
     this.keyStatus = this.dialog.querySelector("#inline-key-status");
-    this.status = form.querySelector("#inline-reply-status");
+    this.status = form.querySelector("[data-reply-status]");
     this.body = form.querySelector("textarea");
-    this.button = form.querySelector("#inline-send");
+    this.button = form.querySelector("[data-send]");
     this.events = new AbortController();
     const options = { signal: this.events.signal };
     this.dialog

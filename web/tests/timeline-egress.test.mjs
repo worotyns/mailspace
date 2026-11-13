@@ -24,7 +24,7 @@ test("inline encryption uploads ciphertext only, preserves typed parent, and pre
   await local.trust("inline@example.test", key.fingerprint, key.fingerprint);
   await local.unlock(key.fingerprint, password);
   const dom = new JSDOM(
-    `<div id="shell" data-user-id="${user}" data-session-expires="${Date.now() + 60000}" data-csrf="csrf"><form data-from="inline@example.test" data-subject="Visible subject"><input name="account" value="account"/><input name="reference" value="typed-parent"/><input name="request_id" value="SYNTHETIC_INLINE_NONCE"/><input name="to" value="inline@example.test"/><textarea></textarea><button id="inline-send"></button><p id="inline-reply-status"></p></form><dialog id="inline-key-dialog"><select></select><input type="password"/><p id="inline-key-status"></p><button id="inline-key-unlock"></button></dialog></div>`,
+    `<div id="shell" data-user-id="${user}" data-session-expires="${Date.now() + 60000}" data-csrf="csrf"><form data-from="inline@example.test" data-subject="Visible subject"><input name="account" value="account"/><input name="reference" value="typed-parent"/><input name="request_id" value="SYNTHETIC_INLINE_NONCE"/><input name="to" value="inline@example.test"/><textarea></textarea><button id="inline-send" data-send></button><p id="inline-reply-status" data-reply-status></p></form><dialog id="inline-key-dialog"><select></select><input type="password"/><p id="inline-key-status"></p><button id="inline-key-unlock"></button></dialog></div>`,
     { url: "http://127.0.0.1:8080" },
   );
   const names = [

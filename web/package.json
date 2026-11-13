@@ -7,8 +7,8 @@
   "scripts": {
     "build": "node build.mjs && tailwindcss -i styles.css -o ../internal/webui/assets/app.css --minify",
     "dev": "tailwindcss -i styles.css -o ../internal/webui/assets/app.css --watch",
-    "format": "prettier --write styles.css build.mjs ../internal/webui/assets/theme.js ../internal/webui/assets/session.js crypto/*.mjs tests/*.test.mjs && prettier --plugin=prettier-plugin-go-template --parser=go-template --write ../internal/webui/templates/*.html",
-    "format:check": "prettier --check styles.css build.mjs ../internal/webui/assets/theme.js ../internal/webui/assets/session.js crypto/*.mjs tests/*.test.mjs && prettier --plugin=prettier-plugin-go-template --parser=go-template --check ../internal/webui/templates/*.html",
+    "format": "prettier --write styles.css build.mjs ../internal/webui/assets/theme.js ../internal/webui/assets/session.js ../internal/webui/assets/forms.js crypto/*.mjs tests/*.test.mjs && prettier --plugin=prettier-plugin-go-template --parser=go-template --write ../internal/webui/templates/*.html",
+    "format:check": "prettier --check styles.css build.mjs ../internal/webui/assets/theme.js ../internal/webui/assets/session.js ../internal/webui/assets/forms.js crypto/*.mjs tests/*.test.mjs && prettier --plugin=prettier-plugin-go-template --parser=go-template --check ../internal/webui/templates/*.html",
     "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {

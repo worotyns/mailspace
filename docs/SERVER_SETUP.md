@@ -150,3 +150,7 @@ The password command prompts privately and commits the password change plus all 
 ## Local rules without an AI provider
 
 See [Local rules](RULES.md). Save a sender/domain/subject rule disabled, preview eligible cached matches, and explicitly enable it. Rules assign owned Spaces locally after successful sync; they never send email, change provider spam flags or share messages. Manual choices win. Schema 9 requires the usual pre-upgrade database and credential-key backup.
+
+## Schema 10 workflow upgrade
+
+Back up the database and installation credential keyring before upgrading. Schema 10 adds reference-only local archives and a 16-color Space palette without rebuilding/deleting old collections. Labels are retired from the interface; old stored label data is preserved. Archive does not move mail remotely. See [workflow](WORKFLOW.md) for drawer, People, command and attachment limits. Rollback requires a pre-upgrade database/keyring and matching image.

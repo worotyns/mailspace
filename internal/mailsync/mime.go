@@ -19,7 +19,13 @@ const maxText = 64 << 10
 var ErrMIME = errors.New("message has unsupported or excessive MIME")
 var messageID = regexp.MustCompile(`<([^<>\s]{1,998})>`)
 
+type Attachment struct {
+	Name string
+	Type string
+}
+
 type Preview struct {
+	Attachments []Attachment
 	ContentHash string
 	Subject     string
 	Sender      string
@@ -132,8 +138,15 @@ func Parse(raw []byte) Preview {
 			}
 			return nil
 		}
-		disposition, _, _ := entity.Header.ContentDisposition()
+		disposition, dispositionParams, _ := entity.Header.ContentDisposition()
 		if disposition == "attachment" || (media != "text/plain" && media != "text/html") {
+			if media != "application/pgp-signature" {
+				name := dispositionParams["filename"]
+				if name == "" {
+					name = params["name"]
+				}
+				result.Attachments = append(result.Attachments, Attachment{Name: text(name, 180), Type: text(media, 100)})
+			}
 			return nil
 		}
 		if media == "text/html" {
@@ -192,6 +205,7 @@ func Parse(raw []byte) Preview {
 		result.Status = "unsupported"
 	}
 	if result.Encrypted {
+		result.Attachments = nil
 		result.Text = ""
 		result.Status = "encrypted"
 		return result

@@ -51,6 +51,11 @@ test("actual composer event submits only ciphertext, never key/passphrase/plaint
           this.value ||= option.value;
         },
         replaceChildren() {},
+        setAttribute() {},
+        close() {
+          this.open = false;
+        },
+        remove() {},
       });
     return elements.get(id);
   };
@@ -79,7 +84,8 @@ test("actual composer event submits only ciphertext, never key/passphrase/plaint
   try {
     globalThis.document = {
       getElementById: element,
-      createElement: () => ({ value: "", textContent: "" }),
+      createElement: () => element(`dynamic-${elements.size}`),
+      body: element("mock-body"),
       addEventListener() {},
     };
     globalThis.window = { addEventListener() {} };

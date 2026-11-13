@@ -106,7 +106,7 @@ func TestMigrationRefusesNewerSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = store.db.Exec("INSERT INTO schema_migrations(version,applied_at) VALUES(10,0)"); err != nil {
+	if _, err = store.db.Exec("INSERT INTO schema_migrations(version,applied_at) VALUES(11,0)"); err != nil {
 		t.Fatal(err)
 	}
 	store.Close()
@@ -179,7 +179,7 @@ func TestUpgradeFromIdentityOnlySchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = store.db.Exec("DROP TABLE message_rule_runs; DROP TABLE message_rules; DROP TABLE mail_import_baselines; DROP TABLE mail_import_settings; DROP TABLE decision_runs; DROP TABLE decision_settings; DROP TABLE message_collection_memberships; DROP TABLE message_manual_revisions; DROP TABLE message_collections; DROP TABLE workspace_audit; DROP TABLE user_preferences; DROP TABLE workspace_members; DROP TABLE workspaces; ALTER TABLE users DROP COLUMN display_name; ALTER TABLE users DROP COLUMN timezone; DROP TABLE outbox; DROP TABLE mail_messages; DROP TABLE mailboxes; DROP TABLE mail_connections; DELETE FROM schema_migrations WHERE version>1"); err != nil {
+	if _, err = store.db.Exec("DROP TABLE message_archives; DROP TABLE message_rule_runs; DROP TABLE message_rules; DROP TABLE mail_import_baselines; DROP TABLE mail_import_settings; DROP TABLE decision_runs; DROP TABLE decision_settings; DROP TABLE message_collection_memberships; DROP TABLE message_manual_revisions; DROP TABLE message_collections; DROP TABLE workspace_audit; DROP TABLE user_preferences; DROP TABLE workspace_members; DROP TABLE workspaces; ALTER TABLE users DROP COLUMN display_name; ALTER TABLE users DROP COLUMN timezone; DROP TABLE outbox; DROP TABLE mail_messages; DROP TABLE mailboxes; DROP TABLE mail_connections; DELETE FROM schema_migrations WHERE version>1"); err != nil {
 		t.Fatal(err)
 	}
 	store.Close()

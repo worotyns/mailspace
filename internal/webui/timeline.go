@@ -9,11 +9,13 @@ import (
 	"fmt"
 	"html/template"
 	"mailspace.local/mailspace/internal/collections"
+	"mailspace.local/mailspace/internal/decision"
 	"mailspace.local/mailspace/internal/mail"
 	"mailspace.local/mailspace/internal/timeline"
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -27,19 +29,12 @@ type CollectionView struct {
 }
 
 func (c CollectionView) Tone() string {
-	switch c.Color {
-	case "blue":
-		return "bg-blue-100 text-blue-800"
-	case "green":
-		return "bg-emerald-100 text-emerald-800"
-	case "peach":
-		return "bg-orange-100 text-orange-800"
-	case "rose":
-		return "bg-rose-100 text-rose-800"
-	case "amber":
-		return "bg-amber-100 text-amber-800"
+	for _, color := range spacePalette {
+		if color.Value == c.Color {
+			return color.Tone
+		}
 	}
-	return "bg-violet-100 text-violet-800"
+	return spacePalette[0].Tone
 }
 
 type PersonView struct {
@@ -49,6 +44,8 @@ type PersonView struct {
 }
 type TimelineMessage struct {
 	Classifier bool
+	Archived   bool
+	Decision   *DecisionView
 	timeline.Record
 	Token       string
 	Day         string
@@ -139,11 +136,42 @@ func (m TimelineMessage) ReplyURL() string {
 	q.Set("reply", m.Identity.Key)
 	q.Del("compose")
 	parsed.RawQuery = q.Encode()
+	if q.Get("thread") != "" {
+		return parsed.String() + "#thread-composer"
+	}
 	return parsed.String() + "#inline-composer"
 }
 
+type DecisionView struct {
+	ID, State  string
+	Confidence int
+	Names      []string
+}
+
+func DecisionSummary(run decision.Run, spaces []collections.Item) *DecisionView {
+	if run.State != "dry-run" && run.State != "review" && run.State != "applied" {
+		return nil
+	}
+	d := &DecisionView{ID: run.ID, State: run.State, Confidence: int(run.Proposal.Confidence*100 + .5)}
+	for _, id := range run.Proposal.SpaceIDs {
+		for _, space := range spaces {
+			if space.ID == id {
+				d.Names = append(d.Names, space.Name)
+			}
+		}
+	}
+	return d
+}
+
 type TimelineData struct {
+	Archived                  map[string]bool
+	Decisions                 map[string]decision.Run
+	PeopleSearch              string
+	PeopleOffset, PeopleTotal int
+	PeoplePage                []PersonView
+
 	Classifier     bool
+	Provider       string
 	Email          string
 	UserID         string
 	CSRF           string
@@ -238,6 +266,9 @@ func RenderTimeline(w http.ResponseWriter, r *http.Request, dev bool, data Timel
 	name := "timeline-page"
 	if r.Header.Get("HX-Request") == "true" && r.Header.Get("HX-History-Restore-Request") != "true" {
 		name = "timeline-shell"
+		if r.Header.Get("HX-Target") == "thread-content" {
+			name = "thread-content"
+		}
 		if r.Header.Get("HX-Target") == "timeline-feed" {
 			name = "timeline-feed"
 		}
@@ -280,13 +311,15 @@ func FormatTimeline(records []timeline.Record, spaces, labels []collections.Item
 			if id == data.LabelID {
 				labelMatch = true
 			}
-			collection.Count++
+			if !data.Archived[record.Identity.Key] {
+				collection.Count++
+			}
 			all[id] = collection
 		}
-		if !hasSpace && !record.Own {
+		if !hasSpace && !record.Own && !data.Archived[record.Identity.Key] {
 			data.Unsorted++
 		}
-		if record.Unread {
+		if record.Unread && !data.Archived[record.Identity.Key] {
 			data.Unread++
 		}
 		if !record.Own && record.Preview.Sender != "" {
@@ -295,6 +328,9 @@ func FormatTimeline(records []timeline.Record, spaces, labels []collections.Item
 			person.Name = record.Preview.Name
 			person.Count++
 			people[person.Email] = person
+		}
+		if data.ThreadKey == "" && ((data.Filter == "archived") != data.Archived[record.Identity.Key]) && data.Filter != "all" {
+			continue
 		}
 		if !spaceMatch || !labelMatch || data.Filter == "unsorted" && (hasSpace || record.Own) || data.Filter == "unread" && !record.Unread {
 			continue
@@ -314,7 +350,7 @@ func FormatTimeline(records []timeline.Record, spaces, labels []collections.Item
 		if data.Day != "" && record.At.In(location).Format("2006-01-02") != data.Day {
 			continue
 		}
-		message := TimelineMessage{Classifier: data.Classifier && !record.Own && !record.Preview.Encrypted && record.Preview.Status == "ready", Record: record, Token: EncodeSource(record.Ref), Day: record.At.In(location).Format("Monday, 2 January 2006"), Time: record.At.In(location).Format("15:04"), ReturnURL: data.CurrentURL(), CSRF: data.CSRF}
+		message := TimelineMessage{Archived: data.Archived[record.Identity.Key], Decision: DecisionSummary(data.Decisions[record.Identity.Key], spaces), Spaces: data.Spaces, Classifier: data.Classifier && !data.Archived[record.Identity.Key] && !record.Own && !record.Preview.Encrypted && record.Preview.Status == "ready", Record: record, Token: EncodeSource(record.Ref), Day: record.At.In(location).Format("Monday, 2 January 2006"), Time: record.At.In(location).Format("15:04"), ReturnURL: data.CurrentURL(), CSRF: data.CSRF}
 		for _, id := range ids {
 			if collection, ok := all[id]; ok {
 				message.Memberships = append(message.Memberships, collection)
@@ -360,6 +396,25 @@ func FormatTimeline(records []timeline.Record, spaces, labels []collections.Item
 		m.Labels = data.Labels
 	}
 	data.Total = len(data.Messages)
+	matches := []PersonView{}
+	for _, p := range data.People {
+		if data.PeopleSearch == "" || strings.Contains(strings.ToLower(p.Name+" "+p.Email), strings.ToLower(data.PeopleSearch)) {
+			matches = append(matches, p)
+		}
+	}
+	data.PeopleTotal = len(matches)
+	if data.PeopleOffset > len(matches) {
+		data.PeopleOffset = len(matches)
+	}
+	end := data.PeopleOffset + 50
+	if end > len(matches) {
+		end = len(matches)
+	}
+	data.PeoplePage = matches[data.PeopleOffset:end]
+	if len(data.People) > 6 {
+		data.People = data.People[:6]
+	}
+
 }
 
 func (d TimelineData) EncryptionRequired() bool { return d.Reply != nil && d.Reply.Preview.Encrypted }
@@ -418,4 +473,61 @@ func (m TimelineMessage) CollectionsURL() string {
 
 func (m TimelineMessage) SenderRuleURL(space string) string {
 	return "/rules?" + url.Values{"reference": {m.Token}, "space": {space}}.Encode()
+}
+
+func (d TimelineData) PeopleURL(offset int) string {
+	u, _ := url.Parse(d.CurrentURL())
+	u.Path = "/people"
+	q := u.Query()
+	q.Set("people_page", strconv.Itoa(offset/50))
+	q.Set("people_q", d.PeopleSearch)
+	u.RawQuery = q.Encode()
+	return u.String()
+}
+func (d TimelineData) PeopleNext() string {
+	if d.PeopleOffset+50 >= d.PeopleTotal {
+		return ""
+	}
+	return d.PeopleURL(d.PeopleOffset + 50)
+}
+func (d TimelineData) PeoplePrevious() string {
+	if d.PeopleOffset == 0 {
+		return ""
+	}
+	return d.PeopleURL(max(0, d.PeopleOffset-50))
+}
+func (d TimelineData) FeedID() string {
+	if d.ThreadKey != "" {
+		return "thread-feed"
+	}
+	return "timeline-feed"
+}
+func (m TimelineMessage) MembershipID() string {
+	u, _ := url.Parse(m.ReturnURL)
+	if u.Query().Get("thread") != "" {
+		return "thread-membership-" + m.Identity.Key
+	}
+	return "membership-" + m.Identity.Key
+}
+
+func RenderPeople(w http.ResponseWriter, r *http.Request, dev bool, data TimelineData) error {
+	name := "people-page"
+	if r.Header.Get("HX-Request") == "true" {
+		name = "people-results"
+	}
+	return renderTimelinePart(w, dev, name, data)
+}
+
+func (d TimelineData) ComposerPrefix() string {
+	if d.ThreadKey != "" {
+		return "thread"
+	}
+	return "inline"
+}
+
+func (m TimelineMessage) DOMID() string {
+	if strings.HasPrefix(m.MembershipID(), "thread-") {
+		return "thread-message-" + m.Identity.Key
+	}
+	return "message-" + m.Identity.Key
 }

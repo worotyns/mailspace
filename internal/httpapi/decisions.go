@@ -42,6 +42,8 @@ func decisionRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 		}
 		notice := ""
 		switch r.URL.Query().Get("notice") {
+		case "batch":
+			notice = "Bounded check completed: up to 3 eligible unassigned messages checked. Preview leaves proposals unchanged; saved Auto mode can apply high-confidence results. Stored results may be reused."
 		case "enable":
 			notice = "Choose Manual previews only (no background requests), Review or Auto, then approve the displayed provider and payload before requesting a message preview."
 		case "saved":
@@ -121,6 +123,32 @@ func decisionRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 		}
 		http.Redirect(w, r, "/automation?notice=saved", 303)
 	}))
+	mux.HandleFunc("POST /automation/recheck", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
+		if !mutation(w, r, s) {
+			return
+		}
+		if r.FormValue("provider") != engine.ProviderName() {
+			http.Error(w, "Provider changed; reload the command", 400)
+			return
+		}
+		var err error
+		switch r.FormValue("execution") {
+		case "preview":
+			_, err = engine.PreviewUnassigned(r.Context(), s.User.ID)
+		case "saved":
+			_, err = engine.CheckUnassigned(r.Context(), s.User.ID)
+		default:
+			http.Error(w, "Choose preview or saved mode explicitly", 400)
+			return
+		}
+		notice := "batch"
+		if errors.Is(err, decision.ErrDisabled) {
+			notice = "enable"
+		} else if err != nil {
+			notice = "failed"
+		}
+		http.Redirect(w, r, "/automation?notice="+notice, 303)
+	}))
 	mux.HandleFunc("POST /automation/preview", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
 		if !mutation(w, r, s) {
 			return
@@ -136,6 +164,16 @@ func decisionRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 		}
 		if err == nil {
 			target = "/automation?notice=ready#run-" + run.ID
+		}
+		if r.Header.Get("HX-Request") == "true" {
+			if err != nil {
+				http.Error(w, "Unable to check suggestions. Open Space automation to review consent/provider settings. No automatic retry.", 422)
+				return
+			}
+			sources := timeline.New(store, config.Accounts, config.Sync, config.Outbox)
+			c := timelineController{config: config, store: store, sources: sources, collections: collections.New(store.Database(), sources)}
+			c.renderMembership(w, r, s, ref)
+			return
 		}
 		http.Redirect(w, r, target, 303)
 	}))

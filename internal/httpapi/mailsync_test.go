@@ -130,7 +130,7 @@ func TestReadOnlyMailboxEndToEndAndAuthorization(t *testing.T) {
 	}
 	ordinaryQuery := url.Values{"account": {account.ID}, "folder": {"INBOX"}, "uid": {strconv.FormatUint(uint64(messages[0].UID), 10)}, "validity": {strconv.FormatUint(uint64(messages[0].Validity), 10)}}.Encode()
 	ordinaryPage := request("GET", "/secure/read?"+ordinaryQuery, token, "", false)
-	if ordinaryPage.Code != 200 || !strings.Contains(ordinaryPage.Body.String(), `data-ordinary="true"`) || !strings.Contains(ordinaryPage.Header().Get("Content-Security-Policy"), "frame-src 'self'") || !strings.Contains(ordinaryPage.Header().Get("Content-Security-Policy"), "img-src 'none'") || !strings.Contains(ordinaryPage.Body.String(), "Preview HTML") {
+	if ordinaryPage.Code != 200 || !strings.Contains(ordinaryPage.Body.String(), `data-ordinary="true"`) || !strings.Contains(ordinaryPage.Header().Get("Content-Security-Policy"), "frame-src 'self'") || !strings.Contains(ordinaryPage.Header().Get("Content-Security-Policy"), "img-src blob:") || !strings.Contains(ordinaryPage.Body.String(), "Preview HTML") {
 		t.Fatal("ordinary text reader/preview boundary missing", ordinaryPage.Code)
 	}
 	if request("GET", "/secure/read?"+ordinaryQuery, other, "", false).Code != 404 {
@@ -235,15 +235,58 @@ func TestReadOnlyMailboxEndToEndAndAuthorization(t *testing.T) {
 		t.Fatal(err)
 	}
 	threadURL := "/?thread=" + sourceIdentity.Key + "&space=" + space.ID
-	if response = request("GET", threadURL, token, "", false); response.Code != 200 || !strings.Contains(response.Body.String(), "Original email thread") || !strings.Contains(response.Body.String(), "View email thread") {
+	if response = request("GET", threadURL, token, "", false); response.Code != 200 || !strings.Contains(response.Body.String(), "Original email thread") || !strings.Contains(response.Body.String(), "Show thread") {
 		t.Fatal("original thread unavailable", response.Code, response.Body.String())
 	}
 	if request("GET", "/?thread="+sourceIdentity.Key, other, "", false).Code == 200 {
 		t.Fatal("foreign original thread disclosed")
 	}
-	if response = request("GET", threadURL+"&reply="+sourceIdentity.Key, token, "", false); response.Code != 200 || !strings.Contains(response.Body.String(), "inline-reply-form") {
+	if response = request("GET", threadURL+"&reply="+sourceIdentity.Key, token, "", false); response.Code != 200 || !strings.Contains(response.Body.String(), "thread-reply-form") {
 		t.Fatal("thread reply composer unavailable")
 	}
+
+	t.Run("drawer and archive boundaries", func(t *testing.T) {
+		req := httptest.NewRequest("GET", threadURL+"&reply="+sourceIdentity.Key, nil)
+		req.Header.Set("HX-Request", "true")
+		req.Header.Set("HX-Target", "thread-content")
+		req.AddCookie(&http.Cookie{Name: "__Host-mailspace", Value: token})
+		res := httptest.NewRecorder()
+		handler.ServeHTTP(res, req)
+		if res.Code != 200 || !strings.Contains(res.Body.String(), `id="thread-feed"`) || !strings.Contains(res.Body.String(), `id="thread-reply-form"`) || strings.Contains(res.Body.String(), `id="timeline-shell"`) {
+			t.Fatal("drawer did not return scoped fragment", res.Code)
+		}
+		archive := func(cookie, csrf, state string) *httptest.ResponseRecorder {
+			req := httptest.NewRequest("POST", "/messages/archive", strings.NewReader(url.Values{"csrf": {csrf}, "reference": {webui.EncodeSource(ref)}, "archived": {state}}.Encode()))
+			req.Header.Set("Origin", "https://mail.example.test")
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req.AddCookie(&http.Cookie{Name: "__Host-mailspace", Value: cookie})
+			res := httptest.NewRecorder()
+			handler.ServeHTTP(res, req)
+			return res
+		}
+		if archive(token, "", "1").Code != 403 {
+			t.Fatal("archive CSRF bypass")
+		}
+		if archive(other, otherSession.CSRF, "1").Code != 404 {
+			t.Fatal("foreign archive accepted")
+		}
+		if archive(token, session.CSRF, "\n 1\n").Code != 303 {
+			t.Fatal("archive failed")
+		}
+		archived := request("GET", "/?filter=archived", token, "", false)
+		if archived.Code != 200 || !strings.Contains(archived.Body.String(), `id="message-`+sourceIdentity.Key+`"`) {
+			t.Fatal("archive view missing source")
+		}
+		if strings.Contains(request("GET", "/?space="+space.ID, token, "", false).Body.String(), `id="message-`+sourceIdentity.Key+`"`) {
+			t.Fatal("archived source remains active")
+		}
+		if _, err := sourceService.Resolve(ctx, alice.ID, ref); err != nil {
+			t.Fatal("archive deleted source")
+		}
+		if archive(token, session.CSRF, "0").Code != 303 {
+			t.Fatal("restore failed")
+		}
+	})
 	removeSpace := func(cookie, csrf, confirmation string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest("POST", "/spaces/"+space.ID+"/delete", strings.NewReader(url.Values{"csrf": {csrf}, "confirm": {confirmation}}.Encode()))
 		req.Header.Set("Origin", "https://mail.example.test")

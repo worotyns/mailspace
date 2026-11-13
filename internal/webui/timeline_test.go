@@ -2,6 +2,7 @@
 package webui
 
 import (
+	"fmt"
 	"mailspace.local/mailspace/internal/collections"
 	"mailspace.local/mailspace/internal/mail"
 	"mailspace.local/mailspace/internal/mailsync"
@@ -97,5 +98,37 @@ func TestTriageExcludesOwnMailAndKeepsAllActivity(t *testing.T) {
 	FormatTimeline([]timeline.Record{incoming, own}, []collections.Item{space}, nil, map[string][]string{"incoming": {"space"}}, &all)
 	if len(all.Messages) != 2 {
 		t.Fatal("inbox zero hid retained activity")
+	}
+}
+
+func TestPeoplePaginationBoundsTwentyThousandContactsAndArchiveViews(t *testing.T) {
+	records := make([]timeline.Record, 20000)
+	for i := range records {
+		records[i] = timeline.Record{Identity: mail.MessageIdentity{Key: fmt.Sprint(i)}, Preview: mailsync.Preview{Sender: fmt.Sprintf("person%05d@example.test", i)}}
+	}
+	data := TimelineData{Filter: "unsorted", PeopleOffset: 50, Archived: map[string]bool{"0": true}}
+	FormatTimeline(records, nil, nil, nil, &data)
+	if len(data.PeoplePage) != 50 || len(data.People) != 6 || data.PeopleTotal != 20000 {
+		t.Fatal("contact rendering unbounded")
+	}
+	if data.Unsorted != 19999 || len(data.Messages) != 19999 {
+		t.Fatal("archive remained active")
+	}
+	archived := TimelineData{Filter: "archived", Archived: map[string]bool{"0": true}}
+	FormatTimeline(records, nil, nil, nil, &archived)
+	if len(archived.Messages) != 1 || !archived.Messages[0].Archived {
+		t.Fatal("archive view failed")
+	}
+	filtered := TimelineData{PeopleSearch: "person19999"}
+	FormatTimeline(records, nil, nil, nil, &filtered)
+	if filtered.PeopleTotal != 1 || len(filtered.PeoplePage) != 1 {
+		t.Fatal("contact search failed")
+	}
+	response := httptest.NewRecorder()
+	if err := RenderPeople(response, httptest.NewRequest("GET", "/people", nil), false, data); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(response.Body.String(), "messages</span>") > 50 {
+		t.Fatal("entire directory rendered")
 	}
 }

@@ -10,6 +10,7 @@
       />
       <title>{{ .Title }} · Mailspace</title>
       <script src="/assets/theme.js"></script>
+      <script src="/assets/forms.js" defer></script>
       <script src="/assets/session.js" defer></script>
       <link rel="stylesheet" href="/assets/app.css" />
       <script src="/assets/htmx.min.js" defer></script>
@@ -35,7 +36,14 @@
           {{ end }}</span
         >
         <div class="ml-auto flex items-center gap-3">
-          {{ template "theme-picker" . }}<a
+          <button
+            type="button"
+            data-open-dialog="command-menu"
+            aria-keyshortcuts="Meta+K Control+K"
+            class="rounded-lg border border-line px-3 py-2 text-xs"
+          >
+            Commands <kbd>⌘ K</kbd></button
+          >{{ template "theme-picker" . }}<a
             href="/profile"
             aria-label="Profile and settings"
             class="flex size-8 items-center justify-center rounded-lg bg-violet-100 text-xs font-semibold text-violet-800"
@@ -113,6 +121,12 @@
             >{{ .Unread }}</span
           ></a
         >
+        <a
+          href="{{ .Link "filter" "archived" }}"
+          hx-get="{{ .Link "filter" "archived" }}"
+          class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-hover"
+          >{{ template "timeline-icon" "archive" }}Archived</a
+        >
       </nav>
       <div class="mb-2 mt-7 flex items-center justify-between px-3">
         <h2
@@ -155,14 +169,14 @@
         >
           People
         </h2>
-        <button
-          type="button"
+        <a
+          href="{{ .PeopleURL 0 }}"
           data-open-dialog="people-directory"
           aria-label="Open people directory"
           class="text-accent"
         >
           {{ template "timeline-icon" "users" }}
-        </button>
+        </a>
       </div>
       <nav aria-label="People" class="space-y-1">
         {{ range $i,$person:=.People }}
@@ -176,39 +190,11 @@
           {{ end }}
         {{ end }}
       </nav>
-      <div class="mb-2 mt-7 flex items-center justify-between px-3">
-        <h2
-          class="text-[11px] font-semibold uppercase tracking-wider text-muted"
-        >
-          Labels
-        </h2>
-        <a
-          href="/labels/new"
-          data-open-dialog="label-create"
-          aria-label="Create label"
-          class="text-accent"
-          >{{ template "timeline-icon" "plus" }}</a
-        >
-      </div>
-      <nav aria-label="Labels" class="space-y-1">
-        {{ range .Labels }}
-          <a
-            href="{{ $.Link "label" .ID }}"
-            hx-get="{{ $.Link "label" .ID }}"
-            class="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs hover:bg-hover"
-            ><span class="size-2 rounded-full {{ .Tone }}"></span>{{ .Name }}</a
-          >
-        {{ end }}
-      </nav>
       <div class="mt-auto space-y-2 px-3 pt-8 text-xs text-muted">
         <a href="/accounts/new" class="block hover:text-accent"
           >Connect mail account</a
         ><a href="/keys" class="block hover:text-accent">Local keys</a
-        ><a
-          href="/rules"
-          class="block px-3 py-2 text-xs text-muted hover:text-ink"
-          >Local rules</a
-        >
+        ><a href="/rules" class="block hover:text-accent">Local rules</a>
         <a href="/automation" class="block py-2 text-xs text-accent"
           >Space automation</a
         >
@@ -243,11 +229,7 @@
               {{ .Description }}
             </p>
           </div>
-          {{ if .LabelID }}
-            <a href="/labels/{{ .LabelID }}/edit" class="text-xs text-accent"
-              >Edit label</a
-            >
-          {{ end }}
+
           {{ if .SpaceID }}
             <a
               href="/spaces/{{ .SpaceID }}/edit"
@@ -302,14 +284,6 @@
               >
                 People directory
               </button>
-              {{ range .Labels }}
-                <a
-                  href="{{ $.Link "label" .ID }}"
-                  hx-get="{{ $.Link "label" .ID }}"
-                  class="block px-3 py-2 text-sm"
-                  >Label: {{ .Name }}</a
-                >
-              {{ end }}
               <a
                 href="/rules"
                 class="block px-3 py-2 text-xs text-muted hover:text-ink"
@@ -406,13 +380,6 @@
                 class="rounded-full bg-canvas px-2 py-1"
                 >{{ .Person }} ×</a
               >
-            {{ end }}{{ if .LabelID }}
-              <a
-                href="{{ .Link "label" "" }}"
-                hx-get="{{ .Link "label" "" }}"
-                class="rounded-full bg-canvas px-2 py-1"
-                >Clear label ×</a
-              >
             {{ end }}{{ if .Day }}
               <a
                 href="{{ .Link "day" "" }}"
@@ -485,18 +452,6 @@
       </div>
       {{ template "collection-fields" .NewSpaceForm }}
     </dialog>
-    <dialog
-      id="label-create"
-      class="m-auto max-h-[90dvh] w-[94vw] max-w-md overflow-y-auto rounded-2xl border border-line bg-panel p-6 text-ink backdrop:bg-black/50"
-    >
-      <div class="mb-4 flex items-center justify-between">
-        <h2 class="text-lg font-semibold">Create a label</h2>
-        <button type="button" data-close-dialog aria-label="Close create label">
-          ×
-        </button>
-      </div>
-      {{ template "collection-fields" .NewLabelForm }}
-    </dialog>
     {{ if .SpaceID }}
       <dialog
         id="space-edit"
@@ -518,10 +473,11 @@
     {{ end }}
     <dialog
       id="people-directory"
+      aria-labelledby="people-title"
       class="m-auto max-h-[80dvh] w-[94vw] max-w-xl overflow-y-auto rounded-2xl border border-line bg-panel p-6 text-ink backdrop:bg-black/50"
     >
       <div class="mb-4 flex items-center justify-between">
-        <h2 class="text-lg font-semibold">People</h2>
+        <h2 id="people-title" class="text-lg font-semibold">People</h2>
         <button
           type="button"
           data-close-dialog
@@ -530,21 +486,141 @@
           ×
         </button>
       </div>
-      {{ range .People }}
-        <a
-          href="{{ $.Link "person" .Email }}"
-          hx-get="{{ $.Link "person" .Email }}"
-          class="block rounded-lg border-b border-line p-3"
-          ><span class="text-sm font-medium">{{ .Name }}</span
-          ><span class="mt-1 block text-xs text-muted"
-            >{{ .Email }} · {{ .Count }} messages</span
-          ></a
+      <div id="people-results">{{ template "people-results-body" . }}</div>
+    </dialog>
+
+    <dialog
+      id="thread-drawer"
+      aria-labelledby="thread-drawer-title"
+      class="thread-drawer border-l border-line bg-panel text-ink backdrop:bg-black/40"
+    >
+      <header
+        class="flex shrink-0 items-center justify-between border-b border-line p-4"
+      >
+        <h2 id="thread-drawer-title" class="font-semibold">Email thread</h2>
+        <button
+          type="button"
+          data-close-dialog
+          autofocus
+          class="rounded-lg border border-line px-3 py-2"
         >
-      {{ else }}
-        <p class="text-sm text-muted">
-          People appear here as your mail synchronizes.
-        </p>
-      {{ end }}
+          Close thread
+        </button>
+      </header>
+      <div
+        id="thread-content"
+        class="flex min-h-0 flex-1 flex-col"
+        hx-target="#thread-content"
+        hx-swap="innerHTML"
+        hx-push-url="false"
+      >
+        <p class="p-6" role="status">Loading thread…</p>
+      </div>
+    </dialog>
+    <dialog
+      id="command-menu"
+      aria-labelledby="command-title"
+      class="m-auto max-h-[85dvh] w-[94vw] max-w-lg overflow-y-auto rounded-2xl border border-line bg-panel p-5 text-ink backdrop:bg-black/40"
+    >
+      <div class="flex justify-between">
+        <h2 id="command-title" class="font-semibold">Commands</h2>
+        <button type="button" data-close-dialog aria-label="Close commands">
+          ×
+        </button>
+      </div>
+      <label class="mt-4 block text-xs"
+        >Find a command<input
+          type="search"
+          data-command-search
+          autofocus
+          class="mt-2 w-full rounded-lg border border-line bg-canvas p-3"
+      /></label>
+      <div class="mt-4 space-y-2" data-command-list>
+        <a
+          href="/?filter=unsorted"
+          data-command
+          class="block rounded-lg p-3 hover:bg-hover"
+          >Unsorted mail</a
+        ><a
+          href="/?filter=all"
+          data-command
+          class="block rounded-lg p-3 hover:bg-hover"
+          >All activity</a
+        ><a
+          href="/?filter=archived"
+          data-command
+          class="block rounded-lg p-3 hover:bg-hover"
+          >Archived mail</a
+        >
+        <a
+          href="/?compose=new"
+          data-command
+          class="block rounded-lg p-3 hover:bg-hover"
+          >New email</a
+        ><button
+          type="button"
+          data-command
+          data-open-people
+          class="block w-full rounded-lg p-3 text-left hover:bg-hover"
+        >
+          People directory</button
+        ><a
+          href="/rules"
+          data-command
+          class="block rounded-lg p-3 hover:bg-hover"
+          >Local rules</a
+        ><a
+          href="/automation"
+          data-command
+          class="block rounded-lg p-3 hover:bg-hover"
+          >Automation / decision history</a
+        ><a
+          href="/settings"
+          data-command
+          class="block rounded-lg p-3 hover:bg-hover"
+          >Settings</a
+        >
+        {{ if .Classifier }}
+          <form
+            action="/automation/recheck"
+            method="post"
+            hx-disable
+            data-command
+            class="rounded-lg border border-line p-3"
+          >
+            <input type="hidden" name="csrf" value="{{ .CSRF }}" /><input
+              type="hidden"
+              name="provider"
+              value="{{ .Provider }}"
+            />
+            <p class="text-sm font-medium">Jev: check unassigned mail</p>
+            <p class="my-2 text-xs text-muted">
+              Check at most 3 eligible cached messages using your saved
+              provider/payload consent. May incur charges. Preview never
+              assigns. Saved mode uses Manual (preview), Review (proposals) or
+              Auto (assign at 80% or higher). Matching stored attempts are
+              reused.
+            </p>
+            <button
+              name="execution"
+              value="preview"
+              class="rounded-lg bg-action px-3 py-2 text-sm text-white"
+            >
+              Preview up to 3 unassigned</button
+            ><button
+              name="execution"
+              value="saved"
+              class="mt-2 rounded-lg border border-line px-3 py-2 text-sm"
+            >
+              Check up to 3 using saved mode
+            </button>
+          </form>
+        {{ end }}
+      </div>
+      <p class="mt-4 text-xs text-muted">
+        ⌘/Ctrl K: commands · Esc: close · Tab / Shift Tab: move · Enter:
+        activate. Typing and mail composition keep their normal shortcuts.
+      </p>
     </dialog>
     <div
       id="loading"
@@ -557,7 +633,7 @@
 {{ end }}
 {{ define "timeline-feed" }}
   <section
-    id="timeline-feed"
+    id="{{ .FeedID }}"
     tabindex="-1"
     class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-6 sm:px-7"
     aria-label="Messages"
@@ -586,7 +662,7 @@
           </div>
         {{ end }}
         <article
-          id="message-{{ .Identity.Key }}"
+          id="{{ .DOMID }}"
           data-dialog-run="{{ .StartsRun }}"
           data-selected="{{ .Selected }}"
           class="group {{ if .StartsRun }}
@@ -661,13 +737,18 @@
                 ><a
                   href="{{ .ThreadURL }}"
                   hx-get="{{ .ThreadURL }}"
+                  hx-target="#thread-content"
+                  hx-swap="innerHTML"
+                  hx-push-url="false"
+                  data-thread-open
+                  aria-controls="thread-drawer"
                   class="hover:text-accent"
-                  >View email thread</a
+                  >Show thread</a
                 ><a href="{{ .ReadURL }}" class="hover:text-accent"
                   >{{ if .Preview.Encrypted }}
                     Decrypt / preview
                   {{ else }}
-                    Full text / HTML
+                    Attachments / full message
                   {{ end }}</a
                 >{{ if .State }}
                   <span
@@ -686,6 +767,24 @@
                   >
                 {{ end }}
               </div>
+              {{ if not .Preview.Encrypted }}
+                <button
+                  type="button"
+                  data-load-attachments
+                  data-reference="{{ .Token }}"
+                  aria-controls="attachments-{{ .MembershipID }}"
+                  class="mt-2 text-xs text-accent"
+                >
+                  Attachments{{ if .Preview.Attachments }}
+                    ({{ len .Preview.Attachments }})
+                  {{ end }}
+                </button>
+                <div
+                  id="attachments-{{ .MembershipID }}"
+                  class="mt-2 space-y-2"
+                  data-attachment-list
+                ></div>
+              {{ end }}
               {{ template "timeline-membership" . }}
             </div>
           </div>
@@ -701,6 +800,8 @@
           <h2 class="text-lg font-semibold">
             {{ if .SpaceID }}
               This Space is ready
+            {{ else if eq .Filter "archived" }}
+              Nothing archived
             {{ else if eq .Filter "unsorted" }}
               Inbox zero. Everything has a home.
             {{ else }}
@@ -737,155 +838,139 @@
           {{ end }}
         </div>
       {{ end }}
-      <div id="timeline-end" class="h-1"></div>
+      <div id="{{ .FeedID }}-end" class="h-1"></div>
     </div>
   </section>
 {{ end }}
 {{ define "timeline-membership" }}
-  <div id="membership-{{ .Identity.Key }}" class="mt-2">
-    <div class="flex flex-wrap gap-1.5">
-      {{ range .Memberships }}
-        <span class="rounded-full px-2 py-0.5 text-[10px] {{ .Tone }}"
-          >{{ if eq .Kind "space" }}#{{ end }}{{ .Name }}</span
+  <div id="{{ .MembershipID }}" class="mt-2">
+    <div class="flex flex-wrap items-center gap-2" aria-label="Assign Spaces">
+      {{ $message:=. }}{{ range .Spaces }}
+        <form
+          action="/collections/{{ .ID }}/membership"
+          method="post"
+          hx-post="/collections/{{ .ID }}/membership"
+          hx-target="#{{ $message.MembershipID }}"
+          hx-swap="outerHTML"
+          hx-push-url="false"
+        >
+          <input type="hidden" name="csrf" value="{{ $message.CSRF }}" /><input
+            type="hidden"
+            name="reference"
+            value="{{ $message.Token }}"
+          /><input
+            type="hidden"
+            name="return_to"
+            value="{{ $message.ReturnURL }}"
+          /><input type="hidden" name="kind" value="space" /><input
+            type="hidden"
+            name="selected"
+            value="{{ $message.NextSelection .ID }}"
+          /><button
+            aria-pressed="{{ $message.Has .ID }}"
+            class="rounded-full border px-2 py-1 text-[10px] {{ if $message.Has .ID }}
+              border-accent text-accent
+            {{ else }}
+              border-line text-muted
+            {{ end }}"
+          >
+            {{ if $message.Has .ID }}✓{{ else }}+{{ end }}
+            {{ .Name }}
+          </button>
+        </form>
+        {{ if and ($message.Has .ID) (not $message.Preview.Encrypted) (not $message.Own) }}
+          <a
+            href="{{ $message.SenderRuleURL .ID }}"
+            class="px-2 py-1 text-[10px] text-accent"
+            >Make sender rule…</a
+          >
+        {{ end }}
+      {{ end }}
+      {{ if not .Spaces }}
+        <a
+          href="/spaces/new"
+          data-open-dialog="space-create"
+          class="text-xs text-accent"
+          >Create your first Space</a
         >
       {{ end }}
     </div>
     {{ if .Classifier }}
-      <form action="/automation/preview" method="post" hx-disable class="mt-2">
+      <form
+        action="/automation/preview"
+        method="post"
+        hx-post="/automation/preview"
+        hx-target="#{{ .MembershipID }}"
+        hx-swap="outerHTML"
+        hx-push-url="false"
+        class="mt-2"
+      >
         <input type="hidden" name="csrf" value="{{ .CSRF }}" /><input
           type="hidden"
           name="reference"
           value="{{ .Token }}"
-        /><button class="text-[10px] text-accent">
-          Preview Space suggestions
-        </button>
+        /><input
+          type="hidden"
+          name="return_to"
+          value="{{ .ReturnURL }}"
+        /><button class="text-xs text-accent">Check Space suggestions</button>
       </form>
     {{ end }}
-    {{ if .Expanded }}
-      <details class="mt-2" open>
-        <summary class="w-fit cursor-pointer text-[10px] text-muted">
-          Spaces &amp; labels
-        </summary>
-        <div class="mt-2 flex flex-wrap gap-2">
-          {{ $message:=. }}{{ range .Spaces }}
-            <form
-              action="/collections/{{ .ID }}/membership"
-              method="post"
-              hx-post="/collections/{{ .ID }}/membership"
-              hx-target="#membership-{{ $message.Identity.Key }}"
-              hx-swap="outerHTML"
-              hx-push-url="false"
-            >
-              <input
-                type="hidden"
-                name="csrf"
-                value="{{ $message.CSRF }}"
-              /><input
-                type="hidden"
-                name="reference"
-                value="{{ $message.Token }}"
-              /><input
-                type="hidden"
-                name="return_to"
-                value="{{ $message.ReturnURL }}"
-              /><input type="hidden" name="kind" value="space" /><input
-                type="hidden"
-                name="selected"
-                value="{{ $message.NextSelection .ID }}"
-              /><button
-                class="rounded-full border px-2 py-1 text-[10px] {{ if $message.Has .ID }}
-                  border-accent text-accent
-                {{ else }}
-                  border-line text-muted
-                {{ end }}"
-              >
-                {{ if $message.Has .ID }}✓{{ else }}+{{ end }}
-                {{ .Name }}
-              </button>
-            </form>
-            {{ if and ($message.Has .ID) (not $message.Preview.Encrypted) (not $message.Own) }}
-              <a
-                href="{{ $message.SenderRuleURL .ID }}"
-                class="px-2 py-1 text-[10px] text-accent"
-                >Make sender rule…</a
-              >
-            {{ end }}
-          {{ end }}{{ range .Labels }}
-            <form
-              action="/collections/{{ .ID }}/membership"
-              method="post"
-              hx-post="/collections/{{ .ID }}/membership"
-              hx-target="#membership-{{ $message.Identity.Key }}"
-              hx-swap="outerHTML"
-              hx-push-url="false"
-            >
-              <input
-                type="hidden"
-                name="csrf"
-                value="{{ $message.CSRF }}"
-              /><input
-                type="hidden"
-                name="reference"
-                value="{{ $message.Token }}"
-              /><input
-                type="hidden"
-                name="return_to"
-                value="{{ $message.ReturnURL }}"
-              /><input type="hidden" name="kind" value="label" /><input
-                type="hidden"
-                name="selected"
-                value="{{ $message.NextSelection .ID }}"
-              /><button
-                class="rounded-full border px-2 py-1 text-[10px] {{ if $message.Has .ID }}
-                  border-accent text-accent
-                {{ else }}
-                  border-line text-muted
-                {{ end }}"
-              >
-                {{ if $message.Has .ID }}✓{{ else }}+{{ end }}
-                {{ .Name }}
-              </button>
-            </form>
-          {{ end }}{{ if not .Spaces }}
-            <a
-              href="/spaces/new"
-              data-open-dialog="space-create"
-              class="text-xs text-accent"
-              >Create your first Space</a
-            >
-          {{ end }}
-        </div>
-      </details>
-    {{ else }}
-      <a
-        href="{{ .CollectionsURL }}"
-        hx-get="{{ .CollectionsURL }}"
-        hx-target="#membership-{{ .Identity.Key }}"
-        hx-swap="outerHTML"
-        hx-push-url="false"
-        class="mt-2 inline-block text-[10px] text-muted"
-        >Spaces &amp; labels</a
+    {{ if .Decision }}
+      <p class="mt-2 text-xs text-muted">
+        Jev · {{ .Decision.Confidence }}% confidence ·
+        {{ .Decision.State }}
+        (overall decision score)
+      </p>
+      <div class="flex flex-wrap gap-2">
+        {{ range .Decision.Names }}
+          <span class="text-xs text-accent">Suggested: {{ . }}</span>
+        {{ end }}
+      </div>
+      <a href="/automation#run-{{ .Decision.ID }}" class="text-xs text-accent"
+        >Review / apply decision</a
       >
     {{ end }}
+    <form action="/messages/archive" method="post" hx-disable class="mt-2">
+      <input type="hidden" name="csrf" value="{{ .CSRF }}" /><input
+        type="hidden"
+        name="reference"
+        value="{{ .Token }}"
+      /><input type="hidden" name="return_to" value="{{ .ReturnURL }}" /><input
+        type="hidden"
+        name="archived"
+        value="{{ if .Archived }}
+          0
+        {{ else }}
+          1
+        {{ end }}"
+      /><button class="text-xs text-muted">
+        {{ if .Archived }}
+          Restore from Archive
+        {{ else }}
+          Archive in Mailspace
+        {{ end }}
+      </button>
+    </form>
   </div>
 {{ end }}
 {{ define "inline-composer" }}
   <footer
-    id="inline-composer"
+    id="{{ .ComposerPrefix }}-composer"
     class="shrink-0 border-t border-line bg-panel px-4 py-3 sm:px-7"
   >
     <div class="mx-auto max-w-4xl">
       {{ if or .Reply .ComposeNew }}
         <form
-          id="inline-reply-form"
+          id="{{ .ComposerPrefix }}-reply-form"
+          data-reply-form
           action="/timeline/replies/plain"
           method="post"
           hx-post="/timeline/replies/plain"
-          hx-target="#inline-reply-status"
+          hx-target="#{{ .ComposerPrefix }}-reply-status"
           hx-swap="innerHTML"
           hx-push-url="false"
           hx-sync="this:drop"
-          hx-disabled-elt="#inline-send"
           data-from="{{ if .Reply }}{{ .Reply.AccountAddress }}{{ end }}"
           data-subject="{{ if .Reply }}{{ .Reply.Subject }}{{ end }}"
           data-encryption-required="{{ .EncryptionRequired }}"
@@ -964,9 +1049,11 @@
               /></label>
             </div>
           {{ end }}
-          <label class="sr-only" for="inline-reply-body">Your reply</label
+          <label class="sr-only" for="{{ .ComposerPrefix }}-reply-body"
+            >Your reply</label
           ><textarea
-            id="inline-reply-body"
+            id="{{ .ComposerPrefix }}-reply-body"
+            data-reply-body
             {{ if .Reply }}
               {{ if not .Reply.Preview.Encrypted }}name="body"{{ end }}
             {{ else }}
@@ -981,14 +1068,16 @@
           <div class="mt-2 flex items-center gap-3">
             <button
               type="button"
-              id="inline-encrypt-toggle"
+              id="{{ .ComposerPrefix }}-encrypt-toggle"
+              data-encrypt-toggle
               aria-pressed="{{ .EncryptionRequired }}"
               class="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1 text-xs text-muted"
             >
               {{ template "timeline-icon" "lock" }}Encrypt</button
             ><a href="{{ .ExpandURL }}" class="text-[11px] text-muted">Expand</a
             ><span
-              id="inline-encryption-state"
+              id="{{ .ComposerPrefix }}-encryption-state"
+              data-encryption-state
               class="ml-auto hidden text-[10px] text-muted sm:inline"
               >{{ if .Reply }}
                 {{ if .Reply.Preview.Encrypted }}
@@ -1001,7 +1090,8 @@
               type="submit"
               name="allow_plaintext"
               value="1"
-              id="inline-send"
+              id="{{ .ComposerPrefix }}-send"
+              data-send
               class="ml-auto shrink-0 whitespace-nowrap rounded-lg bg-action px-4 py-2 text-xs font-medium text-white"
               {{ if .Reply }}
                 {{ if .Reply.Preview.Encrypted }}disabled{{ end }}
@@ -1019,7 +1109,8 @@
             </button>
           </div>
           <div
-            id="inline-reply-status"
+            id="{{ .ComposerPrefix }}-reply-status"
+            data-reply-status
             role="status"
             aria-live="polite"
             class="mt-2 text-xs"
@@ -1031,12 +1122,18 @@
         >
           <span class="text-xs text-muted"
             >Reply to a message above, or start a new email in this Space.</span
-          ><a
-            href="{{ .NewURL }}"
-            hx-get="{{ .NewURL }}"
-            class="ml-auto shrink-0 text-xs font-medium text-accent"
-            >Write something →</a
-          >
+          >{{ if not .ThreadKey }}
+            <a
+              href="{{ .NewURL }}"
+              hx-get="{{ .NewURL }}"
+              class="ml-auto shrink-0 text-xs font-medium text-accent"
+              >{{ if .ThreadKey }}
+                Choose a message to reply
+              {{ else }}
+                Write something →
+              {{ end }}</a
+            >
+          {{ end }}
         </div>
       {{ end }}
     </div>
@@ -1113,31 +1210,24 @@
       </p>
     {{ else }}
       <input type="hidden" name="description" value="" />
-    {{ end }}<label class="block text-xs font-medium"
-      >Color<select
-        name="color"
-        class="mt-1.5 block w-full rounded-lg border border-line bg-panel px-3 py-2 text-sm"
-      >
-        <option value="lilac" {{ if eq .Item.Color "lilac" }}selected{{ end }}>
-          Lilac
-        </option>
-        <option value="blue" {{ if eq .Item.Color "blue" }}selected{{ end }}>
-          Blue
-        </option>
-        <option value="green" {{ if eq .Item.Color "green" }}selected{{ end }}>
-          Green
-        </option>
-        <option value="peach" {{ if eq .Item.Color "peach" }}selected{{ end }}>
-          Peach
-        </option>
-        <option value="rose" {{ if eq .Item.Color "rose" }}selected{{ end }}>
-          Rose
-        </option>
-        <option value="amber" {{ if eq .Item.Color "amber" }}selected{{ end }}>
-          Amber
-        </option>
-      </select></label
-    ><button
+    {{ end }}
+    <fieldset>
+      <legend class="mb-2 text-xs font-medium">Space color</legend>
+      <div class="grid grid-cols-4 gap-2 sm:grid-cols-8">
+        {{ $form:=. }}{{ range .Colors }}
+          <label class="color-swatch {{ .Tone }}"
+            ><input
+              type="radio"
+              name="color"
+              value="{{ .Value }}"
+              required
+              {{ if eq $form.Item.Color .Value }}checked{{ end }}
+            /><span>{{ .Name }}</span></label
+          >
+        {{ end }}
+      </div>
+    </fieldset>
+    <button
       class="rounded-lg bg-action px-4 py-2.5 text-sm font-medium text-white"
     >
       Save
@@ -1179,6 +1269,7 @@
       <meta name="viewport" content="width=device-width,initial-scale=1" />
       <title>{{ .Title }} · Mailspace</title>
       <script src="/assets/theme.js"></script>
+      <script src="/assets/forms.js" defer></script>
       <link rel="stylesheet" href="/assets/app.css" />
     </head>
     <body class="min-h-dvh bg-canvas">
@@ -1202,6 +1293,7 @@
       <meta name="viewport" content="width=device-width,initial-scale=1" />
       <title>Organize message · Mailspace</title>
       <script src="/assets/theme.js"></script>
+      <script src="/assets/forms.js" defer></script>
       <link rel="stylesheet" href="/assets/app.css" />
     </head>
     <body class="min-h-dvh bg-canvas">

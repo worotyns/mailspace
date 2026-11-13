@@ -6,6 +6,7 @@
       <meta name="viewport" content="width=device-width,initial-scale=1" />
       <title>Space automation · Mailspace</title>
       <script src="/assets/theme.js"></script>
+      <script src="/assets/forms.js" defer></script>
       <link rel="stylesheet" href="/assets/app.css" />
     </head>
     <body class="min-h-dvh bg-canvas">
@@ -124,7 +125,9 @@
         <section class="mt-8">
           <h2 class="text-lg font-semibold">Decision trace</h2>
           <p class="mt-2 text-xs text-muted">
-            Only source/Space references, versions, proposed ids, confidence and
+            The latest 50 decision records are displayed. At most 5,000 records
+            are retained per user; reaching capacity stops new requests. Only
+            source/Space references, versions, proposed ids, confidence and
             state are retained. No prompts, mail bodies, model explanations or
             raw responses. Replay validates the saved result without a new model
             call. Apply approves a saved proposal and protects it as a manual

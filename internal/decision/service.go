@@ -153,6 +153,13 @@ func (s *Service) prepare(ctx context.Context, owner string, ref mail.SourceRef,
 		return snap, input, ErrChanged
 	}
 	message := resolved.Record
+	var archived int
+	if err = s.db.QueryRowContext(ctx, "SELECT count(*) FROM message_archives WHERE account_id=? AND account_revision=? AND message_key=?", ref.AccountID, ref.Revision, message.Identity.Key).Scan(&archived); err != nil {
+		return snap, input, err
+	}
+	if archived != 0 {
+		return snap, input, ErrChanged
+	}
 	// Never send encrypted, client-decrypted, pending, unsupported or own mail.
 	if message.Preview.Encrypted || message.Own || message.Preview.Status != "ready" {
 		return snap, input, ErrInput
@@ -543,4 +550,69 @@ func (s *Service) EvaluateSelection(ctx context.Context, owner string, ref mail.
 	}
 	key := digest([]any{snap.Key, ref.AccountID, ref.Revision, settings.Revision, snap.DefinitionsHash, "client-selection", requestID})
 	return s.evaluatePrepared(ctx, owner, snap, input, key, true)
+}
+
+func (r Run) MessageKey() string { return r.snapshot.Key }
+
+// PreviewUnassigned is an explicit bounded dry-run, never a bulk auto-apply.
+func (s *Service) PreviewUnassigned(ctx context.Context, owner string) (int, error) {
+	return s.checkUnassigned(ctx, owner, true)
+}
+func (s *Service) CheckUnassigned(ctx context.Context, owner string) (int, error) {
+	return s.checkUnassigned(ctx, owner, false)
+}
+func (s *Service) checkUnassigned(ctx context.Context, owner string, preview bool) (int, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	settings, err := s.Settings(ctx, owner)
+	if err != nil {
+		return 0, err
+	}
+	if settings.Mode == "off" || !s.Available() {
+		return 0, ErrDisabled
+	}
+	records, err := s.sources.List(ctx, owner, "")
+	if err != nil {
+		return 0, err
+	}
+	members, err := s.groups.Memberships(ctx, owner)
+	if err != nil {
+		return 0, err
+	}
+	spaces, err := s.groups.List(ctx, owner, "space")
+	if err != nil {
+		return 0, err
+	}
+	archived, err := s.groups.Archived(ctx, owner)
+	if err != nil {
+		return 0, err
+	}
+	spaceIDs := map[string]bool{}
+	for _, space := range spaces {
+		spaceIDs[space.ID] = true
+	}
+	count := 0
+	for _, record := range records {
+		if ctx.Err() != nil {
+			return count, ctx.Err()
+		}
+		if record.Own || record.Preview.Encrypted || record.Preview.Status != "ready" || archived[record.Identity.Key] {
+			continue
+		}
+		assigned := false
+		for _, id := range members[record.Identity.Key] {
+			assigned = assigned || spaceIDs[id]
+		}
+		if assigned {
+			continue
+		}
+		if _, err = s.Evaluate(ctx, owner, record.Ref, preview || settings.Mode == "manual"); err != nil {
+			return count, err
+		}
+		count++
+		if count == 3 {
+			break
+		}
+	}
+	return count, nil
 }
