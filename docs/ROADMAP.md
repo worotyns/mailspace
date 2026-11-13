@@ -40,3 +40,9 @@ Before expanding optional modules, deliver message-level many-to-many Spaces, ma
 ## Current product entrypoint
 
 ADR-0019 supersedes old UI/default-demo descriptions above: one authenticated Space dialog at `/`, original cached email-thread preview/reply, no Classic/Conversation/Calendar pages or unauthenticated UI demo. Stateful Compose is the default; SERVER_SETUP.md is the operator runbook. MS-020 personal UX is implemented. RELEASE_READINESS.md separates working controlled-test scope from the remaining 1.0 gates.
+
+### Current usability follow-up
+
+Completed slices: container palette inclusion/build guard; specific Jev failure categories; native quote folding. In the compact-controls slice: guided sender/recipient key setup, contact prefill and bounded suggestions, date/range filter, trusted settings/compose panels, local archive/label bulk previews, saved-decision acceptance and metadata indexes. See ADR-0030 for exact limits.
+
+Still required before claiming the requested full UX/1.0 scope: AND/OR rule expressions and shared filter semantics; memory-only worker vault with explicit lifecycle; inline decrypt and opt-in local autopreview; signed-only sending; broader provider/browser compatibility and deployment acceptance.

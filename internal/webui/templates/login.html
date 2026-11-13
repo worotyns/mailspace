@@ -7,6 +7,8 @@
       <title>Sign in · Mailspace</title>
       <script src="/assets/theme.js"></script>
       <script src="/assets/forms.js" defer></script>
+      <script src="/assets/panel-child.js" defer></script>
+      <script src="/assets/toasts.js" defer></script>
       <script src="/assets/session.js" defer></script>
       <link rel="stylesheet" href="/assets/app.css" />
     </head>
@@ -77,9 +79,11 @@
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
-      <title>Your workspace · Mailspace</title>
+      <title>Settings · Mailspace</title>
       <script src="/assets/theme.js"></script>
       <script src="/assets/forms.js" defer></script>
+      <script src="/assets/panel-child.js" defer></script>
+      <script src="/assets/toasts.js" defer></script>
       <script src="/assets/session.js" defer></script>
       <link rel="stylesheet" href="/assets/app.css" />
     </head>
@@ -99,15 +103,33 @@
           </button>
         </form>
       </header>
-      <nav class="mx-auto flex max-w-3xl gap-5 px-6 pt-5 text-xs text-accent">
-        <a href="/">Timeline</a><a href="/profile">Profile</a
-        ><a href="/workspaces">Organizations</a>
-      </nav>
+      {{ template "settings-navigation" . }}
       <main class="mx-auto max-w-3xl p-6 sm:p-12">
         <p class="text-xs font-medium uppercase tracking-wider text-muted">
           Personal workspace
         </p>
         <h1 class="mt-2 text-2xl font-semibold">Settings</h1>
+        <div class="settings-cards">
+          <a href="/keys"
+            ><strong>Encryption &amp; signatures</strong
+            ><span>My sending key and recipient keys</span></a
+          ><a href="/rules"
+            ><strong>Local rules</strong
+            ><span>Deterministic filters and Space assignment</span></a
+          ><a href="/labels"
+            ><strong>Labels / statuses</strong
+            ><span>Create and edit todo, done or your own labels</span></a
+          ><a href="/automation"
+            ><strong>Space automation</strong
+            ><span>Jev consent, saved decisions and bulk approval</span></a
+          ><a href="/workspaces"
+            ><strong>Context / organizations</strong
+            ><span>Choose context and manage membership</span></a
+          ><a href="/profile"
+            ><strong>Profile &amp; appearance</strong
+            ><span>Name, timezone and local theme</span></a
+          >
+        </div>
         <section class="mt-8 rounded-xl border border-line bg-panel p-6">
           <h2 class="font-semibold">Mail accounts</h2>
           {{ range .Accounts }}
@@ -161,6 +183,7 @@
         {{ if .Message }}
           <p
             role="status"
+            data-toast
             class="mt-4 rounded-lg border border-success-line bg-success-soft p-4 text-sm text-success"
           >
             {{ .Message }}

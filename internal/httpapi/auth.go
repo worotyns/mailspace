@@ -116,6 +116,9 @@ func NewPersonal(sourceDir string, store *identity.Store, config AuthConfig) (ht
 				}
 				return
 			}
+			if r.Header.Get("Sec-Fetch-Dest") == "iframe" && appPanelPath(r.URL.Path) {
+				w = &panelWriter{ResponseWriter: w}
+			}
 			next(w, r, session)
 		}
 	}
@@ -762,6 +765,9 @@ func NewPersonal(sourceDir string, store *identity.Store, config AuthConfig) (ht
 			message = "Mail server connection verified and saved. Open the mailbox and refresh to download messages."
 		case "account-checked":
 			message = "IMAP and SMTP connections verified."
+		}
+		if r.Header.Get("Sec-Fetch-Dest") == "iframe" && appPanelPath(r.URL.Path) {
+			w = &panelWriter{ResponseWriter: w}
 		}
 		render(w, "identity-home", webui.AuthPageData{Email: s.User.Email, CSRF: s.CSRF, Accounts: names, MailAccountsAvailable: config.Accounts != nil, MailEndpointsEnabled: config.MailEndpointsEnabled, Message: message})
 	}

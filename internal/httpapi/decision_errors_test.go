@@ -11,7 +11,7 @@ import (
 
 func TestClassificationFailuresAreSpecificAndNeverEchoProviderData(t *testing.T) {
 	seen := map[string]bool{}
-	for _, err := range []error{decision.ErrBusy, decision.ErrRateLimited, decision.ErrChanged, decision.ErrProvider, decision.ErrInput} {
+	for _, err := range []error{decision.ErrBusy, decision.ErrRateLimited, decision.ErrChanged, decision.ErrProvider, decision.ErrInput, &decision.ProviderHTTPError{Status: 401}, &decision.ProviderHTTPError{Status: 402}, &decision.ProviderHTTPError{Status: 429}} {
 		kind := decisionFailureNotice(fmt.Errorf("private message content: %w", err))
 		message := decisionFailureMessage(kind)
 		if seen[kind] || strings.Contains(message, "private message") || message == "" {

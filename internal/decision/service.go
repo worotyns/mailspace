@@ -255,6 +255,10 @@ func (s *Service) evaluatePrepared(ctx context.Context, owner string, snap snaps
 	}
 	if err != nil {
 		_, _ = s.db.ExecContext(context.WithoutCancel(ctx), "UPDATE decision_runs SET state='error' WHERE id=? AND owner_id=?", id, owner)
+		var status *ProviderHTTPError
+		if errors.As(err, &status) {
+			return Run{}, &ProviderHTTPError{Status: status.Status}
+		}
 		return Run{}, ErrProvider
 	}
 	sort.Strings(proposal.SpaceIDs)

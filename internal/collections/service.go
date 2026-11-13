@@ -201,7 +201,7 @@ func (s *Service) Assign(ctx context.Context, owner, kind, id string, ref mail.S
 	if err != nil {
 		return err
 	}
-	if changed > 0 {
+	if changed > 0 && kind == "space" {
 		_, err = tx.ExecContext(ctx, `INSERT INTO message_manual_revisions(account_id,account_revision,message_key,revision,updated_at) VALUES(?,?,?,1,?) ON CONFLICT(account_id,account_revision,message_key) DO UPDATE SET revision=revision+1,updated_at=excluded.updated_at`, identity.AccountID, identity.Revision, identity.Key, time.Now().Unix())
 		if err != nil {
 			return err

@@ -60,6 +60,9 @@ var migrationNine string
 //go:embed migrations/010_space_workflow.sql
 var migrationTen string
 
+//go:embed migrations/011_metadata_indexes.sql
+var migrationEleven string
+
 type User struct {
 	Name     string `json:"name"`
 	Timezone string `json:"timezone"`
@@ -144,7 +147,7 @@ func (s *Store) migrate() error {
 	if err = tx.QueryRowContext(ctx, "SELECT coalesce(max(version),0) FROM schema_migrations").Scan(&version); err != nil {
 		return err
 	}
-	if version > 10 {
+	if version > 11 {
 		return errors.New("database is newer than this binary; use a compatible version or restore backup")
 	}
 	if version == 0 {
@@ -224,6 +227,14 @@ func (s *Store) migrate() error {
 			return err
 		}
 		if _, err = tx.ExecContext(ctx, "INSERT INTO schema_migrations(version,applied_at) VALUES(10,?)", time.Now().Unix()); err != nil {
+			return err
+		}
+	}
+	if version < 11 {
+		if _, err = tx.ExecContext(ctx, migrationEleven); err != nil {
+			return err
+		}
+		if _, err = tx.ExecContext(ctx, "INSERT INTO schema_migrations(version,applied_at) VALUES(11,?)", time.Now().Unix()); err != nil {
 			return err
 		}
 	}

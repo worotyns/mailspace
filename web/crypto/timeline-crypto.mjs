@@ -190,7 +190,15 @@ export class InlineEncryption {
       )
         throw new Error("invalid result");
       this.body.value = "";
-      location.assign(result.location);
+      this.status.textContent =
+        result.state === "accepted"
+          ? "Mail server accepted this message."
+          : "Send outcome needs attention. Check Outbox before any new send.";
+      window.dispatchEvent?.(
+        new CustomEvent("mailspace:sent", {
+          detail: { state: result.state, location: result.location },
+        }),
+      );
     } catch (error) {
       if (epoch !== this.epoch) return;
       this.status.textContent = this.submitted

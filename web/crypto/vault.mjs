@@ -66,9 +66,23 @@ async function publicInfo(key) {
   )
     status = "expired";
   const identities = key.getUserIDs().slice(0, 20);
+  const emails = [
+    ...new Set(
+      key.users
+        .map((user) => user.userID?.email)
+        .filter((value) => {
+          try {
+            return !!value && !!email(value);
+          } catch {
+            return false;
+          }
+        }),
+    ),
+  ].slice(0, 20);
   return {
     fingerprint: normalizeFingerprint(key.getFingerprint()),
     identities,
+    emails,
     status,
     expires: expiry instanceof Date ? expiry.toISOString() : null,
   };

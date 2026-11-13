@@ -71,6 +71,20 @@ func ruleRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store, pr
 			}
 			data.Edit = &rules.Rule{Kind: "sender", Value: resolved.Record.Preview.Sender, SpaceID: space.ID}
 		}
+		if data.Edit == nil && (r.URL.Query().Get("from_filter") != "" || r.URL.Query().Get("query_filter") != "") {
+			draft := rules.Rule{Kind: "subject", Value: r.URL.Query().Get("query_filter")}
+			if sender := r.URL.Query().Get("from_filter"); sender != "" {
+				draft.Kind = "sender"
+				draft.Value = sender
+			}
+			if id := r.URL.Query().Get("space"); id != "" {
+				if space, err := groups.Get(r.Context(), s.User.ID, "space", id); err == nil {
+					draft.SpaceID = space.ID
+				}
+			}
+			data.Edit = &draft
+			data.Notice = "Rule draft: review the condition and destination before saving. It remains disabled until you approve it."
+		}
 		if webui.RenderRules(w, config.Dev, data) != nil {
 			http.Error(w, "Unable to render rules", 500)
 		}

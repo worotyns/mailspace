@@ -154,7 +154,7 @@ test("actual composer event submits only ciphertext, never key/passphrase/plaint
     await listeners.get("secure-send:click")();
     assert.ok(submitted, "composer did not reach ciphertext submission");
     assert.equal(submitted.subject, "Visible subject");
-    assert.equal(navigated, "/outbox?account=SYNTHETIC_ACCOUNT");
+    assert.equal(navigated, undefined, "sending must keep the current view");
     assert.equal(element("secure-body").value, "");
     assert.equal(element("secure-compose-fields").disabled, true);
     // Re-import the same shipped reader module with a fresh DOM, then prove

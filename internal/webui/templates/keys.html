@@ -7,6 +7,8 @@
       <title>Local keys · Mailspace</title>
       <script src="/assets/theme.js"></script>
       <script src="/assets/forms.js" defer></script>
+      <script src="/assets/panel-child.js" defer></script>
+      <script src="/assets/toasts.js" defer></script>
       <script src="/assets/session.js" defer></script>
       <link rel="stylesheet" href="/assets/app.css" />
       <script type="module" src="/assets/crypto/ui.mjs"></script>
@@ -28,15 +30,13 @@
         hx-history="false"
         class="mx-auto max-w-4xl p-5 sm:p-10"
       >
-        <nav class="flex gap-4 text-xs text-accent">
-          <a href="/">← Timeline</a><a href="/profile">Profile</a
-          ><a href="/workspaces">Organizations</a>
-        </nav>
-        <h1 class="mt-6 text-2xl font-semibold">Local OpenPGP keys</h1>
+        {{ template "settings-navigation" . }}
+        <h1 class="mt-6 text-2xl font-semibold">Encryption &amp; signatures</h1>
         <p class="mt-3 text-sm leading-relaxed text-muted">
-          Keys stay in this browser, protected by their passphrase. Export a
-          backup: the server cannot recover it. This page blocks network
-          connections and never submits key forms.
+          To send encrypted mail: add your private key, add the recipient’s
+          public key, and verify both email identities. Encrypt also signs your
+          message. Keys and passphrases stay in this browser; nothing on this
+          page is uploaded.
         </p>
         <p
           id="vault-status"
@@ -52,165 +52,169 @@
         >
         <fieldset id="vault-controls" disabled class="mt-6 space-y-6">
           <legend class="sr-only">Local key management</legend>
+          <section aria-labelledby="my-keys-title">
+            <h2 id="my-keys-title" class="text-lg font-semibold">
+              1. My sending key
+            </h2>
+            <p class="mt-2 text-sm text-muted">
+              Your private key signs outgoing mail and reads your encrypted Sent
+              copy. It must match the mailbox selected in From.
+            </p>
+            <div id="my-key-list" class="mt-4 space-y-3"></div>
+            <details
+              id="private-import-details"
+              class="mt-4 rounded-xl border border-line p-4"
+              open
+            >
+              <summary class="font-medium">Import my existing key</summary>
+              <section class="rounded-xl border border-line bg-panel p-5">
+                <h3 class="font-semibold">Import my private key</h3>
+                <p class="mt-2 text-xs text-muted">
+                  Choose your exported ASCII-armored .asc file. Its public part
+                  is added automatically. Use the key for your sending mailbox
+                  address.
+                </p>
+                <label class="mt-4 block text-xs font-medium"
+                  >Armored private key<textarea
+                    id="private-armor"
+                    rows="4"
+                    maxlength="2097152"
+                    autocomplete="off"
+                    spellcheck="false"
+                    class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 font-mono text-xs"
+                  ></textarea></label
+                ><label class="mt-3 block text-xs font-medium"
+                  >Or private .asc file<input
+                    id="private-file"
+                    type="file"
+                    accept=".asc"
+                    class="mt-2 block max-w-full text-xs" /></label
+                ><label class="mt-4 block text-xs font-medium"
+                  >Import passphrase<input
+                    id="import-passphrase"
+                    type="password"
+                    maxlength="1024"
+                    autocomplete="off"
+                    class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 text-sm"
+                /></label>
+                <p class="mt-2 text-xs text-muted">
+                  Use its existing passphrase. An unprotected key needs a new
+                  passphrase of at least 12 characters before storage.
+                </p>
+                <button
+                  type="button"
+                  id="import-private"
+                  class="mt-4 rounded-lg border border-line px-4 py-2 text-xs"
+                >
+                  Import protected private key
+                </button>
+              </section>
+            </details>
+          </section>
+          <section aria-labelledby="recipient-keys-title">
+            <h2 id="recipient-keys-title" class="text-lg font-semibold">
+              2. Recipient keys
+            </h2>
+            <p class="mt-2 text-sm text-muted">
+              Their public key encrypts mail to them. You do not need their
+              private key.
+            </p>
+            <div id="recipient-key-list" class="mt-4 space-y-3"></div>
+            <details
+              id="public-import-details"
+              class="mt-4 rounded-xl border border-line p-4"
+              open
+            >
+              <summary class="font-medium">Add a recipient key</summary>
+              <section class="rounded-xl border border-line bg-panel p-5">
+                <h3 class="font-semibold">Add a recipient’s public key</h3>
+                <label class="mt-4 block text-xs font-medium"
+                  >Armored public key<textarea
+                    id="public-armor"
+                    rows="4"
+                    maxlength="2097152"
+                    spellcheck="false"
+                    class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 font-mono text-xs"
+                  ></textarea></label
+                ><label class="mt-3 block text-xs font-medium"
+                  >Or public .asc file<input
+                    id="public-file"
+                    type="file"
+                    accept=".asc"
+                    class="mt-2 block max-w-full text-xs" /></label
+                ><button
+                  type="button"
+                  id="import-public"
+                  class="mt-4 rounded-lg border border-line px-4 py-2 text-xs"
+                >
+                  Add recipient key
+                </button>
+                <p class="mt-3 text-xs text-muted">
+                  Import is discovery, not proof of identity. Verify the full
+                  fingerprint independently before trusting an email binding.
+                </p>
+              </section>
+            </details>
+          </section>
           <section class="rounded-xl border border-line bg-panel p-5">
-            <h2 class="font-semibold">Unlock or lock</h2>
-            <p id="vault-lock-state" class="mt-2 text-xs text-muted">Locked</p>
-            <label class="mt-4 block text-xs font-medium"
-              >Private key<select
-                id="private-key"
-                class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 font-mono text-xs"
-              ></select></label
-            ><label class="mt-4 block text-xs font-medium"
-              >Unlock passphrase<input
-                id="unlock-passphrase"
-                type="password"
-                autocomplete="off"
-                maxlength="1024"
-                class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 text-sm"
-            /></label>
-            <div class="mt-4 flex gap-3">
+            <h2 class="font-semibold">3. Encrypt and sign your message</h2>
+            <p class="mt-2 text-sm text-muted">
+              Choose your sending mailbox in From, enter the recipient, click
+              Encrypt &amp; sign, and unlock your own private key in the
+              composer. Send encrypted submits only ciphertext. The recipient
+              needs a compatible OpenPGP client and their own private key to
+              read it.
+            </p>
+            <a
+              href="/"
+              class="mt-4 inline-block rounded-lg bg-action px-4 py-2 text-sm text-white"
+              >Return to mail</a
+            >
+            <p class="mt-3 text-xs text-muted">
+              Signing without encryption is not connected to sending yet.
+              Existing encrypted sending already includes a signature.
+            </p>
+          </section>
+          <dialog
+            id="verify-key-dialog"
+            aria-labelledby="verify-key-title"
+            class="m-auto max-h-[90dvh] w-[94vw] max-w-xl overflow-y-auto rounded-2xl border border-line bg-panel p-5 text-ink backdrop:bg-black/50"
+          >
+            <div class="flex items-center justify-between">
+              <h2 id="verify-key-title" class="font-semibold">
+                Verify this email identity
+              </h2>
               <button
                 type="button"
-                id="unlock-key"
-                class="rounded-lg bg-action px-4 py-2 text-xs font-medium text-white"
+                id="verify-key-close"
+                class="rounded border border-line px-3 py-2"
               >
-                Unlock in memory</button
-              ><button
-                type="button"
-                id="lock-key"
-                class="rounded-lg border border-line px-4 py-2 text-xs"
-              >
-                Lock now
+                Cancel
               </button>
             </div>
-          </section>
-          <section class="rounded-xl border border-line bg-panel p-5">
-            <h2 class="font-semibold">Generate a protected key</h2>
-            <p class="mt-2 text-xs text-muted">
-              Curve25519 legacy/v4 compatibility profile · two-year expiry.
-              Generating does not upload or publish the key.
-            </p>
-            <div class="mt-4 grid gap-4 sm:grid-cols-2">
-              <label class="block text-xs font-medium"
-                >Key display name<input
-                  id="generate-name"
-                  value="{{ .ProfileName }}"
-                  maxlength="120"
-                  autocomplete="off"
-                  class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 text-sm" /></label
-              ><label class="block text-xs font-medium"
-                >Key email<input
-                  id="generate-email"
-                  value="{{ .Email }}"
-                  type="email"
-                  maxlength="254"
-                  autocomplete="off"
-                  class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 text-sm"
-              /></label>
-            </div>
-            <label class="mt-4 block text-xs font-medium"
-              >New key passphrase<input
-                id="generate-passphrase"
-                type="password"
-                minlength="12"
-                maxlength="1024"
-                autocomplete="new-password"
-                class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 text-sm" /></label
-            ><button
-              type="button"
-              id="generate-key"
-              class="mt-4 rounded-lg bg-action px-4 py-2 text-xs font-medium text-white"
-            >
-              Generate protected key</button
-            ><button
-              type="button"
-              id="export-revocation"
-              hidden
-              class="ml-3 mt-4 rounded-lg border border-line px-4 py-2 text-xs"
-            >
-              Download revocation certificate
-            </button>
-          </section>
-          <section class="rounded-xl border border-line bg-panel p-5">
-            <h2 class="font-semibold">Import a private key</h2>
-            <label class="mt-4 block text-xs font-medium"
-              >Armored private key<textarea
-                id="private-armor"
-                rows="4"
-                maxlength="2097152"
-                autocomplete="off"
-                spellcheck="false"
-                class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 font-mono text-xs"
-              ></textarea></label
-            ><label class="mt-3 block text-xs font-medium"
-              >Or private .asc file<input
-                id="private-file"
-                type="file"
-                accept=".asc"
-                class="mt-2 block max-w-full text-xs" /></label
-            ><label class="mt-4 block text-xs font-medium"
-              >Import passphrase<input
-                id="import-passphrase"
-                type="password"
-                maxlength="1024"
-                autocomplete="off"
-                class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 text-sm"
-            /></label>
-            <p class="mt-2 text-xs text-muted">
-              Use its existing passphrase. An unprotected key needs a new
-              passphrase of at least 12 characters before storage.
-            </p>
-            <button
-              type="button"
-              id="import-private"
-              class="mt-4 rounded-lg border border-line px-4 py-2 text-xs"
-            >
-              Import protected private key
-            </button>
-          </section>
-          <section class="rounded-xl border border-line bg-panel p-5">
-            <h2 class="font-semibold">Public contacts</h2>
-            <label class="mt-4 block text-xs font-medium"
-              >Armored public key<textarea
-                id="public-armor"
-                rows="4"
-                maxlength="2097152"
-                spellcheck="false"
-                class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 font-mono text-xs"
-              ></textarea></label
-            ><label class="mt-3 block text-xs font-medium"
-              >Or public .asc file<input
-                id="public-file"
-                type="file"
-                accept=".asc"
-                class="mt-2 block max-w-full text-xs" /></label
-            ><button
-              type="button"
-              id="import-public"
-              class="mt-4 rounded-lg border border-line px-4 py-2 text-xs"
-            >
-              Import public contact
-            </button>
             <p class="mt-3 text-xs text-muted">
-              Import is discovery, not proof of identity. Verify the full
-              fingerprint independently before trusting an email binding.
+              The key and address are selected for you. Compare the full
+              fingerprint with your own key file, or verify the recipient’s
+              fingerprint through another trusted channel. Importing a public
+              key alone does not verify its owner.
             </p>
-          </section>
-          <section class="rounded-xl border border-line bg-panel p-5">
-            <h2 class="font-semibold">Verify an email binding</h2>
+            <p
+              id="selected-fingerprint"
+              class="mt-3 break-all font-mono text-xs text-accent"
+            ></p>
             <label class="mt-4 block text-xs font-medium"
-              >Contact key<select
+              >Selected key<select
                 id="trust-key"
                 class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 font-mono text-xs"
               ></select></label
             ><label class="mt-4 block text-xs font-medium"
-              >Verified email<input
+              >Email on this key<input
                 id="trust-email-address"
                 type="email"
                 maxlength="254"
                 class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 text-sm" /></label
             ><label class="mt-4 block text-xs font-medium"
-              >Complete independently verified fingerprint<input
+              >Paste the full fingerprint you verified<input
                 id="trust-fingerprint"
                 autocomplete="off"
                 spellcheck="false"
@@ -227,17 +231,103 @@
               id="trust-email"
               class="mt-4 rounded-lg border border-line px-4 py-2 text-xs"
             >
-              Trust verified fingerprint
+              Confirm verified identity
             </button>
+          </dialog>
+          <details class="rounded-xl border border-line p-4">
+            <summary class="font-medium">
+              Advanced: generate a key, unlock here, or review trusted
+              identities
+            </summary>
+            <p class="my-3 text-xs text-muted">
+              Generate only if you do not already have a suitable key. Export
+              your protected private key and revocation certificate as a backup.
+            </p>
+            <section class="rounded-xl border border-line bg-panel p-5">
+              <h2 class="font-semibold">Generate a protected key</h2>
+              <p class="mt-2 text-xs text-muted">
+                Curve25519 legacy/v4 compatibility profile · two-year expiry.
+                Generating does not upload or publish the key.
+              </p>
+              <div class="mt-4 grid gap-4 sm:grid-cols-2">
+                <label class="block text-xs font-medium"
+                  >Key display name<input
+                    id="generate-name"
+                    value="{{ .ProfileName }}"
+                    maxlength="120"
+                    autocomplete="off"
+                    class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 text-sm" /></label
+                ><label class="block text-xs font-medium"
+                  >Key email<input
+                    id="generate-email"
+                    placeholder="Your sending mailbox address"
+                    type="email"
+                    maxlength="254"
+                    autocomplete="off"
+                    class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 text-sm"
+                /></label>
+              </div>
+              <label class="mt-4 block text-xs font-medium"
+                >New key passphrase<input
+                  id="generate-passphrase"
+                  type="password"
+                  minlength="12"
+                  maxlength="1024"
+                  autocomplete="new-password"
+                  class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 text-sm" /></label
+              ><button
+                type="button"
+                id="generate-key"
+                class="mt-4 rounded-lg bg-action px-4 py-2 text-xs font-medium text-white"
+              >
+                Generate protected key</button
+              ><button
+                type="button"
+                id="export-revocation"
+                hidden
+                class="ml-3 mt-4 rounded-lg border border-line px-4 py-2 text-xs"
+              >
+                Download revocation certificate
+              </button>
+            </section>
+            <section class="rounded-xl border border-line bg-panel p-5">
+              <h2 class="font-semibold">Unlock or lock</h2>
+              <p id="vault-lock-state" class="mt-2 text-xs text-muted">
+                Locked
+              </p>
+              <label class="mt-4 block text-xs font-medium"
+                >Private key<select
+                  id="private-key"
+                  class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 font-mono text-xs"
+                ></select></label
+              ><label class="mt-4 block text-xs font-medium"
+                >Unlock passphrase<input
+                  id="unlock-passphrase"
+                  type="password"
+                  autocomplete="off"
+                  maxlength="1024"
+                  class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 text-sm"
+              /></label>
+              <div class="mt-4 flex gap-3">
+                <button
+                  type="button"
+                  id="unlock-key"
+                  class="rounded-lg bg-action px-4 py-2 text-xs font-medium text-white"
+                >
+                  Unlock in memory</button
+                ><button
+                  type="button"
+                  id="lock-key"
+                  class="rounded-lg border border-line px-4 py-2 text-xs"
+                >
+                  Lock now
+                </button>
+              </div>
+            </section>
             <div id="trusted-bindings" class="mt-4"></div>
-          </section>
-          <section>
-            <h2 class="font-semibold">Keys in this browser</h2>
-            <div id="key-list" class="mt-4 space-y-3"></div>
-          </section>
+          </details>
         </fieldset>
         <footer class="mt-8 border-t border-line pt-5 text-xs text-muted">
-          <a href="/source.tar.gz" class="text-accent">Source code · AGPLv3</a>
           <p class="mt-3 leading-relaxed">
             Unlocked state is memory-only. Locking drops references; JavaScript
             cannot guarantee physical RAM erasure. Protect this origin, browser

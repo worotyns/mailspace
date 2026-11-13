@@ -74,3 +74,9 @@ The independent [local rules](RULES.md) module needs no provider or API key. Sav
 Each message uses one provider request containing every owned Space definition (up to 32); Jev evaluates each Space independently, so several can match. A batch checks up to three eligible messages. An unchanged stored result may be reused without a new request.
 
 The UI distinguishes an already-running check, the local limit of six new attempts per user per minute, an outdated decision after source/Space/settings/manual changes, ineligible input, and provider failure. Failed attempts count toward the minute limit. Wait for the running check or minute window before trying again; outdated results need a fresh preview. Provider errors can mean a network failure, rejected HTTP request or invalid response, and do not prove credentials are wrong. There is no automatic retry or plaintext fallback. Raw provider errors and message content are never displayed as diagnostics.
+
+## Accepting saved results in bulk
+
+Decision trace shows the latest 50 records. Select review/dry-run proposals and use **Accept selected**, or **Accept all shown** for every actionable proposal on that displayed page. Acceptance uses saved decisions only, with no model request. Source, settings, Space and manual revisions are rechecked for each proposal; outdated/unavailable proposals are skipped and counted. This does not approve all 5,000 retained records or overwrite manual decisions.
+
+Provider HTTP 401/403, 402 and 429 are displayed as access, budget/credit and provider rate-limit failures respectively. Only the numeric HTTP status crosses this diagnostic boundary; response bodies and headers are discarded.

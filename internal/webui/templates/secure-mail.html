@@ -7,6 +7,8 @@
       <title>Secure mail · Mailspace</title>
       <script src="/assets/theme.js"></script>
       <script src="/assets/forms.js" defer></script>
+      <script src="/assets/panel-child.js" defer></script>
+      <script src="/assets/toasts.js" defer></script>
       <script src="/assets/session.js" defer></script>
       <script type="module" src="/assets/crypto/mail-ui.mjs"></script>
       <link rel="stylesheet" href="/assets/app.css" />
@@ -281,6 +283,9 @@
             <label class="block text-xs"
               >To<input
                 id="secure-to"
+                data-recipient-picker
+                list="secure-recipient-suggestions"
+                autocomplete="off"
                 value="{{ .Compose.To }}"
                 autocomplete="off"
                 maxlength="8192"
@@ -291,12 +296,18 @@
               <label class="block text-xs"
                 >Cc<input
                   id="secure-cc"
+                  data-recipient-picker
+                  list="secure-cc-suggestions"
+                  autocomplete="off"
                   autocomplete="off"
                   maxlength="8192"
                   class="mt-1 w-full rounded-lg border border-line px-3 py-2 text-sm" /></label
               ><label class="block text-xs"
                 >Bcc<input
                   id="secure-bcc"
+                  data-recipient-picker
+                  list="secure-bcc-suggestions"
+                  autocomplete="off"
                   autocomplete="off"
                   maxlength="8192"
                   class="mt-1 w-full rounded-lg border border-line px-3 py-2 text-sm"
@@ -357,6 +368,9 @@
             private message is submitted without it.</noscript
           >
         {{ end }}
+        <datalist id="secure-recipient-suggestions"></datalist
+        ><datalist id="secure-cc-suggestions"></datalist
+        ><datalist id="secure-bcc-suggestions"></datalist>
       </main>
     </body>
   </html>

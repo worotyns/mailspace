@@ -9,6 +9,8 @@ await writeFile(
 );
 const names = [
   "calendar",
+  "tag",
+  "filter",
   "hash",
   "inbox",
   "star",

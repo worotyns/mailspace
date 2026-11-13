@@ -108,7 +108,7 @@ func TestPeoplePaginationBoundsTwentyThousandContactsAndArchiveViews(t *testing.
 	}
 	data := TimelineData{Filter: "unsorted", PeopleOffset: 50, Archived: map[string]bool{"0": true}}
 	FormatTimeline(records, nil, nil, nil, &data)
-	if len(data.PeoplePage) != 50 || len(data.People) != 6 || data.PeopleTotal != 20000 {
+	if len(data.PeoplePage) != 50 || len(data.People) != 6 || data.PeopleTotal != 19999 {
 		t.Fatal("contact rendering unbounded")
 	}
 	if data.Unsorted != 19999 || len(data.Messages) != 19999 {
@@ -130,5 +130,30 @@ func TestPeoplePaginationBoundsTwentyThousandContactsAndArchiveViews(t *testing.
 	}
 	if strings.Count(response.Body.String(), "messages</span>") > 50 {
 		t.Fatal("entire directory rendered")
+	}
+}
+
+func TestContactComposeAndInclusiveDateRange(t *testing.T) {
+	d := TimelineData{Person: "Sender <sender@example.test>"}
+	if d.ComposeRecipient() != "sender@example.test" {
+		t.Fatal("contact not prefilled")
+	}
+	d.Person = "invalid\r\nBcc: injected@example.test"
+	if d.ComposeRecipient() != "" {
+		t.Fatal("invalid recipient accepted")
+	}
+	records := []timeline.Record{}
+	for day := 10; day <= 13; day++ {
+		records = append(records, timeline.Record{Identity: mail.MessageIdentity{Key: fmt.Sprint(day)}, At: time.Date(2026, 11, day, 12, 0, 0, 0, time.UTC), Preview: mailsync.Preview{Sender: "sender@example.test"}})
+	}
+	data := TimelineData{Timezone: "UTC", FromDate: "2026-11-11", UntilDate: "2026-11-12"}
+	FormatTimeline(records, nil, nil, nil, &data)
+	if len(data.Messages) != 2 {
+		t.Fatal("inclusive range failed", len(data.Messages))
+	}
+	data = TimelineData{Timezone: "UTC", FromDate: "2026-11-11"}
+	FormatTimeline(records, nil, nil, nil, &data)
+	if len(data.Messages) != 1 {
+		t.Fatal("single day failed")
 	}
 }

@@ -1,5 +1,6 @@
 {{ define "thread-content" }}
   <header
+    data-thread-url="{{ .CurrentURL }}"
     class="flex shrink-0 items-start justify-between gap-3 border-b border-line p-4"
   >
     <div>
@@ -43,8 +44,9 @@
   </p>
   {{ range .PeoplePage }}
     <a
-      href="{{ $.Link "person" .Email }}"
-      hx-get="{{ $.Link "person" .Email }}"
+      title="{{ .Email }}"
+      href="{{ $.PeopleLink .Email }}"
+      hx-get="{{ $.PeopleLink .Email }}"
       hx-target="#timeline-shell"
       hx-swap="outerHTML"
       hx-push-url="true"
@@ -91,6 +93,8 @@
       <link rel="stylesheet" href="/assets/app.css" />
       <script src="/assets/theme.js" defer></script>
       <script src="/assets/forms.js" defer></script>
+      <script src="/assets/panel-child.js" defer></script>
+      <script src="/assets/toasts.js" defer></script>
     </head>
     <body>
       <main class="mx-auto max-w-xl p-5">

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"mailspace.local/mailspace/internal/collections"
 	"mailspace.local/mailspace/internal/decision"
@@ -14,6 +15,7 @@ import (
 	"mailspace.local/mailspace/internal/webui"
 	"net/http"
 	"net/url"
+	"strconv"
 )
 
 func decisionRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store, protected protectedRoute, mutation func(http.ResponseWriter, *http.Request, identity.Session) bool) {
@@ -43,6 +45,13 @@ func decisionRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 		}
 		notice := ""
 		switch r.URL.Query().Get("notice") {
+		case "bulk":
+			applied, _ := strconv.Atoi(r.URL.Query().Get("applied"))
+			skipped, _ := strconv.Atoi(r.URL.Query().Get("skipped"))
+			if applied < 0 || applied > 50 || skipped < 0 || skipped > 50 {
+				applied, skipped = 0, 0
+			}
+			notice = fmt.Sprintf("Applied %d stored decisions; skipped %d outdated or unavailable decisions. No new provider requests.", applied, skipped)
 		case "batch":
 			notice = "Bounded check completed: up to 3 eligible unassigned messages checked. Preview leaves proposals unchanged; saved Auto mode can apply high-confidence results. Stored results may be reused."
 		case "enable":
@@ -55,7 +64,7 @@ func decisionRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 			notice = "Stored decision applied once; no new provider request."
 		case "replayed":
 			notice = "Stored decision passed current validation. Replay made no provider request or assignment."
-		case "busy-failed", "rate-failed", "changed-failed", "provider-failed", "input-failed", "timeout-failed":
+		case "busy-failed", "rate-failed", "changed-failed", "provider-failed", "input-failed", "timeout-failed", "provider-auth-failed", "provider-budget-failed", "provider-rate-failed":
 			notice = decisionFailureMessage(r.URL.Query().Get("notice"))
 		case "failed":
 			notice = "Could not complete this action. Check provider configuration, source/Space revisions and manual overrides. No plaintext fallback or automatic retry."
@@ -180,6 +189,57 @@ func decisionRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 		}
 		http.Redirect(w, r, target, 303)
 	}))
+
+	mux.HandleFunc("POST /automation/bulk/apply", protected(func(w http.ResponseWriter, r *http.Request, session identity.Session) {
+		if !mutation(w, r, session) {
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, 32768)
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Invalid bounded selection", 400)
+			return
+		}
+		ids := r.Form["run_id"]
+		if r.FormValue("scope") == "visible" {
+			ids = r.Form["visible_id"]
+		} else if r.FormValue("scope") != "selected" {
+			http.Error(w, "Choose selected or visible decisions", 400)
+			return
+		}
+		if len(ids) == 0 || len(ids) > 50 {
+			http.Error(w, "Select between 1 and 50 decisions", 400)
+			return
+		}
+		// Authorize the complete selection before any assignment; each Apply also
+		// rechecks the current source/settings/Space/manual revisions transactionally.
+		selected := []decision.Run{}
+		seen := map[string]bool{}
+		for _, id := range ids {
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+			run, err := engine.Get(r.Context(), session.User.ID, id)
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			selected = append(selected, run)
+		}
+		applied, skipped := 0, 0
+		for _, run := range selected {
+			if run.State != "review" && run.State != "dry-run" {
+				skipped++
+				continue
+			}
+			if err := engine.Apply(r.Context(), session.User.ID, run.ID, true); err != nil {
+				skipped++
+			} else {
+				applied++
+			}
+		}
+		http.Redirect(w, r, "/automation?"+url.Values{"notice": {"bulk"}, "applied": {strconv.Itoa(applied)}, "skipped": {strconv.Itoa(skipped)}}.Encode(), 303)
+	}))
 	for _, action := range []string{"apply", "replay"} {
 		mux.HandleFunc("POST /automation/runs/{id}/"+action, protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
 			if !mutation(w, r, s) {
@@ -205,6 +265,17 @@ func decisionRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 
 // Only fixed categories reach the UI; provider response bodies may contain mail.
 func decisionFailureNotice(err error) string {
+	var status *decision.ProviderHTTPError
+	if errors.As(err, &status) {
+		switch status.Status {
+		case 401, 403:
+			return "provider-auth-failed"
+		case 402:
+			return "provider-budget-failed"
+		case 429:
+			return "provider-rate-failed"
+		}
+	}
 	switch {
 	case errors.Is(err, decision.ErrBusy):
 		return "busy-failed"
@@ -224,6 +295,12 @@ func decisionFailureNotice(err error) string {
 }
 func decisionFailureMessage(kind string) string {
 	switch kind {
+	case "provider-auth-failed":
+		return "The provider rejected authentication/access (HTTP 401/403). Check token permissions and model access. No automatic retry."
+	case "provider-budget-failed":
+		return "The provider rejected the request for budget/credit reasons (HTTP 402). Check balance and spending limits. No automatic retry."
+	case "provider-rate-failed":
+		return "The provider rate limit was reached (HTTP 429). Wait before explicitly trying again. No automatic retry."
 	case "busy-failed":
 		return "Another Space check is running. Wait for it to finish, then try again. No automatic retry."
 	case "rate-failed":

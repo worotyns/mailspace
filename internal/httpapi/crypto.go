@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	netmail "net/mail"
 	"net/url"
 	"strconv"
 	"strings"
@@ -84,6 +85,14 @@ func cryptoRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store, 
 			return
 		}
 		form := webui.ComposeForm{AccountID: account.ID, Address: account.Address, AccountName: account.Name, Nonce: rand.Text()}
+		if to := r.URL.Query().Get("to"); to != "" {
+			address, err := netmail.ParseAddress(to)
+			if err != nil || len(to) > 254 || strings.ContainsAny(to, "\r\n\x00") {
+				http.Error(w, "Invalid recipient", 400)
+				return
+			}
+			form.To = address.Address
+		}
 		if r.URL.Query().Get("uid") != "" {
 			uid, e := strconv.ParseUint(r.URL.Query().Get("uid"), 10, 32)
 			validity, e2 := strconv.ParseUint(r.URL.Query().Get("validity"), 10, 32)
@@ -196,6 +205,11 @@ func cryptoRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store, 
 			}
 		}
 		_ = config.Outbox.Dispatch(r.Context(), s.User.ID, record.ID)
-		reply(w, map[string]string{"location": "/outbox?" + url.Values{"account": {record.AccountID}, "message": {record.ID}}.Encode()})
+		current, err := config.Outbox.Get(r.Context(), s.User.ID, record.ID)
+		state, copyState := "unknown", "unknown"
+		if err == nil {
+			state, copyState = current.State, current.CopyState
+		}
+		reply(w, map[string]string{"id": record.ID, "state": state, "copyState": copyState, "location": "/outbox?" + url.Values{"account": {record.AccountID}, "message": {record.ID}}.Encode()})
 	}))
 }

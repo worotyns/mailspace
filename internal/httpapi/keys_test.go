@@ -42,6 +42,20 @@ func TestLocalKeyPageHasNoUploadOrFormEgress(t *testing.T) {
 	if response := request("GET", "/keys", false); response.Code != 303 || response.Header().Get("Location") != "/login" {
 		t.Fatal("unauthenticated UI did not return to login")
 	}
+
+	for _, path := range []string{"/settings", "/keys", "/profile"} {
+		req := httptest.NewRequest("GET", path, nil)
+		req.AddCookie(&http.Cookie{Name: "__Host-mailspace", Value: token})
+		req.Header.Set("Sec-Fetch-Dest", "iframe")
+		res := httptest.NewRecorder()
+		h.ServeHTTP(res, req)
+		if res.Code != 200 || !strings.Contains(res.Header().Get("Content-Security-Policy"), "frame-ancestors 'self'") {
+			t.Fatal("trusted panel unavailable", path, res.Code, res.Header())
+		}
+		if path == "/keys" && !strings.Contains(res.Header().Get("Content-Security-Policy"), "connect-src 'none'") {
+			t.Fatal("framed keys can transmit")
+		}
+	}
 	response := request("GET", "/keys", true)
 	if response.Code != 200 {
 		t.Fatal("key view unavailable", response.Code)

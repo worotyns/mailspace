@@ -106,7 +106,7 @@ func TestMigrationRefusesNewerSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = store.db.Exec("INSERT INTO schema_migrations(version,applied_at) VALUES(11,0)"); err != nil {
+	if _, err = store.db.Exec("INSERT INTO schema_migrations(version,applied_at) VALUES(12,0)"); err != nil {
 		t.Fatal(err)
 	}
 	store.Close()

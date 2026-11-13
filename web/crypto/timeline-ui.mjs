@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import "./recipient-picker.mjs";
+import "./app-panels.mjs";
 // Plain replies use HTMX. Encrypted mode has no serializable body field and
 // intercepts submission before HTMX; the crypto module uploads ciphertext only.
 let cleanup = () => {};
@@ -12,7 +14,8 @@ function clearAttachments() {
   for (const viewer of attachmentViewers) {
     if (viewer.triggerButton?.isConnected) {
       viewer.triggerButton.disabled = false;
-      viewer.triggerButton.textContent = viewer.triggerLabel;
+      viewer.triggerButton.setAttribute("aria-label", "Attachments");
+      viewer.triggerButton.title = "Attachments";
     }
     viewer.dispose();
   }
@@ -53,11 +56,13 @@ function initialize() {
     pending;
   function paint() {
     toggle.setAttribute("aria-pressed", String(encrypted));
-    toggle.textContent = encrypted ? "🔒 Encryption on" : "Encrypt";
+    toggle.textContent = encrypted ? "🔒 Encrypt & sign on" : "Encrypt & sign";
     state.textContent = encrypted
       ? "Encrypted locally before sending"
       : "No encryption selected";
-    send.textContent = encrypted ? "Send encrypted" : "Send unencrypted";
+    send.textContent = encrypted
+      ? "Send encrypted & signed"
+      : "Send unencrypted";
     if (encrypted) {
       body.removeAttribute("name");
       form.setAttribute("hx-disable", "");
@@ -146,6 +151,7 @@ document.addEventListener("click", (event) => {
     const dialog = document.getElementById(opener.dataset.openDialog);
     if (dialog?.showModal) {
       event.preventDefault();
+      if (dialog.id === "command-menu") prepareContextCommands();
       dialog.showModal();
     }
   }
@@ -155,6 +161,8 @@ document.addEventListener("click", (event) => {
 document.addEventListener("htmx:beforeSwap", (event) => {
   if (["timeline-shell", "thread-content"].includes(event.detail.target?.id)) {
     cleanup();
+    clearAttachments();
+  } else if (event.detail.target?.id?.includes("membership-")) {
     clearAttachments();
   }
   if (
@@ -173,11 +181,19 @@ window.addEventListener("pagehide", () => cleanup());
 initialize();
 
 document.addEventListener("htmx:beforeRequest", () => {
-  document.getElementById("request-error").hidden = true;
+  document.getElementById("request-error")?.setAttribute("hidden", "");
 });
 for (const event of ["htmx:responseError", "htmx:sendError", "htmx:timeout"])
   document.addEventListener(event, () => {
-    document.getElementById("request-error").hidden = false;
+    window.dispatchEvent(
+      new CustomEvent("mailspace:toast", {
+        detail: {
+          message:
+            "Unable to finish this action. Check the connection and try again.",
+          kind: "error",
+        },
+      }),
+    );
   });
 
 document.addEventListener("htmx:afterSettle", (event) => {
@@ -202,6 +218,43 @@ document.addEventListener("htmx:afterSettle", (event) => {
   }
 });
 
+let commandMessage = null;
+function prepareContextCommands() {
+  const current = new URL(location.href);
+  const thread = document.getElementById("thread-drawer")?.open
+    ? new URL(
+        document.querySelector("[data-thread-url]")?.dataset.threadUrl ||
+          location.href,
+        location.href,
+      ).searchParams.get("thread")
+    : current.searchParams.get("thread") ||
+      (commandMessage?.isConnected ? commandMessage.dataset.messageKey : "");
+  const person =
+    current.searchParams.get("person") ||
+    (commandMessage?.isConnected ? commandMessage.dataset.messagePerson : "");
+  for (const link of document.querySelectorAll("[data-context-command]")) {
+    const [action, scope] = link.dataset.contextCommand.split("-");
+    const value = scope === "thread" ? thread : person;
+    link.dataset.contextAvailable = value ? "true" : "false";
+    link.hidden = !value;
+    if (value)
+      link.href =
+        (action === "archive" ? "/archive/preview?" : "/labels/assign?") +
+        new URLSearchParams({
+          scope,
+          [scope === "thread" ? "key" : "person"]: value,
+        });
+  }
+}
+for (const type of ["click", "focusin"])
+  document.addEventListener(
+    type,
+    (event) => {
+      const article = event.target.closest("[data-message-key]");
+      if (article) commandMessage = article;
+    },
+    true,
+  );
 // Native dialogs provide focus containment, Escape and focus restoration.
 document.addEventListener(
   "close",
@@ -220,7 +273,13 @@ document.addEventListener("keydown", (event) => {
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
     const menu = document.getElementById("command-menu");
     if (!menu) return;
-    if (document.querySelector("dialog[open]:not(#command-menu)")) return;
+    if (
+      document.querySelector(
+        "dialog[open]:not(#command-menu):not(#thread-drawer):not(#app-panel-dialog)",
+      )
+    )
+      return;
+    prepareContextCommands();
     event.preventDefault();
     if (menu.open) menu.close();
     else menu.showModal();
@@ -230,12 +289,14 @@ document.addEventListener("input", (event) => {
   if (!event.target.matches("[data-command-search]")) return;
   const query = event.target.value.toLowerCase().trim();
   for (const item of document.querySelectorAll("[data-command]"))
-    item.hidden = !item.textContent.toLowerCase().includes(query);
+    item.hidden =
+      item.dataset.contextAvailable === "false" ||
+      !item.textContent.toLowerCase().includes(query);
 });
 document.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-load-attachments]");
   if (!button || button.disabled) return;
-  const list = button.parentElement.querySelector("[data-attachment-list]");
+  const list = document.getElementById(button.getAttribute("aria-controls"));
   if (!list) return;
   const epoch = attachmentEpoch;
   button.disabled = true;
@@ -279,7 +340,8 @@ document.addEventListener("click", async (event) => {
     notice.textContent =
       "Local attachment bytes. Open the full message for signature verification.";
     list.prepend(notice);
-    button.textContent = "Attachments loaded";
+    button.setAttribute("aria-label", "Attachments loaded");
+    button.title = "Attachments loaded";
   } catch {
     if (epoch === attachmentEpoch)
       list.textContent =
@@ -340,4 +402,53 @@ document.addEventListener("keydown", (event) => {
       : (current + (event.key === "ArrowDown" ? 1 : -1) + items.length) %
         items.length;
   items[next].focus();
+});
+
+window.addEventListener("mailspace:panel-closed", () => {
+  const shell = document.getElementById("timeline-shell");
+  if (
+    !shell ||
+    [...shell.querySelectorAll("[data-reply-body]")].some((el) =>
+      el.value.trim(),
+    )
+  )
+    return;
+  const drawer = document.getElementById("thread-drawer");
+  const url = drawer?.open
+    ? document.querySelector("[data-thread-url]")?.dataset.threadUrl
+    : shell.dataset.feedUrl;
+  const target = drawer?.open ? "#thread-content" : "#timeline-shell";
+  if (url && window.htmx)
+    window.htmx.ajax("GET", url, {
+      target,
+      swap: drawer?.open ? "innerHTML" : "outerHTML",
+    });
+});
+
+window.addEventListener("mailspace:sent", (event) => {
+  window.dispatchEvent(
+    new CustomEvent("mailspace:toast", {
+      detail: {
+        message:
+          event.detail?.state === "accepted"
+            ? "Mail server accepted this message."
+            : "Send outcome needs attention. Check Outbox before sending again.",
+        href: event.detail?.location,
+      },
+    }),
+  );
+  const shell = document.getElementById("timeline-shell");
+  const drawer = document.getElementById("thread-drawer");
+  const source = drawer?.open
+    ? document.querySelector("[data-thread-url]")?.dataset.threadUrl
+    : shell?.dataset.feedUrl;
+  if (!source || !window.htmx) return;
+  const url = new URL(source, location.href);
+  url.searchParams.delete("reply");
+  url.searchParams.delete("compose");
+  url.hash = "";
+  window.htmx.ajax("GET", url.pathname + url.search, {
+    target: drawer?.open ? "#thread-content" : "#timeline-shell",
+    swap: drawer?.open ? "innerHTML" : "outerHTML",
+  });
 });

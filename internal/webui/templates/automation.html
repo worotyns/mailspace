@@ -7,6 +7,8 @@
       <title>Space automation · Mailspace</title>
       <script src="/assets/theme.js"></script>
       <script src="/assets/forms.js" defer></script>
+      <script src="/assets/panel-child.js" defer></script>
+      <script src="/assets/toasts.js" defer></script>
       <link rel="stylesheet" href="/assets/app.css" />
     </head>
     <body class="min-h-dvh bg-canvas">
@@ -23,6 +25,7 @@
         {{ if .Notice }}
           <p
             role="status"
+            data-toast
             class="my-4 rounded-lg border border-line p-3 text-sm"
           >
             {{ .Notice }}
@@ -133,6 +136,28 @@
             call. Apply approves a saved proposal and protects it as a manual
             decision.
           </p>
+          <form
+            id="decision-bulk"
+            action="/automation/bulk/apply"
+            method="post"
+            class="mt-4 flex flex-wrap gap-3"
+          >
+            <input type="hidden" name="csrf" value="{{ .CSRF }}" />
+            <button
+              name="scope"
+              value="selected"
+              class="rounded-lg border border-line px-3 py-2 text-sm"
+            >
+              Accept selected
+            </button>
+            <button
+              name="scope"
+              value="visible"
+              class="rounded-lg border border-line px-3 py-2 text-sm"
+            >
+              Accept all shown
+            </button>
+          </form>
           <div class="mt-4 space-y-3">
             {{ range .Runs }}
               <article
@@ -140,6 +165,23 @@
                 class="rounded-xl border border-line bg-panel p-4"
               >
                 <div class="flex flex-wrap items-center gap-2 text-xs">
+                  {{ if or (eq .State "review") (eq .State "dry-run") }}
+                    <input
+                      type="hidden"
+                      name="visible_id"
+                      value="{{ .ID }}"
+                      form="decision-bulk"
+                    />
+                    <label
+                      ><input
+                        type="checkbox"
+                        name="run_id"
+                        value="{{ .ID }}"
+                        form="decision-bulk"
+                      />
+                      Select decision</label
+                    >
+                  {{ end }}
                   <strong>{{ .State }}</strong
                   ><time class="text-muted"
                     >{{ .CreatedAt.Format "2006-01-02 15:04 UTC" }}</time

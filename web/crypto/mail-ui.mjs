@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import "./recipient-picker.mjs";
 import { AttachmentViewer } from "./attachments.mjs";
 import { messageText, MailHTMLPreview } from "./mail-html.mjs";
 import { LocalDrafts } from "./drafts.mjs";
@@ -450,7 +451,24 @@ try {
           throw new Error("invalid outcome");
         if (activeDraft) await drafts.remove(root.dataset.account, activeDraft);
         lock();
-        location.assign(result.location);
+        notify(
+          result.state === "accepted"
+            ? "Mail server accepted this message."
+            : "Send outcome needs attention. Check Outbox before any new send.",
+        );
+        const outcomeLink = document.createElement("a");
+        outcomeLink.href = result.location;
+        outcomeLink.textContent = " Outbox details";
+        status.append(outcomeLink);
+        if (window.parent && window.parent !== window)
+          window.parent.postMessage(
+            {
+              type: "mailspace:panel-sent",
+              state: result.state,
+              location: result.location,
+            },
+            location.origin,
+          );
       }),
     );
   window.addEventListener("mailspace:lock", lock);

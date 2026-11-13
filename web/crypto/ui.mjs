@@ -79,8 +79,16 @@ function node(tag, text, classes) {
 }
 async function refresh() {
   const snapshot = await vault.list();
-  const list = element("key-list");
-  list.replaceChildren();
+  const mine = element("my-key-list"),
+    recipients = element("recipient-key-list");
+  mine.replaceChildren();
+  recipients.replaceChildren();
+  element("private-import-details").open = !snapshot.keys.some(
+    (key) => key.private,
+  );
+  element("public-import-details").open = !snapshot.keys.some(
+    (key) => !key.private,
+  );
   const privateSelect = element("private-key");
   const trustSelect = element("trust-key");
   const privateValue = privateSelect.value,
@@ -88,6 +96,9 @@ async function refresh() {
   privateSelect.replaceChildren();
   trustSelect.replaceChildren();
   for (const key of snapshot.keys) {
+    const verified = snapshot.bindings.filter(
+      (binding) => binding.fingerprint === key.fingerprint,
+    );
     const card = node(
       "article",
       null,
@@ -113,6 +124,36 @@ async function refresh() {
         `${key.private ? "Protected private key · " : "Public contact · "}${key.status}${key.expires ? " · expires " + key.expires.slice(0, 10) : ""}`,
         "mt-2 text-xs text-muted",
       ),
+    );
+    card.append(
+      node(
+        "p",
+        verified.length
+          ? `Verified for: ${verified.map((binding) => binding.email).join(" · ")}`
+          : "Not ready for encrypted sending: verify this key’s email identity below.",
+        "mt-3 text-sm",
+      ),
+    );
+    const verify = node(
+      "button",
+      key.private ? "Set up my sending identity" : "Verify recipient identity",
+      "mt-3 rounded-lg bg-action px-3 py-2 text-sm text-white",
+    );
+    verify.type = "button";
+    verify.addEventListener("click", () => {
+      trustSelect.value = key.fingerprint;
+      element("trust-email-address").value = key.emails?.[0] || "";
+      element("trust-fingerprint").value = "";
+      element("replace-binding").checked = false;
+      element("selected-fingerprint").textContent =
+        `Selected fingerprint: ${key.fingerprint.match(/.{1,4}/g).join(" ")}`;
+      element("verify-key-dialog").showModal();
+      element("trust-fingerprint").focus();
+    });
+    card.append(verify);
+    const details = node("details", null, "mt-3");
+    details.append(
+      node("summary", "Backup and full key details", "text-xs text-muted"),
     );
     const row = node("div", null, "mt-3 flex flex-wrap gap-3");
     const exportPublic = node(
@@ -146,15 +187,38 @@ async function refresh() {
         ),
       );
       row.append(exportPrivate);
-      privateSelect.append(new Option(key.fingerprint, key.fingerprint));
+      privateSelect.append(
+        new Option(
+          `${key.identities.join(" · ")} · ${key.fingerprint.slice(-16)}`,
+          key.fingerprint,
+        ),
+      );
     }
-    trustSelect.append(new Option(key.fingerprint, key.fingerprint));
-    card.append(row);
-    list.append(card);
+    trustSelect.append(
+      new Option(
+        `${key.private ? "My key" : "Recipient"}: ${key.identities.join(" · ")} · ${key.fingerprint.slice(-16)}`,
+        key.fingerprint,
+      ),
+    );
+    details.append(row);
+    card.append(details);
+    (key.private ? mine : recipients).append(card);
   }
-  if (!snapshot.keys.length)
-    list.append(
-      node("p", "No keys in this browser yet.", "text-sm text-muted"),
+  if (!snapshot.keys.some((key) => key.private))
+    mine.append(
+      node(
+        "p",
+        "No sending key yet. Import your own private .asc key below.",
+        "mt-3 text-sm text-muted",
+      ),
+    );
+  if (!snapshot.keys.some((key) => !key.private))
+    recipients.append(
+      node(
+        "p",
+        "No recipient keys yet. Add the public key of the person you want to email.",
+        "mt-3 text-sm text-muted",
+      ),
     );
   if ([...privateSelect.options].some((o) => o.value === privateValue))
     privateSelect.value = privateValue;
@@ -270,7 +334,7 @@ try {
           element("import-passphrase").value,
         );
         notify(
-          "Private key imported in protected form. Unlock it only when needed.",
+          "Your private key and its public part are stored locally. Click Set up my sending identity on its card, then verify the email and fingerprint.",
         );
       } finally {
         element("import-passphrase").value = "";
@@ -284,7 +348,9 @@ try {
       await vault.importPublic(await readInput("public-armor", "public-file"));
       element("public-armor").value = "";
       element("public-file").value = "";
-      notify("Public key imported without establishing email trust.");
+      notify(
+        "Recipient key added. Click Verify recipient identity on its card before encrypted sending.",
+      );
     }),
   );
   element("unlock-key").addEventListener("click", () =>
@@ -307,6 +373,14 @@ try {
     lock();
     await refresh();
   });
+  element("verify-key-close").addEventListener("click", () =>
+    element("verify-key-dialog").close(),
+  );
+  element("trust-key").addEventListener("change", () => {
+    element("selected-fingerprint").textContent =
+      `Selected fingerprint: ${element("trust-key").value}`;
+    element("trust-fingerprint").value = "";
+  });
   element("trust-email").addEventListener("click", () =>
     perform(async () => {
       await vault.trust(
@@ -317,7 +391,10 @@ try {
       );
       element("trust-fingerprint").value = "";
       element("replace-binding").checked = false;
-      notify("Fingerprint bound to this email by your explicit decision.");
+      element("verify-key-dialog").close();
+      notify(
+        "Identity verified locally. Use the matching mailbox and recipient when you choose Encrypt & sign.",
+      );
     }),
   );
   window.addEventListener("mailspace:lock", () => {

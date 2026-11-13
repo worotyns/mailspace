@@ -7,6 +7,8 @@
       <title>Profile · Mailspace</title>
       <script src="/assets/theme.js"></script>
       <script src="/assets/forms.js" defer></script>
+      <script src="/assets/panel-child.js" defer></script>
+      <script src="/assets/toasts.js" defer></script>
       <script src="/assets/session.js" defer></script>
       <link rel="stylesheet" href="/assets/app.css" />
     </head>
@@ -20,10 +22,7 @@
         >{{ template "theme-picker" . }}
       </header>
       <main class="mx-auto max-w-2xl p-6 sm:p-10">
-        <nav class="flex flex-wrap gap-4 text-xs text-accent">
-          <a href="/">← Timeline</a><a href="/settings">Mail accounts</a
-          ><a href="/workspaces">Organizations</a><a href="/keys">Local keys</a>
-        </nav>
+        {{ template "settings-navigation" . }}
         <h1 class="mt-6 text-2xl font-semibold">Your profile</h1>
         <form
           action="/profile"
@@ -75,9 +74,6 @@
             </form>
           </div>
         </section>
-        <footer class="mt-8 border-t border-line pt-5 text-xs text-muted">
-          <a href="/source.tar.gz" class="text-accent">Source code · AGPLv3</a>
-        </footer>
       </main>
     </body>
   </html>
@@ -91,6 +87,8 @@
       <title>Organizations · Mailspace</title>
       <script src="/assets/theme.js"></script>
       <script src="/assets/forms.js" defer></script>
+      <script src="/assets/panel-child.js" defer></script>
+      <script src="/assets/toasts.js" defer></script>
       <script src="/assets/session.js" defer></script>
       <link rel="stylesheet" href="/assets/app.css" />
     </head>
@@ -104,9 +102,7 @@
         >{{ template "theme-picker" . }}
       </header>
       <main class="mx-auto max-w-3xl p-6 sm:p-10">
-        <nav class="flex gap-4 text-xs text-accent">
-          <a href="/">← Timeline</a><a href="/profile">Profile</a>
-        </nav>
+        {{ template "settings-navigation" . }}
         <h1 class="mt-6 text-2xl font-semibold">Organizations</h1>
         <p class="mt-3 text-sm leading-relaxed text-muted">
           Current context: {{ .Workspace.Name }}. Switching an organization
@@ -187,6 +183,8 @@
       <title>{{ .Workspace.Name }} · Mailspace</title>
       <script src="/assets/theme.js"></script>
       <script src="/assets/forms.js" defer></script>
+      <script src="/assets/panel-child.js" defer></script>
+      <script src="/assets/toasts.js" defer></script>
       <script src="/assets/session.js" defer></script>
       <link rel="stylesheet" href="/assets/app.css" />
     </head>

@@ -195,6 +195,24 @@ func TestClassificationHTTPConsentScopeAndSelection(t *testing.T) {
 	if res.Code != 303 || !strings.Contains(res.Header().Get("Location"), "failed") {
 		t.Fatal("other owner applied decision")
 	}
+
+	bulk := url.Values{"scope": {"selected"}, "run_id": {result.ID, "foreign-or-missing-run"}}.Encode()
+	res = request("POST", "/automation/bulk/apply", token, session.CSRF, "application/x-www-form-urlencoded", bulk)
+	if res.Code != 404 {
+		t.Fatal("mixed foreign selection accepted", res.Code)
+	}
+	unchanged, _ := engine.Get(ctx, alice.ID, result.ID)
+	if unchanged.State != "dry-run" {
+		t.Fatal("bulk authorization partially applied own decision")
+	}
+	bulk = url.Values{"scope": {"selected"}, "run_id": {result.ID, result.ID}}.Encode()
+	res = request("POST", "/automation/bulk/apply", token, session.CSRF, "application/x-www-form-urlencoded", bulk)
+	if res.Code != 303 || !strings.Contains(res.Header().Get("Location"), "applied=1") {
+		t.Fatal("bulk approval failed", res.Code, res.Body.String())
+	}
+	if provider.calls != 1 {
+		t.Fatal("bulk acceptance invoked provider")
+	}
 	res = request("POST", "/automation/runs/"+result.ID+"/apply", token, session.CSRF, "application/x-www-form-urlencoded", "")
 	if res.Code != 303 || !strings.Contains(res.Header().Get("Location"), "applied") {
 		t.Fatalf("approval failed: %s", res.Body.String())

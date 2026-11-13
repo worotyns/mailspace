@@ -13,6 +13,7 @@ import (
 	"mailspace.local/mailspace/internal/mail"
 	"mailspace.local/mailspace/internal/timeline"
 	"net/http"
+	netmail "net/mail"
 	"net/url"
 	"sort"
 	"strconv"
@@ -164,6 +165,8 @@ func DecisionSummary(run decision.Run, spaces []collections.Item) *DecisionView 
 }
 
 type TimelineData struct {
+	FromDate, UntilDate string
+
 	Archived                  map[string]bool
 	Decisions                 map[string]decision.Run
 	PeopleSearch              string
@@ -207,7 +210,7 @@ type TimelineData struct {
 
 func (d TimelineData) Link(key, value string) string {
 	q := url.Values{}
-	for k, v := range map[string]string{"space": d.SpaceID, "label": d.LabelID, "person": d.Person, "filter": d.Filter, "q": d.Query, "day": d.Day, "account": d.AccountID, "thread": d.ThreadKey} {
+	for k, v := range map[string]string{"space": d.SpaceID, "label": d.LabelID, "person": d.Person, "filter": d.Filter, "q": d.Query, "day": d.Day, "from": d.FromDate, "until": d.UntilDate, "account": d.AccountID, "thread": d.ThreadKey} {
 		if v != "" {
 			q.Set(k, v)
 		}
@@ -220,6 +223,8 @@ func (d TimelineData) Link(key, value string) string {
 		q.Del("space")
 		q.Del("filter")
 		q.Del("day")
+		q.Del("from")
+		q.Del("until")
 	}
 	if key != "" {
 		if value == "" {
@@ -322,7 +327,7 @@ func FormatTimeline(records []timeline.Record, spaces, labels []collections.Item
 		if record.Unread && !data.Archived[record.Identity.Key] {
 			data.Unread++
 		}
-		if !record.Own && record.Preview.Sender != "" {
+		if !record.Own && !data.Archived[record.Identity.Key] && record.Preview.Sender != "" {
 			person := people[record.Preview.Sender]
 			person.Email = record.Preview.Sender
 			person.Name = record.Preview.Name
@@ -347,9 +352,20 @@ func FormatTimeline(records []timeline.Record, spaces, labels []collections.Item
 		if data.Query != "" && !strings.Contains(strings.ToLower(record.Preview.Subject+" "+record.Preview.Name+" "+record.Preview.Sender+" "+strings.Join(record.Preview.To, " ")), strings.ToLower(data.Query)) {
 			continue
 		}
-		if data.Day != "" && record.At.In(location).Format("2006-01-02") != data.Day {
+		date := record.At.In(location).Format("2006-01-02")
+		if data.Day != "" && date != data.Day {
 			continue
 		}
+		if data.FromDate != "" {
+			until := data.UntilDate
+			if until == "" {
+				until = data.FromDate
+			}
+			if date < data.FromDate || date > until {
+				continue
+			}
+		}
+
 		message := TimelineMessage{Archived: data.Archived[record.Identity.Key], Decision: DecisionSummary(data.Decisions[record.Identity.Key], spaces), Spaces: data.Spaces, Classifier: data.Classifier && !data.Archived[record.Identity.Key] && !record.Own && !record.Preview.Encrypted && record.Preview.Status == "ready", Record: record, Token: EncodeSource(record.Ref), Day: record.At.In(location).Format("Monday, 2 January 2006"), Time: record.At.In(location).Format("15:04"), ReturnURL: data.CurrentURL(), CSRF: data.CSRF}
 		for _, id := range ids {
 			if collection, ok := all[id]; ok {
@@ -430,7 +446,7 @@ func (d TimelineData) ExpandURL() string {
 	if len(d.Accounts) > 0 {
 		account = d.Accounts[0].ID
 	}
-	return "/secure/compose?" + url.Values{"account": {account}}.Encode()
+	return "/secure/compose?" + url.Values{"account": {account}, "to": {d.ComposeRecipient()}}.Encode()
 }
 
 func (m TimelineMessage) NextSelection(id string) string {
@@ -530,4 +546,71 @@ func (m TimelineMessage) DOMID() string {
 		return "thread-message-" + m.Identity.Key
 	}
 	return "message-" + m.Identity.Key
+}
+
+func (d TimelineData) ComposeRecipient() string {
+	address, err := netmail.ParseAddress(d.Person)
+	if err != nil {
+		return ""
+	}
+	return address.Address
+}
+
+func (d TimelineData) PeopleLink(person string) string {
+	d.ThreadKey = ""
+	d.Filter = ""
+	d.SpaceID = ""
+	d.LabelID = ""
+	d.Day = ""
+	d.FromDate = ""
+	d.UntilDate = ""
+	d.Query = ""
+	return d.Link("person", person)
+}
+func (m TimelineMessage) RuleSpace() string {
+	for _, space := range m.Spaces {
+		if m.Has(space.ID) {
+			return space.ID
+		}
+	}
+	return ""
+}
+func (m TimelineMessage) Suggested(id string) bool {
+	if m.Decision == nil {
+		return false
+	}
+	for _, name := range m.Decision.Names {
+		for _, space := range m.Spaces {
+			if space.ID == id && space.Name == name {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (m TimelineMessage) ArchiveSelection() string {
+	if m.Archived {
+		return "0"
+	}
+	return "1"
+}
+func (d TimelineData) DateLabel() string {
+	if d.UntilDate == "" || d.UntilDate == d.FromDate {
+		return d.FromDate
+	}
+	return d.FromDate + " – " + d.UntilDate
+}
+func (d TimelineData) ClearDatesURL() string {
+	d.Day = ""
+	d.FromDate = ""
+	d.UntilDate = ""
+	return d.CurrentURL()
+}
+func (d TimelineData) FilterRuleURL() string {
+	return "/rules?" + url.Values{"from_filter": {d.Person}, "query_filter": {d.Query}, "space": {d.SpaceID}}.Encode()
+}
+
+func (m TimelineMessage) LabelsURL() string {
+	return "/labels/assign?" + url.Values{"scope": {"message"}, "reference": {m.Token}}.Encode()
 }

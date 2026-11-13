@@ -15,6 +15,14 @@ import (
 	"time"
 )
 
+// ProviderHTTPError retains only an HTTP status, never response text or headers.
+type ProviderHTTPError struct{ Status int }
+
+func (e *ProviderHTTPError) Error() string {
+	return fmt.Sprintf("classification provider HTTP %d", e.Status)
+}
+func (*ProviderHTTPError) Unwrap() error { return ErrProvider }
+
 type ChatProvider struct {
 	Endpoint   string
 	Model      string
@@ -112,7 +120,7 @@ func (p *ChatProvider) exchange(ctx context.Context, endpoint string, request an
 	}
 	defer response.Body.Close()
 	if response.StatusCode != 200 {
-		return nil, fmt.Errorf("%w: HTTP %d", ErrProvider, response.StatusCode)
+		return nil, &ProviderHTTPError{Status: response.StatusCode}
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, (64<<10)+1))
 	if err != nil || len(data) > 64<<10 {

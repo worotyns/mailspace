@@ -8,6 +8,8 @@
       <link rel="stylesheet" href="/assets/app.css" />
       <script src="/assets/theme.js" defer></script>
       <script src="/assets/forms.js" defer></script>
+      <script src="/assets/panel-child.js" defer></script>
+      <script src="/assets/toasts.js" defer></script>
     </head>
     <body class="min-h-dvh bg-canvas text-ink">
       <main class="mx-auto max-w-3xl space-y-6 p-5 sm:p-10">
@@ -20,7 +22,11 @@
           Manual decisions always win.
         </p>
         {{ if .Notice }}
-          <p role="status" class="rounded-lg border border-line p-3 text-sm">
+          <p
+            role="status"
+            data-toast
+            class="rounded-lg border border-line p-3 text-sm"
+          >
             {{ .Notice }}
           </p>
         {{ end }}

@@ -11,6 +11,8 @@
       <title>{{ .Title }} · Mailspace</title>
       <script src="/assets/theme.js"></script>
       <script src="/assets/forms.js" defer></script>
+      <script src="/assets/panel-child.js" defer></script>
+      <script src="/assets/toasts.js" defer></script>
       <script src="/assets/session.js" defer></script>
       <link rel="stylesheet" href="/assets/app.css" />
       <script src="/assets/htmx.min.js" defer></script>
@@ -24,30 +26,28 @@
         >Skip to timeline</a
       >
       <header
-        class="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-panel px-4"
+        class="flex h-11 shrink-0 items-center gap-3 border-b border-line bg-panel px-4"
       >
         <a href="/" class="text-lg font-semibold tracking-tight text-accent"
           >mailspace.</a
-        ><span class="hidden text-xs text-muted sm:inline"
-          >{{ if .Synthetic }}
-            Local preview · synthetic mail
-          {{ else }}
-            Your workspace
-          {{ end }}</span
         >
         <div class="ml-auto flex items-center gap-3">
           <button
             type="button"
             data-open-dialog="command-menu"
-            aria-keyshortcuts="Meta+K Control+K"
-            class="rounded-lg border border-line px-3 py-2 text-xs"
+            title="Commands (⌘/Ctrl K)"
+            aria-label="Commands"
+            class="icon-action"
           >
-            Commands <kbd>⌘ K</kbd></button
-          >{{ template "theme-picker" . }}<a
-            href="/profile"
-            aria-label="Profile and settings"
-            class="flex size-8 items-center justify-center rounded-lg bg-violet-100 text-xs font-semibold text-violet-800"
-            >@</a
+            {{ template "timeline-icon" "search" }}<kbd class="text-[10px]"
+              >⌘K</kbd
+            ></button
+          ><a
+            href="/settings"
+            title="Settings"
+            aria-label="Settings"
+            class="icon-action"
+            >{{ template "timeline-icon" "settings" }}</a
           >
         </div>
       </header>
@@ -74,6 +74,7 @@
     data-session-expires="{{ .SessionExpires }}"
     data-csrf="{{ .CSRF }}"
     data-feed-url="{{ .CurrentURL }}"
+    data-person="{{ .Person }}"
     hx-target="#timeline-shell"
     hx-swap="outerHTML"
     hx-push-url="true"
@@ -182,215 +183,240 @@
         {{ range $i,$person:=.People }}
           {{ if lt $i 6 }}
             <a
-              href="{{ $.Link "person" .Email }}"
-              hx-get="{{ $.Link "person" .Email }}"
+              title="{{ .Email }}"
+              href="{{ $.PeopleLink .Email }}"
+              hx-get="{{ $.PeopleLink .Email }}"
               class="block truncate rounded-lg px-3 py-1.5 text-xs text-body hover:bg-hover"
               >{{ if .Name }}{{ .Name }}{{ else }}{{ .Email }}{{ end }}</a
             >
           {{ end }}
         {{ end }}
       </nav>
-      <div class="mt-auto space-y-2 px-3 pt-8 text-xs text-muted">
-        <a href="/accounts/new" class="block hover:text-accent"
-          >Connect mail account</a
-        ><a href="/keys" class="block hover:text-accent">Local keys</a
-        ><a href="/rules" class="block hover:text-accent">Local rules</a>
-        <a href="/automation" class="block py-2 text-xs text-accent"
-          >Space automation</a
+      <div class="mt-auto px-3 pt-6">
+        <a
+          href="/settings"
+          class="flex items-center gap-2 py-2 text-xs text-muted"
+          >{{ template "timeline-icon" "settings" }}Settings</a
         >
-        <a href="/settings" class="block hover:text-accent">Settings</a
-        >{{ if .Accounts }}
-        {{ end }}
       </div>
     </aside>
     <main class="flex min-h-0 min-w-0 flex-col" aria-label="Message timeline">
-      <header class="shrink-0 border-b border-line bg-panel px-4 py-4 sm:px-7">
-        <div class="flex items-start gap-3">
-          <div class="min-w-0">
-            {{ if .ThreadKey }}
-              <a
-                href="{{ .BackToSpaceURL }}"
-                hx-get="{{ .BackToSpaceURL }}"
-                class="mb-2 block text-xs font-medium text-accent"
-                >← Back to Space timeline</a
-              >
-            {{ end }}
-            <h1
-              tabindex="-1"
-              class="truncate text-xl font-semibold tracking-tight"
-            >
-              {{ if and .SpaceID (not .ThreadKey) }}
-                <span class="mr-1 text-accent">#</span>
-              {{ end }}{{ .Title }}
-            </h1>
-            <p
-              class="mt-1 line-clamp-2 max-w-3xl text-xs leading-relaxed text-muted"
-            >
-              {{ .Description }}
-            </p>
-          </div>
-
-          {{ if .SpaceID }}
-            <a
-              href="/spaces/{{ .SpaceID }}/edit"
-              data-open-dialog="space-edit"
-              aria-label="Edit Space description"
-              class="shrink-0 text-accent"
-              >{{ template "timeline-icon" "pencil" }}</a
-            >
-          {{ end }}<a
-            href="{{ .NewURL }}"
-            hx-get="{{ .NewURL }}"
-            class="ml-auto shrink-0 rounded-lg bg-action px-3 py-2 text-xs font-medium text-white"
-            >New email</a
+      <header class="timeline-topbar border-b border-line bg-panel">
+        <h1
+          class="min-w-0 max-w-[14rem] truncate text-sm font-semibold"
+          title="{{ .Description }}"
+        >
+          {{ .Title }}
+        </h1>
+        <form
+          action="/"
+          method="get"
+          hx-get="/"
+          hx-target="#timeline-shell"
+          hx-swap="outerHTML"
+          class="flex min-w-24 flex-1 items-center gap-1"
+        >
+          <input type="hidden" name="space" value="{{ .SpaceID }}" /><input
+            type="hidden"
+            name="person"
+            value="{{ .Person }}"
+          /><input type="hidden" name="filter" value="{{ .Filter }}" /><input
+            type="hidden"
+            name="from"
+            value="{{ .FromDate }}"
+          /><input type="hidden" name="until" value="{{ .UntilDate }}" /><input
+            type="search"
+            name="q"
+            value="{{ .Query }}"
+            maxlength="200"
+            aria-label="Find a person or topic"
+            placeholder="Search mail…"
+            class="min-w-0 w-full rounded-lg border border-line bg-canvas px-3"
+          /><button
+            class="icon-action"
+            title="Search"
+            aria-label="Search timeline"
           >
-        </div>
-        <div class="mt-4 flex flex-wrap items-center gap-2">
-          <details class="relative md:hidden">
-            <summary
-              class="cursor-pointer rounded-lg border border-line px-3 py-1.5 text-xs"
-            >
-              Spaces
-              {{ template "timeline-icon" "chevron-down" }}
-            </summary>
-            <nav
-              class="absolute left-0 top-full z-30 mt-2 w-64 rounded-xl border border-line bg-panel p-2 shadow-lg"
-            >
-              <a
-                href="{{ .Link "filter" "all" }}"
-                hx-get="{{ .Link "filter" "all" }}"
-                class="block rounded px-3 py-2 text-sm"
-                >All activity</a
-              ><a
-                href="{{ .Link "filter" "unsorted" }}"
-                hx-get="{{ .Link "filter" "unsorted" }}"
-                class="block rounded px-3 py-2 text-sm"
-                >Unsorted</a
-              >{{ range .Spaces }}
-                <a
-                  href="{{ $.Link "space" .ID }}"
-                  hx-get="{{ $.Link "space" .ID }}"
-                  class="block truncate rounded px-3 py-2 text-sm"
-                  ># {{ .Name }}</a
-                >
-              {{ end }}
-              <a href="/workspaces" class="block px-3 py-2 text-sm text-accent"
-                >Switch organization</a
-              >
-              <button
-                type="button"
-                data-open-dialog="people-directory"
-                class="block px-3 py-2 text-sm"
-              >
-                People directory
-              </button>
-              <a
-                href="/rules"
-                class="block px-3 py-2 text-xs text-muted hover:text-ink"
-                >Local rules</a
-              >
-              <a href="/automation" class="block py-2 text-xs text-accent"
-                >Space automation</a
-              >
-              <a href="/settings" class="block px-3 py-2 text-sm"
-                >Settings &amp; accounts</a
-              >
-              <a href="/keys" class="block px-3 py-2 text-sm">Local keys</a>
-              <a
-                href="/spaces/new"
-                data-open-dialog="space-create"
-                class="block px-3 py-2 text-sm text-accent"
-                >+ Create Space</a
-              >
-            </nav>
-          </details>
-          <form
-            action="/"
-            method="get"
-            hx-get="/"
-            class="flex min-w-0 flex-1 items-center gap-2"
+            {{ template "timeline-icon" "search" }}
+          </button>
+        </form>
+        <button
+          type="button"
+          data-open-dialog="label-filter"
+          class="icon-action"
+          title="Filter by label"
+          aria-label="Filter by label"
+        >
+          {{ template "timeline-icon" "filter" }}{{ if .LabelID }}
+            <span class="size-1 rounded-full bg-action"></span>
+          {{ end }}
+        </button>
+        <button
+          type="button"
+          data-open-dialog="date-filter"
+          class="icon-action"
+          title="Date or date range"
+          aria-label="Date or date range"
+        >
+          {{ template "timeline-icon" "calendar" }}{{ if .FromDate }}
+            <span class="text-[11px]">{{ .DateLabel }}</span>
+          {{ end }}
+        </button>
+        {{ if or .Person .Query }}
+          <a
+            href="{{ .FilterRuleURL }}"
+            class="icon-action"
+            title="Draft a rule; review its condition before saving"
+            aria-label="Draft rule"
+            >{{ template "timeline-icon" "pencil" }}</a
           >
-            <input type="hidden" name="space" value="{{ .SpaceID }}" /><input
-              type="hidden"
-              name="filter"
-              value="{{ .Filter }}"
-            /><input
-              name="q"
-              value="{{ .Query }}"
-              type="search"
-              aria-label="Find a person or topic"
-              placeholder="Find a person or topic…"
-              maxlength="200"
-              class="min-w-0 flex-1 rounded-lg border border-line bg-panel px-3 py-1.5 text-xs"
-            /><button
-              class="rounded-lg border border-line px-2 py-1.5 text-xs"
-              aria-label="Search timeline"
-            >
-              {{ template "timeline-icon" "search" }}
-            </button>
-          </form>
-          <details class="relative">
-            <summary
-              class="cursor-pointer rounded-lg border border-line px-2 py-1.5 text-xs"
-            >
-              {{ template "timeline-icon" "calendar" }}<span
-                class="hidden sm:inline"
-                >Jump to date</span
-              >
-            </summary>
-            <form
-              action="/"
-              method="get"
-              hx-get="/"
-              class="absolute right-0 top-full z-30 mt-2 flex w-64 flex-wrap gap-2 rounded-xl border border-line bg-panel p-3 shadow-lg"
-            >
-              <input type="hidden" name="space" value="{{ .SpaceID }}" /><label
-                class="block w-full text-xs"
-                >Date in {{ .Timezone }}<input
-                  type="date"
-                  name="day"
-                  value="{{ .Day }}"
-                  class="mt-1 block w-full rounded border border-line bg-panel px-2 py-2" /></label
-              ><button class="rounded bg-action px-3 py-1.5 text-xs text-white">
-                Go to date</button
-              ><a
-                href="{{ .Link "day" "" }}"
-                hx-get="{{ .Link "day" "" }}"
-                class="px-2 py-1.5 text-xs text-accent"
-                >Latest</a
-              >
-            </form>
-          </details>
-          <form action="/timeline/sync" method="post" hx-post="/timeline/sync">
-            <input type="hidden" name="csrf" value="{{ .CSRF }}" /><input
-              type="hidden"
-              name="return_to"
-              value="{{ .CurrentURL }}"
-            /><button class="rounded-lg border border-line px-3 py-1.5 text-xs">
-              Refresh
-            </button>
-          </form>
-        </div>
-        {{ if or .Person .LabelID .Day .Notice }}
-          <div class="mt-3 flex flex-wrap gap-2 text-xs text-muted">
-            {{ if .Person }}
-              <a
-                href="{{ .Link "person" "" }}"
-                hx-get="{{ .Link "person" "" }}"
-                class="rounded-full bg-canvas px-2 py-1"
-                >{{ .Person }} ×</a
-              >
-            {{ end }}{{ if .Day }}
-              <a
-                href="{{ .Link "day" "" }}"
-                hx-get="{{ .Link "day" "" }}"
-                class="rounded-full bg-canvas px-2 py-1"
-                >{{ .Day }} ×</a
-              >
-            {{ end }}{{ .Notice }}
-          </div>
         {{ end }}
+        {{ if .SpaceID }}
+          <button
+            type="button"
+            data-open-dialog="space-edit"
+            class="icon-action"
+            title="Space description"
+            aria-label="Edit Space description"
+          >
+            {{ template "timeline-icon" "hash" }}
+          </button>
+        {{ end }}
+        <form action="/timeline/sync" method="post">
+          <input type="hidden" name="csrf" value="{{ .CSRF }}" /><input
+            type="hidden"
+            name="return_to"
+            value="{{ .CurrentURL }}"
+          /><button
+            class="icon-action"
+            title="Refresh mail"
+            aria-label="Refresh mail"
+          >
+            {{ template "timeline-icon" "arrow-down" }}
+          </button>
+        </form>
+        <a
+          href="{{ .NewURL }}"
+          hx-get="{{ .NewURL }}"
+          class="shrink-0 rounded-lg bg-action px-3 py-2 text-xs text-white"
+          >New email</a
+        >
       </header>
+      {{ if .Notice }}<p data-toast hidden>{{ .Notice }}</p>{{ end }}
+      <dialog
+        id="label-filter"
+        aria-labelledby="label-filter-title"
+        class="m-auto w-[94vw] max-w-md rounded-2xl border border-line bg-panel p-5 text-ink backdrop:bg-black/40"
+      >
+        <div class="flex justify-between">
+          <h2 id="label-filter-title" class="font-semibold">
+            Filter labels / statuses
+          </h2>
+          <button
+            type="button"
+            data-close-dialog
+            aria-label="Close label filter"
+          >
+            ×
+          </button>
+        </div>
+        <form
+          action="/"
+          method="get"
+          hx-get="/"
+          hx-target="#timeline-shell"
+          hx-swap="outerHTML"
+          class="mt-4 space-y-3"
+        >
+          <input type="hidden" name="space" value="{{ .SpaceID }}" /><input
+            type="hidden"
+            name="person"
+            value="{{ .Person }}"
+          /><input type="hidden" name="filter" value="{{ .Filter }}" /><input
+            type="hidden"
+            name="from"
+            value="{{ .FromDate }}"
+          /><input type="hidden" name="until" value="{{ .UntilDate }}" /><input
+            type="hidden"
+            name="q"
+            value="{{ .Query }}"
+          /><label class="block text-sm"
+            >Label<select name="label" class="mt-2 block w-full">
+              <option value="">Any label</option>
+              {{ range .Labels }}
+                <option
+                  value="{{ .ID }}"
+                  {{ if eq $.LabelID .ID }}selected{{ end }}
+                >
+                  {{ .Name }}
+                </option>
+              {{ end }}
+            </select></label
+          >
+          <div class="flex justify-between">
+            <a href="/labels">Manage labels</a
+            ><button class="rounded-lg bg-action px-4 text-white">
+              Apply filter
+            </button>
+          </div>
+        </form>
+      </dialog>
+      <dialog
+        id="date-filter"
+        aria-labelledby="date-filter-title"
+        class="m-auto w-[94vw] max-w-md rounded-2xl border border-line bg-panel p-5 text-ink backdrop:bg-black/40"
+      >
+        <div class="flex justify-between">
+          <h2 id="date-filter-title" class="font-semibold">Date or range</h2>
+          <button
+            type="button"
+            data-close-dialog
+            aria-label="Close date filter"
+          >
+            ×
+          </button>
+        </div>
+        <form
+          action="/"
+          method="get"
+          hx-get="/"
+          hx-target="#timeline-shell"
+          hx-swap="outerHTML"
+          class="mt-4 space-y-3"
+        >
+          <input type="hidden" name="space" value="{{ .SpaceID }}" /><input
+            type="hidden"
+            name="person"
+            value="{{ .Person }}"
+          /><input type="hidden" name="filter" value="{{ .Filter }}" /><input
+            type="hidden"
+            name="q"
+            value="{{ .Query }}"
+          /><label class="block text-xs"
+            >On / from<input
+              type="date"
+              name="from"
+              value="{{ .FromDate }}"
+              required
+              class="mt-1 block w-full rounded-lg border border-line bg-canvas px-3" /></label
+          ><label class="block text-xs"
+            >Until (optional)<input
+              type="date"
+              name="until"
+              value="{{ .UntilDate }}"
+              class="mt-1 block w-full rounded-lg border border-line bg-canvas px-3"
+          /></label>
+          <p class="text-xs text-muted">
+            Leave Until empty for one date. Dates use your profile timezone.
+          </p>
+          <div class="flex justify-between">
+            <a href="{{ .ClearDatesURL }}">Clear dates</a
+            ><button class="rounded-lg bg-action px-4 py-2 text-sm text-white">
+              Apply dates
+            </button>
+          </div>
+        </form>
+      </dialog>
       {{ template "timeline-feed" . }}
       {{ template "inline-composer" . }}
       <dialog
@@ -401,7 +427,7 @@
       >
         <div class="flex items-center justify-between">
           <h2 id="inline-key-title" class="text-lg font-semibold">
-            Encrypt this reply
+            Encrypt and sign this reply
           </h2>
           <button type="button" data-close-dialog aria-label="Close encryption">
             ×
@@ -536,7 +562,62 @@
           class="mt-2 w-full rounded-lg border border-line bg-canvas p-3"
       /></label>
       <div class="mt-4 space-y-2" data-command-list>
-        <a
+        {{ range .Spaces }}
+          <a
+            href="{{ $.Link "space" .ID }}"
+            data-command
+            class="block rounded-lg p-3 hover:bg-hover"
+            >Space: {{ .Name }}</a
+          >
+        {{ end }}<a
+          data-context-command="archive-thread"
+          href="#"
+          hidden
+          data-command
+          class="block rounded-lg p-3 hover:bg-hover"
+          >Archive current thread</a
+        ><a
+          data-context-command="archive-person"
+          href="#"
+          hidden
+          data-command
+          class="block rounded-lg p-3 hover:bg-hover"
+          >Archive mail with current person</a
+        ><a
+          data-context-command="label-thread"
+          href="#"
+          hidden
+          data-command
+          class="block rounded-lg p-3 hover:bg-hover"
+          >Label current thread</a
+        ><a
+          data-context-command="label-person"
+          href="#"
+          hidden
+          data-command
+          class="block rounded-lg p-3 hover:bg-hover"
+          >Label mail with current person</a
+        ><a
+          href="/labels"
+          data-command
+          class="block rounded-lg p-3 hover:bg-hover"
+          >Manage labels / statuses</a
+        ><a
+          href="/workspaces"
+          data-command
+          class="block rounded-lg p-3 hover:bg-hover"
+          >Switch organization / context</a
+        ><a
+          href="/keys"
+          data-command
+          class="block rounded-lg p-3 hover:bg-hover"
+          >My keys and recipient keys</a
+        ><a
+          href="/accounts/new"
+          data-command
+          class="block rounded-lg p-3 hover:bg-hover"
+          >Connect mail account</a
+        ><a
           href="/?filter=unsorted"
           data-command
           class="block rounded-lg p-3 hover:bg-hover"
@@ -664,6 +745,9 @@
         <article
           id="{{ .DOMID }}"
           data-dialog-run="{{ .StartsRun }}"
+          data-message-key="{{ .Identity.Key }}"
+          data-message-person="{{ .Preview.Sender }}"
+          data-message-reference="{{ .Token }}"
           data-selected="{{ .Selected }}"
           class="group {{ if .StartsRun }}
             mt-4
@@ -677,7 +761,7 @@
               flex-row-reverse
             {{ end }}"
           >
-            <div class="w-8 shrink-0 self-start">
+            <div class="w-8 shrink-0 self-start" title="{{ .Preview.Sender }}">
               {{ if .StartsRun }}
                 <span
                   class="flex size-8 items-center justify-center rounded-xl bg-violet-100 text-[10px] font-semibold text-violet-800"
@@ -693,6 +777,8 @@
                   {{ end }}"
                 >
                   <a
+                    title="{{ .Preview.Sender }}"
+                    aria-label="{{ .Sender }} ({{ .Preview.Sender }})"
                     href="/?person={{ .Preview.Sender }}"
                     hx-get="/?person={{ .Preview.Sender }}"
                     class="text-xs font-semibold"
@@ -735,72 +821,6 @@
                   {{ end }}
                 {{ end }}
               </div>
-              <div
-                class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted {{ if .Own }}
-                  justify-end
-                {{ end }}"
-              >
-                <time>{{ .Time }}</time>{{ if .Unread }}
-                  <span
-                    class="size-1.5 rounded-full bg-action"
-                    aria-label="Unread"
-                  ></span>
-                {{ end }}<a
-                  href="{{ .ReplyURL }}"
-                  hx-get="{{ .ReplyURL }}"
-                  class="font-medium text-accent"
-                  >Reply</a
-                ><a
-                  href="{{ .ThreadURL }}"
-                  hx-get="{{ .ThreadURL }}"
-                  hx-target="#thread-content"
-                  hx-swap="innerHTML"
-                  hx-push-url="false"
-                  data-thread-open
-                  aria-controls="thread-drawer"
-                  class="hover:text-accent"
-                  >Show thread</a
-                ><a href="{{ .ReadURL }}" class="hover:text-accent"
-                  >{{ if .Preview.Encrypted }}
-                    Decrypt / preview
-                  {{ else }}
-                    Attachments / full message
-                  {{ end }}</a
-                >{{ if .State }}
-                  <span
-                    class="{{ if eq .State "accepted" }}
-                      text-success
-                    {{ else }}
-                      text-warning
-                    {{ end }}"
-                    >{{ if eq .State "accepted" }}
-                      Server accepted
-                    {{ else if eq .State "rejected" }}
-                      Rejected
-                    {{ else }}
-                      Send outcome uncertain — check Outbox
-                    {{ end }}</span
-                  >
-                {{ end }}
-              </div>
-              {{ if not .Preview.Encrypted }}
-                <button
-                  type="button"
-                  data-load-attachments
-                  data-reference="{{ .Token }}"
-                  aria-controls="attachments-{{ .MembershipID }}"
-                  class="mt-2 text-xs text-accent"
-                >
-                  Attachments{{ if .Preview.Attachments }}
-                    ({{ len .Preview.Attachments }})
-                  {{ end }}
-                </button>
-                <div
-                  id="attachments-{{ .MembershipID }}"
-                  class="mt-2 space-y-2"
-                  data-attachment-list
-                ></div>
-              {{ end }}
               {{ template "timeline-membership" . }}
             </div>
           </div>
@@ -859,68 +879,101 @@
   </section>
 {{ end }}
 {{ define "timeline-membership" }}
-  <div id="{{ .MembershipID }}" class="mt-2">
-    <div class="flex flex-wrap items-center gap-2" aria-label="Assign Spaces">
-      {{ $message:=. }}{{ range .Spaces }}
+  <div id="{{ .MembershipID }}" class="message-actions">
+    <div
+      class="message-toolbar"
+      role="group"
+      aria-label="Message actions and Spaces"
+    >
+      <time class="shrink-0 text-[10px] text-muted">{{ .Time }}</time
+      >{{ if .Unread }}
+        <span
+          class="size-1 shrink-0 rounded-full bg-action"
+          aria-label="Unread"
+        ></span>
+      {{ end }}
+      <a
+        href="{{ .ReplyURL }}"
+        hx-get="{{ .ReplyURL }}"
+        class="icon-action"
+        title="Reply"
+        aria-label="Reply"
+        >{{ template "timeline-icon" "message-circle" }}</a
+      >
+      <a
+        href="{{ .ThreadURL }}"
+        hx-get="{{ .ThreadURL }}"
+        hx-target="#thread-content"
+        hx-swap="innerHTML"
+        hx-push-url="false"
+        data-thread-open
+        aria-controls="thread-drawer"
+        class="icon-action"
+        title="Show thread"
+        aria-label="Show thread"
+        >{{ template "timeline-icon" "messages" }}</a
+      >
+      <a
+        href="{{ .ReadURL }}"
+        class="icon-action"
+        title="Full message / decrypt"
+        aria-label="Full message / decrypt"
+        >{{ template "timeline-icon" "file-text" }}</a
+      >
+      {{ if not .Preview.Encrypted }}
+        <button
+          type="button"
+          data-load-attachments
+          data-reference="{{ .Token }}"
+          aria-controls="attachments-{{ .MembershipID }}"
+          class="icon-action"
+          title="Attachments"
+          aria-label="Attachments"
+        >
+          {{ template "timeline-icon" "paperclip" }}{{ if .Preview.Attachments }}
+            <span class="text-[10px]">{{ len .Preview.Attachments }}</span>
+          {{ end }}
+        </button>
+      {{ end }}
+      {{ if .Classifier }}
         <form
-          action="/collections/{{ .ID }}/membership"
+          action="/automation/preview"
           method="post"
-          hx-post="/collections/{{ .ID }}/membership"
-          hx-target="#{{ $message.MembershipID }}"
+          hx-post="/automation/preview"
+          hx-target="#{{ .MembershipID }}"
           hx-swap="outerHTML"
           hx-push-url="false"
         >
-          <input type="hidden" name="csrf" value="{{ $message.CSRF }}" /><input
+          <input type="hidden" name="csrf" value="{{ .CSRF }}" /><input
             type="hidden"
             name="reference"
-            value="{{ $message.Token }}"
+            value="{{ .Token }}"
           /><input
             type="hidden"
             name="return_to"
-            value="{{ $message.ReturnURL }}"
-          /><input type="hidden" name="kind" value="space" /><input
-            type="hidden"
-            name="selected"
-            value="{{ $message.NextSelection .ID }}"
+            value="{{ .ReturnURL }}"
           /><button
-            aria-pressed="{{ $message.Has .ID }}"
-            class="rounded-full border px-2 py-1 text-[10px] {{ if $message.Has .ID }}
-              border-accent text-accent
-            {{ else }}
-              border-line text-muted
-            {{ end }}"
+            class="icon-action"
+            title="Recheck Space suggestions; may incur provider charges"
+            aria-label="Check Space suggestions"
           >
-            {{ if $message.Has .ID }}✓{{ else }}+{{ end }}
-            {{ .Name }}
+            {{ template "timeline-icon" "star" }}{{ if .Decision }}
+              <span class="text-[10px]">{{ .Decision.Confidence }}%</span>
+            {{ end }}
           </button>
         </form>
-        {{ if and ($message.Has .ID) (not $message.Preview.Encrypted) (not $message.Own) }}
-          <a
-            href="{{ $message.SenderRuleURL .ID }}"
-            class="px-2 py-1 text-[10px] text-accent"
-            >Make sender rule…</a
-          >
-        {{ end }}
-      {{ end }}
-      {{ if not .Spaces }}
+      {{ else if .Decision }}
         <a
-          href="/spaces/new"
-          data-open-dialog="space-create"
-          class="text-xs text-accent"
-          >Create your first Space</a
+          href="/automation#run-{{ .Decision.ID }}"
+          class="icon-action"
+          title="Review saved Jev result"
+          aria-label="Review saved Jev result"
+          >{{ template "timeline-icon" "star" }}<span class="text-[10px]"
+            >{{ .Decision.Confidence }}%</span
+          ></a
         >
       {{ end }}
-    </div>
-    {{ if .Classifier }}
-      <form
-        action="/automation/preview"
-        method="post"
-        hx-post="/automation/preview"
-        hx-target="#{{ .MembershipID }}"
-        hx-swap="outerHTML"
-        hx-push-url="false"
-        class="mt-2"
-      >
+      <form action="/messages/archive" method="post" hx-disable>
         <input type="hidden" name="csrf" value="{{ .CSRF }}" /><input
           type="hidden"
           name="reference"
@@ -929,45 +982,108 @@
           type="hidden"
           name="return_to"
           value="{{ .ReturnURL }}"
-        /><button class="text-xs text-accent">Check Space suggestions</button>
+        /><input
+          type="hidden"
+          name="archived"
+          value="{{ .ArchiveSelection }}"
+        /><button
+          class="icon-action"
+          title="{{ if .Archived }}
+            Restore message
+          {{ else }}
+            Archive message
+          {{ end }}"
+          aria-label="{{ if .Archived }}
+            Restore message
+          {{ else }}
+            Archive message
+          {{ end }}"
+        >
+          {{ template "timeline-icon" "archive" }}
+        </button>
       </form>
-    {{ end }}
-    {{ if .Decision }}
-      <p class="mt-2 text-xs text-muted">
-        Jev · {{ .Decision.Confidence }}% confidence ·
-        {{ .Decision.State }}
-        (overall decision score)
-      </p>
-      <div class="flex flex-wrap gap-2">
-        {{ range .Decision.Names }}
-          <span class="text-xs text-accent">Suggested: {{ . }}</span>
+      <a
+        href="{{ .LabelsURL }}"
+        class="icon-action"
+        title="Labels / statuses"
+        aria-label="Labels / statuses"
+        >{{ template "timeline-icon" "tag" }}</a
+      >{{ range .Memberships }}
+        {{ if eq .Kind "label" }}
+          <span class="space-chip {{ .Tone }}" title="Label: {{ .Name }}"
+            >{{ .Name }}</span
+          >
         {{ end }}
-      </div>
-      <a href="/automation#run-{{ .Decision.ID }}" class="text-xs text-accent"
-        >Review / apply decision</a
-      >
+      {{ end }}
+      <span class="h-4 shrink-0 border-l border-line" aria-hidden="true"></span>
+      {{ $m:=. }}{{ range .Spaces }}
+        <form
+          action="/collections/{{ .ID }}/membership"
+          method="post"
+          hx-post="/collections/{{ .ID }}/membership"
+          hx-target="#{{ $m.MembershipID }}"
+          hx-swap="outerHTML"
+          hx-push-url="false"
+        >
+          <input type="hidden" name="csrf" value="{{ $m.CSRF }}" /><input
+            type="hidden"
+            name="reference"
+            value="{{ $m.Token }}"
+          /><input
+            type="hidden"
+            name="return_to"
+            value="{{ $m.ReturnURL }}"
+          /><input type="hidden" name="kind" value="space" /><input
+            type="hidden"
+            name="selected"
+            value="{{ $m.NextSelection .ID }}"
+          /><button
+            aria-pressed="{{ $m.Has .ID }}"
+            title="{{ .Name }}{{ if $m.Suggested .ID }}
+              · suggested by Jev
+            {{ end }}"
+            class="space-chip {{ if $m.Has .ID }}
+              border-accent text-accent
+            {{ else }}
+              border-line text-muted
+            {{ end }} {{ if $m.Suggested .ID }}suggested-space{{ end }}"
+          >
+            {{ if $m.Has .ID }}✓{{ else }}+{{ end }}
+            {{ .Name }}{{ if and ($m.Suggested .ID) $m.Decision }}
+              <span class="text-[9px]">{{ $m.Decision.Confidence }}%</span>
+            {{ end }}
+          </button>
+        </form>
+      {{ end }}
+      {{ if and .RuleSpace (not .Preview.Encrypted) (not .Own) }}
+        <a
+          href="{{ .SenderRuleURL .RuleSpace }}"
+          class="icon-action"
+          title="Create sender rule"
+          aria-label="Create sender rule"
+          >{{ template "timeline-icon" "pencil" }}</a
+        >
+      {{ end }}
+      {{ if .State }}
+        <span
+          class="icon-action {{ if eq .State "accepted" }}
+            text-success
+          {{ else }}
+            text-warning
+          {{ end }}"
+          title="SMTP outcome: {{ .State }}; see Outbox"
+          aria-label="SMTP outcome: {{ .State }}"
+          >{{ template "timeline-icon" "check" }}</span
+        >
+      {{ end }}
+    </div>
+    {{ if not .Preview.Encrypted }}
+      <div
+        id="attachments-{{ .MembershipID }}"
+        class="space-y-2"
+        data-attachment-list
+      ></div>
     {{ end }}
-    <form action="/messages/archive" method="post" hx-disable class="mt-2">
-      <input type="hidden" name="csrf" value="{{ .CSRF }}" /><input
-        type="hidden"
-        name="reference"
-        value="{{ .Token }}"
-      /><input type="hidden" name="return_to" value="{{ .ReturnURL }}" /><input
-        type="hidden"
-        name="archived"
-        value="{{ if .Archived }}
-          0
-        {{ else }}
-          1
-        {{ end }}"
-      /><button class="text-xs text-muted">
-        {{ if .Archived }}
-          Restore from Archive
-        {{ else }}
-          Archive in Mailspace
-        {{ end }}
-      </button>
-    </form>
   </div>
 {{ end }}
 {{ define "inline-composer" }}
@@ -1026,6 +1142,9 @@
             <label class="mb-2 flex items-center gap-2 text-[11px] text-muted"
               >To<input
                 name="to"
+                data-recipient-picker
+                list="{{ .ComposerPrefix }}-recipient-suggestions"
+                autocomplete="off"
                 value="{{ .Reply.Recipient }}"
                 maxlength="8192"
                 required
@@ -1050,7 +1169,11 @@
                 </select></label
               ><label class="flex items-center gap-2 text-xs text-muted"
                 >To<input
+                  value="{{ .ComposeRecipient }}"
                   name="to"
+                  data-recipient-picker
+                  list="{{ .ComposerPrefix }}-recipient-suggestions"
+                  autocomplete="off"
                   maxlength="8192"
                   required
                   placeholder="person@example.test"
@@ -1065,6 +1188,7 @@
               /></label>
             </div>
           {{ end }}
+          <datalist id="{{ .ComposerPrefix }}-recipient-suggestions"></datalist>
           <label class="sr-only" for="{{ .ComposerPrefix }}-reply-body"
             >Your reply</label
           ><textarea
@@ -1159,6 +1283,7 @@
   {{ if .Error }}
     <p
       role="alert"
+      data-toast
       class="rounded-lg border border-error-line bg-error-soft p-3 text-error"
     >
       {{ .Error }}
@@ -1286,6 +1411,8 @@
       <title>{{ .Title }} · Mailspace</title>
       <script src="/assets/theme.js"></script>
       <script src="/assets/forms.js" defer></script>
+      <script src="/assets/panel-child.js" defer></script>
+      <script src="/assets/toasts.js" defer></script>
       <link rel="stylesheet" href="/assets/app.css" />
     </head>
     <body class="min-h-dvh bg-canvas">
@@ -1310,6 +1437,8 @@
       <title>Organize message · Mailspace</title>
       <script src="/assets/theme.js"></script>
       <script src="/assets/forms.js" defer></script>
+      <script src="/assets/panel-child.js" defer></script>
+      <script src="/assets/toasts.js" defer></script>
       <link rel="stylesheet" href="/assets/app.css" />
     </head>
     <body class="min-h-dvh bg-canvas">

@@ -56,7 +56,7 @@ func timelineReturn(value string) string {
 	}
 	q := url.Values{}
 	source := parsed.Query()
-	for _, key := range []string{"space", "label", "person", "filter", "q", "day", "account", "reply", "compose", "thread"} {
+	for _, key := range []string{"space", "label", "person", "filter", "q", "day", "account", "reply", "compose", "thread", "from", "until"} {
 		if value := source.Get(key); value != "" && len(value) <= 1000 {
 			q.Set(key, value)
 		}
@@ -83,6 +83,19 @@ func (c *timelineController) data(r *http.Request, s identity.Session) (webui.Ti
 	if data.Classifier {
 		data.Provider = c.config.Decisions.ProviderName()
 	}
+	data.FromDate = q.Get("from")
+	data.UntilDate = q.Get("until")
+	if data.FromDate != "" {
+		if _, err := time.Parse("2006-01-02", data.FromDate); err != nil {
+			return data, timeline.ErrInput
+		}
+		data.Day = ""
+	}
+	if data.UntilDate != "" {
+		if _, err := time.Parse("2006-01-02", data.UntilDate); err != nil || data.FromDate == "" || data.UntilDate < data.FromDate {
+			return data, timeline.ErrInput
+		}
+	}
 	data.PeopleOffset = page * 50
 	data.PeopleSearch = strings.TrimSpace(q.Get("people_q"))
 	data.Archived, err = c.collections.Archived(r.Context(), s.User.ID)
@@ -101,9 +114,7 @@ func (c *timelineController) data(r *http.Request, s identity.Session) (webui.Ti
 			}
 		}
 	}
-	if data.LabelID != "" {
-		return data, timeline.ErrInput
-	}
+
 	if data.Filter == "archived" {
 		data.Title = "Archived"
 		data.Description = "Archived in Mailspace. Original server folders and Space assignments are unchanged."
@@ -117,6 +128,7 @@ func (c *timelineController) data(r *http.Request, s identity.Session) (webui.Ti
 		}
 	}
 	if data.Day != "" {
+		data.FromDate = data.Day
 		if _, err := time.Parse("2006-01-02", data.Day); err != nil {
 			return data, timeline.ErrInput
 		}
@@ -125,7 +137,10 @@ func (c *timelineController) data(r *http.Request, s identity.Session) (webui.Ti
 	if err != nil {
 		return data, err
 	}
-	var labels []collections.Item
+	labels, err := c.collections.List(r.Context(), s.User.ID, "label")
+	if err != nil {
+		return data, err
+	}
 	if data.SpaceID != "" {
 		item, err := c.collections.Get(r.Context(), s.User.ID, "space", data.SpaceID)
 		if err != nil {
@@ -243,6 +258,12 @@ func (c *timelineController) data(r *http.Request, s identity.Session) (webui.Ti
 		}
 	}
 	switch q.Get("notice") {
+	case "bulk-archived":
+		data.Notice = "Cached selection archived in Mailspace. Restore is available in Archived."
+	case "labels-updated":
+		data.Notice = "Labels updated for the selected cached scope."
+	case "no-changes":
+		data.Notice = "No matching cached messages needed a change."
 	case "synced":
 		data.Notice = "Mail refreshed."
 	case "sync-failed":
@@ -288,7 +309,33 @@ func timelineRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 	}
 	source := timeline.New(store, config.Accounts, config.Sync, config.Outbox)
 	c := &timelineController{config: config, store: store, sources: source, collections: collections.New(store.Database(), source)}
+	c.bulkRoutes(mux, protected, mutation)
 	mux.HandleFunc("GET /{$}", protected(c.render))
+	mux.HandleFunc("GET /people/suggestions", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
+		query := strings.TrimSpace(r.URL.Query().Get("q"))
+		if len(query) < 2 || len(query) > 254 {
+			reply(w, []map[string]string{})
+			return
+		}
+		clone := r.Clone(r.Context())
+		u := *r.URL
+		q := url.Values{"people_q": {query}}
+		u.RawQuery = q.Encode()
+		clone.URL = &u
+		data, err := c.data(clone, s)
+		if err != nil {
+			http.Error(w, "Contact suggestions unavailable", 503)
+			return
+		}
+		result := []map[string]string{}
+		for _, person := range data.PeoplePage {
+			result = append(result, map[string]string{"email": person.Email, "name": person.Name})
+			if len(result) == 20 {
+				break
+			}
+		}
+		reply(w, result)
+	}))
 	mux.HandleFunc("GET /people", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
 		data, err := c.data(r, s)
 		if err != nil {
@@ -386,7 +433,7 @@ func timelineRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 		parsed.RawQuery = q.Encode()
 		http.Redirect(w, r, parsed.String(), 303)
 	}))
-	for _, kind := range []string{"space"} {
+	for _, kind := range []string{"space", "label"} {
 		prefix := "/spaces"
 		if kind == "label" {
 			prefix = "/labels"
@@ -415,6 +462,10 @@ func timelineRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 			key := "space"
 			if kind == "label" {
 				key = "label"
+			}
+			if kind == "label" {
+				http.Redirect(w, r, "/labels", 303)
+				return
 			}
 			http.Redirect(w, r, "/?"+url.Values{key: {item.ID}, "notice": {"saved"}}.Encode(), 303)
 		}))
@@ -446,6 +497,10 @@ func timelineRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 			if kind == "label" {
 				key = "label"
 			}
+			if kind == "label" {
+				http.Redirect(w, r, "/labels", 303)
+				return
+			}
 			http.Redirect(w, r, "/?"+url.Values{key: {item.ID}, "notice": {"saved"}}.Encode(), 303)
 		}))
 	}
@@ -459,8 +514,8 @@ func timelineRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 			return
 		}
 		kind := r.FormValue("kind")
-		if kind != "space" {
-			http.Error(w, "Use Spaces; labels are retired", 400)
+		if kind != "space" && kind != "label" {
+			http.Error(w, "Unknown collection kind", 400)
 			return
 		}
 		selected := r.FormValue("selected")
@@ -563,7 +618,11 @@ func (c *timelineController) renderMembership(w http.ResponseWriter, r *http.Req
 		http.Error(w, "Collections unavailable", 503)
 		return
 	}
-	var labels []collections.Item
+	labels, err := c.collections.List(r.Context(), s.User.ID, "label")
+	if err != nil {
+		http.Error(w, "Labels unavailable", 503)
+		return
+	}
 	members, err := c.collections.Memberships(r.Context(), s.User.ID)
 	if err != nil {
 		http.Error(w, "Assignments unavailable", 503)
