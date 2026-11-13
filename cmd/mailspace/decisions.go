@@ -22,38 +22,51 @@ func decisions(store *identity.Store, a *accounts.Service, syncer *mailsync.Serv
 	}
 	endpoint := "https://openrouter.ai/api/v1/chat/completions"
 	if kind != "openrouter" && kind != "local" {
-		return nil, errors.New("JEV provider must be openrouter or local")
+		return nil, errors.New("MAILSPACE_JEV_PROVIDER must be openrouter or local; leave empty to disable classification")
+	}
+	model := os.Getenv("MAILSPACE_JEV_MODEL")
+	if strings.TrimSpace(model) == "" || model != strings.TrimSpace(model) || len(model) > 200 || strings.ContainsAny(model, "\r\n\x00") {
+		return nil, errors.New("MAILSPACE_JEV_MODEL must be a nonempty model identifier without surrounding whitespace (maximum 200 bytes)")
 	}
 	if kind == "local" {
 		endpoint = os.Getenv("MAILSPACE_JEV_ENDPOINT")
+		if endpoint == "" {
+			return nil, errors.New("MAILSPACE_JEV_ENDPOINT is required when MAILSPACE_JEV_PROVIDER=local")
+		}
 	}
 	key := os.Getenv("MAILSPACE_JEV_API_TOKEN")
 	if len(key) > 4096 || strings.ContainsAny(key, "\r\n\x00") {
-		return nil, errors.New("invalid JEV token format")
+		return nil, errors.New("MAILSPACE_JEV_API_TOKEN must be at most 4096 bytes without line breaks or NUL")
 	}
 	if path := os.Getenv("MAILSPACE_JEV_KEY_FILE"); path != "" {
 		if key != "" {
-			return nil, errors.New("set JEV API_TOKEN or KEY_FILE, not both")
+			return nil, errors.New("set MAILSPACE_JEV_API_TOKEN or MAILSPACE_JEV_KEY_FILE, not both")
 		}
 		info, err := os.Lstat(path)
 		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 || info.Size() > 4096 {
-			return nil, errors.New("JEV key file must be a private regular file under 4 KiB")
+			return nil, errors.New("MAILSPACE_JEV_KEY_FILE must reference a readable regular file with private permissions (0600), at most 4 KiB")
 		}
 		file, err := os.Open(path)
 		if err != nil {
-			return nil, errors.New("JEV key unavailable")
+			return nil, errors.New("MAILSPACE_JEV_KEY_FILE cannot be read by the app; check its container mount and ownership")
 		}
 		raw, err := io.ReadAll(io.LimitReader(file, 4097))
 		file.Close()
 		if err != nil || len(raw) > 4096 {
-			return nil, errors.New("JEV key unavailable")
+			return nil, errors.New("MAILSPACE_JEV_KEY_FILE cannot be read by the app; check its container mount and ownership")
 		}
 		key = strings.TrimSpace(string(raw))
 		clear(raw)
 	}
-	provider, err := decision.NewChatProvider(endpoint, os.Getenv("MAILSPACE_JEV_MODEL"), key, kind == "openrouter")
+	if kind == "openrouter" && strings.TrimSpace(key) == "" {
+		return nil, errors.New("OpenRouter requires MAILSPACE_JEV_API_TOKEN or a nonempty MAILSPACE_JEV_KEY_FILE; ensure Compose forwards the variable and recreate the container, or leave MAILSPACE_JEV_PROVIDER empty to disable classification")
+	}
+	if strings.ContainsAny(key, "\r\n\x00") {
+		return nil, errors.New("JEV API token must not contain embedded line breaks or NUL")
+	}
+	provider, err := decision.NewChatProvider(endpoint, model, key, kind == "openrouter")
 	if err != nil {
-		return nil, err
+		return nil, errors.New("invalid MAILSPACE_JEV_ENDPOINT: use a full HTTPS chat-completions URL without credentials, query or fragment; HTTP is allowed only on numeric loopback for a local provider")
 	}
 	sources := timeline.New(store, a, syncer, box)
 	return decision.New(store.Database(), sources, collections.New(store.Database(), sources), provider), nil

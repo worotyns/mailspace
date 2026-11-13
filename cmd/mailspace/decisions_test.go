@@ -4,6 +4,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -32,5 +33,29 @@ func TestClassifierTokenSourcesAndDisabledMode(t *testing.T) {
 	}
 	if _, err := decisions(nil, nil, nil, nil); err == nil {
 		t.Fatal("world-readable key accepted")
+	}
+}
+
+func TestClassifierStartupErrorsIdentifyMissingConfigurationWithoutSecrets(t *testing.T) {
+	for _, tc := range []struct{ name, provider, model, token, endpoint, want string }{
+		{"missing model", "openrouter", "", "synthetic-secret-canary", "", "MAILSPACE_JEV_MODEL"},
+		{"missing token", "openrouter", "typesafe-ai/jev-1.3", "", "", "OpenRouter requires MAILSPACE_JEV_API_TOKEN"},
+		{"missing local endpoint", "local", "synthetic/model", "", "", "MAILSPACE_JEV_ENDPOINT is required"},
+		{"unsafe local endpoint", "local", "synthetic/model", "synthetic-secret-canary", "http://remote.example.test/v1/chat/completions", "invalid MAILSPACE_JEV_ENDPOINT"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("MAILSPACE_JEV_PROVIDER", tc.provider)
+			t.Setenv("MAILSPACE_JEV_MODEL", tc.model)
+			t.Setenv("MAILSPACE_JEV_API_TOKEN", tc.token)
+			t.Setenv("MAILSPACE_JEV_ENDPOINT", tc.endpoint)
+			t.Setenv("MAILSPACE_JEV_KEY_FILE", "")
+			_, err := decisions(nil, nil, nil, nil)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("expected useful config error, got %v", err)
+			}
+			if strings.Contains(err.Error(), "synthetic-secret-canary") {
+				t.Fatal("configuration error exposed token")
+			}
+		})
 	}
 }
