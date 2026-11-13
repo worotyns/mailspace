@@ -27,3 +27,7 @@ ADR-0024 adds exact-octet multipart/signed verification for ordinary and decrypt
 ### MS-018 initial import policy
 
 Migration 008 implements fresh new connections, durable UID baselines and explicit bounded recent import in account settings. Existing accounts retain their prior behavior. Full archive pagination and native IDLE remain open; no history-complete claim.
+
+### Completed slice: reviewed local rules
+
+Schema 9 adds disabled-by-default exact sender/domain and subject-phrase rules, read-only cached previews, explicit enable and bounded post-sync assignment. Manual membership changes veto automatic rules. Sender suggestions after manual assignment are drafts only. Provider-side spam training/moves, archived-rule replay and unbounded history remain outside this slice. See [RULES.md](RULES.md) and ADR-0027.

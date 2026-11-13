@@ -204,7 +204,12 @@
         <a href="/accounts/new" class="block hover:text-accent"
           >Connect mail account</a
         ><a href="/keys" class="block hover:text-accent">Local keys</a
-        ><a href="/automation" class="block py-2 text-xs text-accent"
+        ><a
+          href="/rules"
+          class="block px-3 py-2 text-xs text-muted hover:text-ink"
+          >Local rules</a
+        >
+        <a href="/automation" class="block py-2 text-xs text-accent"
           >Space automation</a
         >
         <a href="/settings" class="block hover:text-accent">Settings</a
@@ -305,6 +310,11 @@
                   >Label: {{ .Name }}</a
                 >
               {{ end }}
+              <a
+                href="/rules"
+                class="block px-3 py-2 text-xs text-muted hover:text-ink"
+                >Local rules</a
+              >
               <a href="/automation" class="block py-2 text-xs text-accent"
                 >Space automation</a
               >
@@ -793,6 +803,13 @@
                 {{ .Name }}
               </button>
             </form>
+            {{ if and ($message.Has .ID) (not $message.Preview.Encrypted) (not $message.Own) }}
+              <a
+                href="{{ $message.SenderRuleURL .ID }}"
+                class="px-2 py-1 text-[10px] text-accent"
+                >Make sender rule…</a
+              >
+            {{ end }}
           {{ end }}{{ range .Labels }}
             <form
               action="/collections/{{ .ID }}/membership"

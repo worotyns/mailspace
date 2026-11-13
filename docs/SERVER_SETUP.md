@@ -146,3 +146,7 @@ The password command prompts privately and commits the password change plus all 
 - Empty/partial history: synchronization is bounded recent mail; older history/native IDLE remains open. Missing References/duplicate Message-ID values intentionally do not become guessed threads.
 - Cannot unlock a key: local vault/browser/origin and OpenPGP passphrase, not the app password. Restore a protected exported key if needed; the administrator cannot decrypt/reset it.
 - Database/key errors after restore: stop and restore a complete matching snapshot. Do not delete keyring files or create a fresh keyring next to an old DB.
+
+## Local rules without an AI provider
+
+See [Local rules](RULES.md). Save a sender/domain/subject rule disabled, preview eligible cached matches, and explicitly enable it. Rules assign owned Spaces locally after successful sync; they never send email, change provider spam flags or share messages. Manual choices win. Schema 9 requires the usual pre-upgrade database and credential-key backup.

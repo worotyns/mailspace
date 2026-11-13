@@ -17,7 +17,8 @@ Built with Go, HTMX, Tailwind and SQLite. Fully open source. No mandatory AI, in
 - A Space is an area of relevance, not an IMAP folder or an email thread. One message can belong to several Spaces; messages from the same email thread can belong to different Spaces. Manual Unsorted triage works without a model.
 - **View email thread** opens the original cached email conversation across the current account's folders/outbox. Reply there or from a Space: the selected original message supplies From/References/In-Reply-To. Subject similarity never invents a thread; missing history and ambiguous Message-IDs are handled conservatively.
 - Write replies inline. Explicit Send unencrypted for ordinary mail, or Encrypt and unlock a local key in a compact dialog. No silent encrypted-parent downgrade. Advanced encrypted compose includes local drafts and attachments.
-- Native text/plain first, HTML-only converted to inert text, optional sanitized isolated HTML preview with external resources blocked.
+- Native text/plain first; HTML-only mail opens automatically as readable text, without tags or HTML layout. Optional isolated formatted preview blocks external resources.
+- [Local rules](docs/RULES.md): reviewed sender/domain/subject matches assign incoming cached mail to Spaces without a model.
 - Local browser keys, explicit fingerprint trust, encrypted provider credentials, no telemetry/model/index by default. Organization membership is separate from private mail access.
 
 The local preview uses the same authenticated application with synthetic mail and isolated TLS providers.

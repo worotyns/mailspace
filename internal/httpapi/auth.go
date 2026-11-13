@@ -586,6 +586,7 @@ func NewPersonal(sourceDir string, store *identity.Store, config AuthConfig) (ht
 	}))
 
 	decisionRoutes(mux, config, store, protected, mutation)
+	ruleRoutes(mux, config, store, protected, mutation)
 	hasTimeline := timelineRoutes(mux, config, store, protected, mutation, withConnectionBudget, func() { <-connectionSlots })
 	cryptoRoutes(mux, config, store, protected, mutation, withConnectionBudget, func() { <-connectionSlots })
 	mux.HandleFunc("GET /keys", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {

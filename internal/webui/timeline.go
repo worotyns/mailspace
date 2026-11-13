@@ -415,3 +415,7 @@ func (m TimelineMessage) TopicLabel() string {
 func (m TimelineMessage) CollectionsURL() string {
 	return "/messages/collections?" + url.Values{"reference": {m.Token}, "return_to": {m.ReturnURL}}.Encode()
 }
+
+func (m TimelineMessage) SenderRuleURL(space string) string {
+	return "/rules?" + url.Values{"reference": {m.Token}, "space": {space}}.Encode()
+}

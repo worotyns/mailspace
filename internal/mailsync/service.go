@@ -20,11 +20,13 @@ var ErrChanged = errors.New("mail account changed; retry synchronization")
 const MaxAccountBytes = 64 << 20
 
 type Service struct {
-	db       *sql.DB
-	accounts *accounts.Service
-	reader   mailnet.Reader
-	mu       sync.Mutex
-	queue    chan syncRequest
+	db        *sql.DB
+	accounts  *accounts.Service
+	reader    mailnet.Reader
+	mu        sync.Mutex
+	queue     chan syncRequest
+	afterMu   sync.RWMutex
+	afterSync func(context.Context, string, string)
 }
 
 func New(db *sql.DB, a *accounts.Service, r mailnet.Reader) *Service {
@@ -59,14 +61,25 @@ func (s *Service) authorized(ctx context.Context, owner, id string) error {
 
 // Sync is bounded and read-only remotely. Each complete mailbox snapshot commits
 // atomically, while already downloaded MIME is reused by UID within UIDVALIDITY.
-func (s *Service) Sync(ctx context.Context, owner, id string) error {
+func (s *Service) Sync(ctx context.Context, owner, id string) (resultErr error) {
 	if err := s.authorized(ctx, owner, id); err != nil {
 		return err
 	}
 	if !s.mu.TryLock() {
 		return ErrBusy
 	}
-	defer s.mu.Unlock()
+	callerCtx := ctx
+	defer func() {
+		s.mu.Unlock()
+		if resultErr == nil {
+			s.afterMu.RLock()
+			callback := s.afterSync
+			s.afterMu.RUnlock()
+			if callback != nil {
+				callback(callerCtx, owner, id)
+			}
+		}
+	}()
 	ctx, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
 	policy, err := s.ImportPolicy(ctx, owner, id)
@@ -321,4 +334,12 @@ func (s *Service) Raw(ctx context.Context, owner, id, folder string, validity, u
 		return nil, accounts.ErrNotFound
 	}
 	return raw, err
+}
+
+// SetAfterSync installs one in-process, local-only post-sync action safely.
+// It does not create another scheduler, model client or external request.
+func (s *Service) SetAfterSync(callback func(context.Context, string, string)) {
+	s.afterMu.Lock()
+	defer s.afterMu.Unlock()
+	s.afterSync = callback
 }

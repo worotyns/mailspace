@@ -114,3 +114,9 @@ Follow-up startup diagnostics name missing model/token/endpoint settings without
 Two explicitly authorized, bounded requests to typesafe/jev-1.13 via OpenRouter Decisions succeeded with no retries. A synthetic invoice matched Payments (routing confidence 0.920); a synthetic cinema booking matched Personal (0.880). Inputs contained only made-up .test addressing and generic briefs. No production mail, key content or raw provider response was logged/committed. This validates actual connectivity/contract/privacy routing for that test, not every future provider/model or correctness on private mail. CI skips this opt-in test unless a private operator key path is explicitly supplied.
 
 A real-browser synthetic HTML message rendered in the isolated dialog with script/image payloads absent. An extra Read-as-text click had hidden preview availability; ordinary readers now load text automatically. HTML-only MIME remains converted to inert text, with formatted preview opt-in. The legacy 8080 server remains stopped.
+
+## Local rules (schema 9)
+
+Full `make check` passed: 23 client tests including GnuPG interoperability, asset formatting, Go vet, all Go race suites and actionlint. Rules tests cover disabled creation, read-only previews, idempotent many-to-many assignment, manual veto, stale revision, body exclusion, encrypted/own-message exclusion and two-user denial. HTTP tests cover CSRF, consent, foreign rules/Spaces and no provider calls. Domain validation has an additional regression test.
+
+The disposable browser preview verified create-disabled → preview → explicit enable with synthetic `.test` data, keyboard focus, desktop and 390×844 layout (document width 390). No production mailbox or API key was used. Screenshot saved as `local-rules-mobile.png` in the task outputs. The temporary preview was stopped afterward; port 8080 was not started. No provider-side spam operation or complete 1.0 acceptance is claimed.

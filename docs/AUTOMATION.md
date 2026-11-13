@@ -64,3 +64,7 @@ For each Space, a probability >= 0.5 proposes membership. The proposal's confide
 Contract sources: [OpenRouter Jev guide](https://openrouter.ai/docs/guides/community/jev), [Decisions API](https://openrouter.ai/docs/api/api-reference/alphadecisions/submit-a-decisions-request). Requests retain no-collection/ZDR/parameter support requirements and explicitly disable provider fallback for Decisions. Availability with an actual paid account remains untested locally; rejected privacy routes do not silently weaken policy.
 
 Incoming Unsorted is now the default triage queue; when all incoming cached messages have a Space, it shows inbox zero. All activity and Spaces retain the messages. Use **Preview Space suggestions** on an eligible message in any cached historical view. Even manually organized cached mail can be previewed explicitly, while automatic reassignment remains blocked by its manual epoch. Preview never starts a history import and requires separate approval to apply.
+
+## Deterministic local rules
+
+The independent [local rules](RULES.md) module needs no provider or API key. Saving/editing disables a rule; explicit enable covers cached and future eligible mail. It matches headers only and preserves manual organization. Rules do not enable Jev, inspect encrypted content or mutate remote mail. Jev may separately propose additional Spaces under its own saved consent.

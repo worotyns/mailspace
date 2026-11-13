@@ -209,4 +209,45 @@ func TestClassificationHTTPConsentScopeAndSelection(t *testing.T) {
 	if provider.calls != 1 {
 		t.Fatal("approval re-exported content")
 	}
+	t.Run("local rules consent and ownership", func(t *testing.T) {
+		form := url.Values{"kind": {"sender"}, "value": {"sender@example.test"}, "space": {space.ID}}.Encode()
+		if request("POST", "/rules", token, "", "application/x-www-form-urlencoded", form).Code != 403 {
+			t.Fatal("rule creation bypassed CSRF")
+		}
+		if request("POST", "/rules", other, otherSession.CSRF, "application/x-www-form-urlencoded", form).Code != 422 {
+			t.Fatal("rule targeted a foreign Space")
+		}
+		if response := request("POST", "/rules", token, session.CSRF, "application/x-www-form-urlencoded", form); response.Code != 303 {
+			t.Fatalf("rule creation failed: %s", response.Body.String())
+		}
+		var ruleID string
+		var enabled bool
+		if err := db.Database().QueryRow("SELECT id,enabled FROM message_rules WHERE owner_id=?", alice.ID).Scan(&ruleID, &enabled); err != nil || enabled {
+			t.Fatal("rule did not start disabled")
+		}
+		if response := request("GET", "/rules?edit="+ruleID, token, "", "", ""); response.Code != 200 || !strings.Contains(response.Body.String(), "Preview cached matches") {
+			t.Fatalf("rule UI unavailable: %s", response.Body.String())
+		}
+		if request("GET", "/rules?edit="+ruleID, other, "", "", "").Code != 404 {
+			t.Fatal("foreign rule was readable")
+		}
+		if response := request("POST", "/rules/"+ruleID+"/preview", token, session.CSRF, "application/x-www-form-urlencoded", ""); response.Code != 200 || !strings.Contains(response.Body.String(), "Preview only") {
+			t.Fatal("rule preview unavailable")
+		}
+		state := url.Values{"revision": {"1"}, "enabled": {"1"}}.Encode()
+		if request("POST", "/rules/"+ruleID+"/enable", token, session.CSRF, "application/x-www-form-urlencoded", state).Code != 400 {
+			t.Fatal("rule enabled without approval")
+		}
+		state = url.Values{"revision": {"1"}, "enabled": {"1"}, "consent": {"allow"}}.Encode()
+		if request("POST", "/rules/"+ruleID+"/enable", other, otherSession.CSRF, "application/x-www-form-urlencoded", state).Code != 404 {
+			t.Fatal("foreign rule enabled")
+		}
+		if request("POST", "/rules/"+ruleID+"/enable", token, session.CSRF, "application/x-www-form-urlencoded", state).Code != 303 {
+			t.Fatal("approved rule not enabled")
+		}
+		if provider.calls != 1 {
+			t.Fatal("local rule actions invoked an AI provider")
+		}
+	})
+
 }
