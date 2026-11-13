@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Package rules applies reviewed, deterministic header-only Space rules locally.
+// Package rules applies reviewed, deterministic, bounded Space rules locally.
 // Rules cannot export content, run scripts, send mail or grant permissions.
 package rules
 
@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"errors"
 	"mailspace.local/mailspace/internal/mail"
+	"mailspace.local/mailspace/internal/mailfilter"
 	"mailspace.local/mailspace/internal/timeline"
 	netmail "net/mail"
 	"strings"
@@ -26,9 +27,10 @@ type Sources interface {
 	List(context.Context, string, string) ([]timeline.Record, error)
 }
 type Rule struct {
-	ID, Kind, Value, SpaceID string
-	Enabled                  bool
-	Revision                 int64
+	ID, Kind, Value, SpaceID, Expression string
+	compiled                             *mailfilter.Expr
+	Enabled                              bool
+	Revision                             int64
 }
 
 func (Rule) String() string   { return "<redacted local mail rule>" }
@@ -70,8 +72,21 @@ func fields(kind, value string) bool {
 	return false
 }
 func (s *Service) Save(ctx context.Context, owner, id, kind, value, space string, revision int64) (Rule, error) {
+	return s.save(ctx, owner, id, kind, value, space, "", revision)
+}
+func (s *Service) SaveExpression(ctx context.Context, owner, id, query, space string, revision int64) (Rule, error) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return Rule{}, ErrInput
+	}
+	if _, err := mailfilter.Compile(query); err != nil {
+		return Rule{}, ErrInput
+	}
+	return s.save(ctx, owner, id, "subject", "", space, query, revision)
+}
+func (s *Service) save(ctx context.Context, owner, id, kind, value, space, expression string, revision int64) (Rule, error) {
 	value = strings.TrimSpace(value)
-	if !fields(kind, value) {
+	if expression == "" && !fields(kind, value) {
 		return Rule{}, ErrInput
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -92,10 +107,10 @@ func (s *Service) Save(ctx context.Context, owner, id, kind, value, space string
 			return Rule{}, ErrLimit
 		}
 		id = rand.Text()
-		_, err = tx.ExecContext(ctx, "INSERT INTO message_rules(id,owner_id,kind,value,space_id,enabled,revision,created_at) VALUES(?,?,?,?,?,0,1,?)", id, owner, kind, value, space, time.Now().Unix())
+		_, err = tx.ExecContext(ctx, "INSERT INTO message_rules(id,owner_id,kind,value,space_id,enabled,revision,created_at,expression) VALUES(?,?,?,?,?,0,1,?,?)", id, owner, kind, value, space, time.Now().Unix(), expression)
 	} else {
 		var result sql.Result
-		result, err = tx.ExecContext(ctx, "UPDATE message_rules SET kind=?,value=?,space_id=?,enabled=0,revision=revision+1 WHERE id=? AND owner_id=? AND revision=?", kind, value, space, id, owner, revision)
+		result, err = tx.ExecContext(ctx, "UPDATE message_rules SET kind=?,value=?,space_id=?,expression=?,enabled=0,revision=revision+1 WHERE id=? AND owner_id=? AND revision=?", kind, value, space, expression, id, owner, revision)
 		if err == nil {
 			n, _ := result.RowsAffected()
 			if n != 1 {
@@ -113,14 +128,20 @@ func (s *Service) Save(ctx context.Context, owner, id, kind, value, space string
 }
 func (s *Service) Get(ctx context.Context, owner, id string) (Rule, error) {
 	var r Rule
-	err := s.db.QueryRowContext(ctx, "SELECT id,kind,value,space_id,enabled,revision FROM message_rules WHERE id=? AND owner_id=?", id, owner).Scan(&r.ID, &r.Kind, &r.Value, &r.SpaceID, &r.Enabled, &r.Revision)
+	err := s.db.QueryRowContext(ctx, "SELECT id,kind,value,space_id,enabled,revision,expression FROM message_rules WHERE id=? AND owner_id=?", id, owner).Scan(&r.ID, &r.Kind, &r.Value, &r.SpaceID, &r.Enabled, &r.Revision, &r.Expression)
 	if err != nil {
 		return r, ErrChanged
+	}
+	if r.Expression != "" {
+		r.compiled, err = mailfilter.Compile(r.Expression)
+		if err != nil {
+			return Rule{}, ErrInput
+		}
 	}
 	return r, nil
 }
 func (s *Service) List(ctx context.Context, owner string) ([]Rule, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id,kind,value,space_id,enabled,revision FROM message_rules WHERE owner_id=? ORDER BY created_at,id LIMIT 32", owner)
+	rows, err := s.db.QueryContext(ctx, "SELECT id,kind,value,space_id,enabled,revision,expression FROM message_rules WHERE owner_id=? ORDER BY created_at,id LIMIT 32", owner)
 	if err != nil {
 		return nil, err
 	}
@@ -128,8 +149,14 @@ func (s *Service) List(ctx context.Context, owner string) ([]Rule, error) {
 	list := []Rule{}
 	for rows.Next() {
 		var r Rule
-		if err = rows.Scan(&r.ID, &r.Kind, &r.Value, &r.SpaceID, &r.Enabled, &r.Revision); err != nil {
+		if err = rows.Scan(&r.ID, &r.Kind, &r.Value, &r.SpaceID, &r.Enabled, &r.Revision, &r.Expression); err != nil {
 			return nil, err
+		}
+		if r.Expression != "" {
+			r.compiled, err = mailfilter.Compile(r.Expression)
+			if err != nil {
+				return nil, ErrInput
+			}
 		}
 		list = append(list, r)
 	}
@@ -161,6 +188,17 @@ func Matches(r Rule, m timeline.Record) bool {
 	if m.Own || m.Preview.Encrypted || m.Preview.Status != "ready" {
 		return false
 	}
+	if r.Expression != "" {
+		expr := r.compiled
+		if expr == nil {
+			var err error
+			expr, err = mailfilter.Compile(r.Expression)
+			if err != nil {
+				return false
+			}
+		}
+		return expr.Match(mailfilter.Message{From: m.Preview.Sender, To: m.Preview.To, Subject: m.Preview.Subject, Name: m.Preview.Name, Text: m.Preview.Text, Encrypted: m.Preview.Encrypted})
+	}
 	switch r.Kind {
 	case "sender":
 		return strings.EqualFold(m.Preview.Sender, r.Value)
@@ -187,8 +225,13 @@ func (s *Service) Preview(ctx context.Context, owner, id string) (Preview, error
 	if err != nil {
 		return Preview{}, err
 	}
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
 	result := Preview{Messages: []timeline.Record{}}
 	for _, m := range messages {
+		if err := ctx.Err(); err != nil {
+			return result, err
+		}
 		if !Matches(r, m) {
 			continue
 		}
@@ -240,6 +283,9 @@ func (s *Service) Process(ctx context.Context, owner, account string) (int, erro
 	}
 	applied := 0
 	for _, m := range messages {
+		if err := ctx.Err(); err != nil {
+			return applied, err
+		}
 		for _, r := range enabled {
 			if !Matches(r, m) {
 				continue

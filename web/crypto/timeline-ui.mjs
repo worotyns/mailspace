@@ -185,9 +185,9 @@ document.addEventListener("htmx:beforeRequest", () => {
 });
 for (const event of ["htmx:responseError", "htmx:sendError", "htmx:timeout"])
   document.addEventListener(event, (failure) => {
-    const notice = failure.detail?.xhr?.getResponseHeader(
-      "X-Mailspace-Decision-Notice",
-    );
+    const notice =
+      failure.detail?.xhr?.getResponseHeader("X-Mailspace-Notice") ||
+      failure.detail?.xhr?.getResponseHeader("X-Mailspace-Decision-Notice");
     window.dispatchEvent(
       new CustomEvent("mailspace:toast", {
         detail: {

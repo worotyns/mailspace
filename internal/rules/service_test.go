@@ -221,3 +221,45 @@ func TestRuleDomainValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestExpressionRulesKeepOwnershipConsentAndEncryptedExclusion(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	query := `(subject:invoice OR subject:receipt) AND body:PRIVATE_RULE_BODY_CANARY`
+	if _, err := f.engine.SaveExpression(ctx, f.other, "", query, f.space, 0); err == nil {
+		t.Fatal("foreign expression target accepted")
+	}
+	rule, err := f.engine.SaveExpression(ctx, f.owner, "", query, f.space, 0)
+	if err != nil || rule.Enabled {
+		t.Fatal("expression not saved disabled", err)
+	}
+	if _, err := f.engine.Get(ctx, f.other, rule.ID); err == nil {
+		t.Fatal("foreign expression readable")
+	}
+	preview, err := f.engine.Preview(ctx, f.owner, rule.ID)
+	if err != nil || len(preview.Messages) != 1 {
+		t.Fatal("expression preview failed", err)
+	}
+	encrypted := preview.Messages[0]
+	encrypted.Preview.Encrypted = true
+	if Matches(rule, encrypted) {
+		t.Fatal("encrypted rule body matched")
+	}
+	if n, err := f.engine.Process(ctx, f.owner, ""); err != nil || n != 0 {
+		t.Fatal("disabled expression executed")
+	}
+	if err = f.engine.Enable(ctx, f.owner, rule.ID, rule.Revision, true); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := f.engine.Process(ctx, f.owner, ""); err != nil || n != 1 {
+		t.Fatal("approved expression failed", n, err)
+	}
+	rule, _ = f.engine.Get(ctx, f.owner, rule.ID)
+	changed, err := f.engine.SaveExpression(ctx, f.owner, rule.ID, `subject:other`, f.space, rule.Revision)
+	if err != nil || changed.Enabled || changed.Revision == rule.Revision {
+		t.Fatal("edit kept old automation active", err)
+	}
+	if _, err = f.engine.SaveExpression(ctx, f.owner, rule.ID, `body:x OR`, f.space, changed.Revision); err == nil {
+		t.Fatal("invalid expression stored")
+	}
+}

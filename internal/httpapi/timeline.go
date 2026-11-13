@@ -13,6 +13,7 @@ import (
 	"mailspace.local/mailspace/internal/decision"
 	"mailspace.local/mailspace/internal/identity"
 	"mailspace.local/mailspace/internal/mail"
+	"mailspace.local/mailspace/internal/mailfilter"
 	"mailspace.local/mailspace/internal/outbox"
 	"mailspace.local/mailspace/internal/timeline"
 	"mailspace.local/mailspace/internal/webui"
@@ -119,8 +120,11 @@ func (c *timelineController) data(r *http.Request, s identity.Session) (webui.Ti
 		data.Title = "Archived"
 		data.Description = "Archived in Mailspace. Original server folders and Space assignments are unchanged."
 	}
-	if len(data.Query) > 200 || len(data.Person) > 254 || (data.Filter != "" && data.Filter != "all" && data.Filter != "unsorted" && data.Filter != "unread" && data.Filter != "archived") {
+	if len(data.Query) > 2048 || len(data.Person) > 254 || (data.Filter != "" && data.Filter != "all" && data.Filter != "unsorted" && data.Filter != "unread" && data.Filter != "archived") {
 		return data, timeline.ErrInput
+	}
+	if _, err := mailfilter.Compile(data.Query); err != nil {
+		return data, err
 	}
 	if data.ThreadKey != "" {
 		if _, err := hex.DecodeString(data.ThreadKey); err != nil || len(data.ThreadKey) != 64 {
@@ -286,6 +290,11 @@ func (c *timelineController) data(r *http.Request, s identity.Session) (webui.Ti
 func (c *timelineController) render(w http.ResponseWriter, r *http.Request, s identity.Session) {
 	data, err := c.data(r, s)
 	if err != nil {
+		if errors.Is(err, mailfilter.ErrQuery) {
+			w.Header().Set("X-Mailspace-Notice", mailfilter.ErrQuery.Error())
+			http.Error(w, mailfilter.ErrQuery.Error(), 400)
+			return
+		}
 		if errors.Is(err, collections.ErrNotFound) || errors.Is(err, timeline.ErrNotFound) {
 			http.NotFound(w, r)
 		} else {

@@ -5,12 +5,14 @@ import (
 	"context"
 	"mailspace.local/mailspace/internal/collections"
 	"mailspace.local/mailspace/internal/identity"
+	"mailspace.local/mailspace/internal/mailfilter"
 	"mailspace.local/mailspace/internal/rules"
 	"mailspace.local/mailspace/internal/timeline"
 	"mailspace.local/mailspace/internal/webui"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 )
 
 func ruleRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store, protected protectedRoute, mutation func(http.ResponseWriter, *http.Request, identity.Session) bool) {
@@ -71,20 +73,30 @@ func ruleRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store, pr
 			}
 			data.Edit = &rules.Rule{Kind: "sender", Value: resolved.Record.Preview.Sender, SpaceID: space.ID}
 		}
+
 		if data.Edit == nil && (r.URL.Query().Get("from_filter") != "" || r.URL.Query().Get("query_filter") != "") {
-			draft := rules.Rule{Kind: "subject", Value: r.URL.Query().Get("query_filter")}
-			if sender := r.URL.Query().Get("from_filter"); sender != "" {
-				draft.Kind = "sender"
-				draft.Value = sender
+			parts := []string{}
+			if person := r.URL.Query().Get("from_filter"); person != "" {
+				parts = append(parts, "(from:"+strconv.Quote(person)+" OR to:"+strconv.Quote(person)+")")
 			}
+			if query := r.URL.Query().Get("query_filter"); query != "" {
+				expr, err := mailfilter.Compile(query)
+				if err != nil {
+					http.Error(w, mailfilter.ErrQuery.Error(), 400)
+					return
+				}
+				parts = append(parts, expr.String())
+			}
+			draft := rules.Rule{Kind: "subject", Expression: strings.Join(parts, " AND ")}
 			if id := r.URL.Query().Get("space"); id != "" {
 				if space, err := groups.Get(r.Context(), s.User.ID, "space", id); err == nil {
 					draft.SpaceID = space.ID
 				}
 			}
 			data.Edit = &draft
-			data.Notice = "Rule draft: review the condition and destination before saving. It remains disabled until you approve it."
+			data.Notice = "Rule draft uses your search conditions. Review its destination, save and preview before enabling. Date and label filters are not included."
 		}
+
 		if webui.RenderRules(w, config.Dev, data) != nil {
 			http.Error(w, "Unable to render rules", 500)
 		}
@@ -95,7 +107,13 @@ func ruleRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store, pr
 			return
 		}
 		revision, _ := strconv.ParseInt(r.FormValue("revision"), 10, 64)
-		if _, err := engine.Save(r.Context(), s.User.ID, r.PathValue("id"), r.FormValue("kind"), r.FormValue("value"), r.FormValue("space"), revision); err != nil {
+		var err error
+		if expression := r.FormValue("expression"); strings.TrimSpace(expression) != "" {
+			_, err = engine.SaveExpression(r.Context(), s.User.ID, r.PathValue("id"), expression, r.FormValue("space"), revision)
+		} else {
+			_, err = engine.Save(r.Context(), s.User.ID, r.PathValue("id"), r.FormValue("kind"), r.FormValue("value"), r.FormValue("space"), revision)
+		}
+		if err != nil {
 			http.Error(w, "Check rule, Space ownership and current revision", 422)
 			return
 		}

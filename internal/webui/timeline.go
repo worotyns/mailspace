@@ -11,6 +11,7 @@ import (
 	"mailspace.local/mailspace/internal/collections"
 	"mailspace.local/mailspace/internal/decision"
 	"mailspace.local/mailspace/internal/mail"
+	"mailspace.local/mailspace/internal/mailfilter"
 	"mailspace.local/mailspace/internal/timeline"
 	"net/http"
 	netmail "net/mail"
@@ -300,6 +301,7 @@ func FormatTimeline(records []timeline.Record, spaces, labels []collections.Item
 		all[item.ID] = CollectionView{Item: item, Active: item.ID == data.LabelID}
 	}
 	people := map[string]PersonView{}
+	queryFilter, _ := mailfilter.Compile(data.Query)
 	for _, record := range records {
 		ids := memberships[record.Identity.Key]
 		hasSpace := false
@@ -349,7 +351,7 @@ func FormatTimeline(records []timeline.Record, spaces, labels []collections.Item
 				continue
 			}
 		}
-		if data.Query != "" && !strings.Contains(strings.ToLower(record.Preview.Subject+" "+record.Preview.Name+" "+record.Preview.Sender+" "+strings.Join(record.Preview.To, " ")), strings.ToLower(data.Query)) {
+		if data.Query != "" && !queryFilter.Match(mailfilter.Message{From: record.Preview.Sender, To: record.Preview.To, Subject: record.Preview.Subject, Name: record.Preview.Name, Text: record.Preview.Text, Encrypted: record.Preview.Encrypted}) {
 			continue
 		}
 		date := record.At.In(location).Format("2006-01-02")

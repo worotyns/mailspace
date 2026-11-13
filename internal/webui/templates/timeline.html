@@ -216,6 +216,11 @@
           hx-swap="outerHTML"
           class="flex min-w-24 flex-1 items-center gap-1"
         >
+          <input type="hidden" name="label" value="{{ .LabelID }}" /><input
+            type="hidden"
+            name="account"
+            value="{{ .AccountID }}"
+          />
           <input type="hidden" name="space" value="{{ .SpaceID }}" /><input
             type="hidden"
             name="person"
@@ -228,9 +233,11 @@
             type="search"
             name="q"
             value="{{ .Query }}"
-            maxlength="200"
+            maxlength="2048"
             aria-label="Find a person or topic"
             placeholder="Search mail…"
+            title="Search text or combine from:, to:, domain:, subject:, body: with AND / OR and parentheses"
+            aria-describedby="mail-filter-help"
             class="min-w-0 w-full rounded-lg border border-line bg-canvas px-3"
           /><button
             class="icon-action"
@@ -262,11 +269,16 @@
             <span class="text-[11px]">{{ .DateLabel }}</span>
           {{ end }}
         </button>
+        <span id="mail-filter-help" class="sr-only"
+          >Plain words search sender, recipients and subject. Combine from:,
+          to:, domain:, subject: or body: with AND, OR and parentheses. Body
+          searches ordinary cached text only.</span
+        >
         {{ if or .Person .Query }}
           <a
             href="{{ .FilterRuleURL }}"
             class="icon-action"
-            title="Draft a rule; review its condition before saving"
+            title="Create a rule from search conditions; review before enabling"
             aria-label="Draft rule"
             >{{ template "timeline-icon" "pencil" }}</a
           >
@@ -328,6 +340,7 @@
           hx-swap="outerHTML"
           class="mt-4 space-y-3"
         >
+          <input type="hidden" name="account" value="{{ .AccountID }}" />
           <input type="hidden" name="space" value="{{ .SpaceID }}" /><input
             type="hidden"
             name="person"
@@ -384,6 +397,11 @@
           hx-swap="outerHTML"
           class="mt-4 space-y-3"
         >
+          <input type="hidden" name="label" value="{{ .LabelID }}" /><input
+            type="hidden"
+            name="account"
+            value="{{ .AccountID }}"
+          />
           <input type="hidden" name="space" value="{{ .SpaceID }}" /><input
             type="hidden"
             name="person"
@@ -649,7 +667,7 @@
           href="/rules"
           data-command
           class="block rounded-lg p-3 hover:bg-hover"
-          >Local rules</a
+          >Local rules / AND / OR filters</a
         ><a
           href="/automation"
           data-command
