@@ -185,6 +185,11 @@ func run() error {
 			return fmt.Errorf("synthetic mailbox sync: %w", err)
 		}
 	}
+	if !existing {
+		if err = seedSpaces(ctx, store, service, syncer, outgoing, owner.ID); err != nil {
+			return err
+		}
+	}
 	done := make(chan struct{})
 	go func() { defer close(done); syncer.Run(ctx) }()
 	defer func() { stop(); <-done }()

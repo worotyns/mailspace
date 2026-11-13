@@ -4,6 +4,8 @@ This guide is for a single-instance Linux server with Docker Engine and Docker C
 
 Current target: an authenticated personal installation for testing, with real mail transport, persistent SQLite, private Spaces/labels, local OpenPGP and ordinary replies. Do not mistake this for a completed 1.0/security audit. See RELEASE_READINESS.md for the remaining gates. Organizations do not share mail yet.
 
+All settings and defaults are documented in [CONFIGURATION.md](CONFIGURATION.md). Optional classification: [AUTOMATION.md](AUTOMATION.md). Continuous SQLite replication: [BACKUPS.md](BACKUPS.md).
+
 ## 1. Prepare the server
 
 Use a dedicated domain such as `mail.example.com`. Point its DNS to your server. You need Docker/Compose, outbound access to the approved provider ports, and an HTTPS reverse proxy. The application port stays bound to `127.0.0.1:8080`; never publish it directly to the Internet. Open ports 80/443 for the proxy as appropriate. Allow sufficient disk for cached mail, outbox and backups; monitor volume growth. Run one app instance per SQLite volume.

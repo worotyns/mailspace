@@ -1,0 +1,29 @@
+# Optional: docker compose -f compose.yaml -f compose.backup.yaml up -d --build
+services:
+  litestream:
+    build:
+      context: .
+      target: backup
+    entrypoint: ["/app/litestream"]
+    command: ["replicate", "-config", "/etc/litestream.yml"]
+    depends_on:
+      mailspace:
+        condition: service_healthy
+    environment:
+      LITESTREAM_REPLICA_URL: ${LITESTREAM_REPLICA_URL:?Set an explicit private replica URL to enable backups}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+    volumes:
+      - mailspace-data:/app/data
+      - mailspace-replicas:/backups
+      - ./deploy/litestream.yml:/etc/litestream.yml:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: [/tmp]
+    stop_grace_period: 60s
+    restart: unless-stopped
+volumes:
+  mailspace-replicas:
+    name: ${MAILSPACE_BACKUP_VOLUME:-mailspace_mailspace-replicas}

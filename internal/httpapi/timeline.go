@@ -290,7 +290,12 @@ func timelineRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 			http.NotFound(w, r)
 			return
 		}
-		renderSecurePage(w, config, webui.AuthPageData{UserID: s.User.ID, SessionExpires: s.ExpiresAt.UnixMilli(), Email: s.User.Email, SecureRead: true, OrdinaryRead: !resolved.Record.Preview.Encrypted, RawURL: "/api/messages/raw?" + url.Values{"reference": {webui.EncodeSource(ref)}}.Encode(), ClaimedSender: resolved.Record.Preview.Sender, AccountID: ref.AccountID})
+		classifyReference, classifyProvider := "", ""
+		if config.Decisions != nil && config.Decisions.Available() && resolved.Record.Preview.Encrypted {
+			classifyReference = webui.EncodeSource(ref)
+			classifyProvider = config.Decisions.ProviderName()
+		}
+		renderSecurePage(w, config, webui.AuthPageData{UserID: s.User.ID, SessionExpires: s.ExpiresAt.UnixMilli(), Email: s.User.Email, ClassifyReference: classifyReference, ClassifyProvider: classifyProvider, CSRF: s.CSRF, SecureRead: true, OrdinaryRead: !resolved.Record.Preview.Encrypted, RawURL: "/api/messages/raw?" + url.Values{"reference": {webui.EncodeSource(ref)}}.Encode(), ClaimedSender: resolved.Record.Preview.Sender, AccountID: ref.AccountID})
 	}))
 	mux.HandleFunc("POST /timeline/sync", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
 		if !mutation(w, r, s) {

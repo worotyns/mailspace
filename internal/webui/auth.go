@@ -27,6 +27,8 @@ type AccountForm struct {
 	SameCredentials bool
 }
 type AuthPageData struct {
+	ClassifyReference     string
+	ClassifyProvider      string
 	OrdinaryRead          bool
 	SecureRead            bool
 	RawURL                string

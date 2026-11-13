@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Litestream 0.5.x. Database only: preserve the credential keyring separately.
+# No metrics listener or MCP server is enabled.
+snapshot:
+  interval: 24h
+  retention: 168h
+l0-retention: 24h
+logging:
+  level: info
+  type: json
+  stderr: true
+dbs:
+  - path: /app/data/mailspace.db
+    replica:
+      url: ${LITESTREAM_REPLICA_URL}
+      sync-interval: 1s

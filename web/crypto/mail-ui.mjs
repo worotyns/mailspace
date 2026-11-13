@@ -17,6 +17,7 @@ const status = el("secure-status"),
   reading = root.dataset.read === "true";
 const ordinary = root.dataset.ordinary === "true";
 let currentHTML = null;
+let selectionClassifier;
 const htmlPreview = reading
   ? new MailHTMLPreview(
       el("html-preview-dialog"),
@@ -84,6 +85,7 @@ const notify = (text) => {
   status.textContent = text;
 };
 function lock() {
+  selectionClassifier?.clear();
   epoch++;
   vault?.lock();
   request?.abort();
@@ -299,6 +301,10 @@ try {
       }),
     );
   }
+  if (reading && root.dataset.classifyReference) {
+    const { ClientSelection } = await import("./client-selection.mjs");
+    selectionClassifier = new ClientSelection(root);
+  }
   if (reading)
     el("mail-decrypt").addEventListener("click", () =>
       perform(async (current) => {
@@ -357,6 +363,7 @@ try {
           attachments.append(link);
         }
         el("decrypted-content").hidden = false;
+        selectionClassifier?.enable();
         notify(
           ordinary
             ? "Text view ready. HTML appears only when you explicitly open its isolated preview."

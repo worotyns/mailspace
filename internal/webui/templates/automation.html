@@ -1,0 +1,188 @@
+{{ define "automation-page" }}
+  <!doctype html>
+  <html lang="en">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width,initial-scale=1" />
+      <title>Space automation · Mailspace</title>
+      <script src="/assets/theme.js"></script>
+      <link rel="stylesheet" href="/assets/app.css" />
+    </head>
+    <body class="min-h-dvh bg-canvas">
+      <main class="mx-auto max-w-3xl p-6 sm:p-10">
+        <a href="/" class="text-xs text-accent">← Space timeline</a>
+        <h1 class="mt-6 text-2xl font-semibold">Space automation</h1>
+        <p class="mt-2 text-sm text-muted">
+          JEV validates model proposals against your current Spaces and manual
+          decisions. It cannot send mail, change permissions or decrypt content.
+        </p>
+        <p class="mt-4 rounded-lg border border-line bg-panel p-3 text-sm">
+          Provider: <strong>{{ .Provider }}</strong>
+        </p>
+        {{ if .Notice }}
+          <p
+            role="status"
+            class="my-4 rounded-lg border border-line p-3 text-sm"
+          >
+            {{ .Notice }}
+          </p>
+        {{ end }}{{ if not .Available }}
+          <p class="my-4 text-sm text-muted">
+            The administrator must configure an optional classifier first. No
+            model or network job runs while it is disabled. See
+            docs/AUTOMATION.md in the source.
+          </p>
+        {{ end }}
+        <form
+          action="/automation"
+          method="post"
+          class="mt-6 space-y-5 rounded-xl border border-line bg-panel p-5"
+        >
+          <input type="hidden" name="provider" value="{{ .Provider }}" /><input
+            type="hidden"
+            name="csrf"
+            value="{{ .CSRF }}"
+          /><label class="block text-sm"
+            >Mode<select
+              name="mode"
+              class="mt-2 block w-full rounded-lg border border-line bg-canvas p-2"
+            >
+              <option
+                value="off"
+                {{ if eq .Settings.Mode "off" }}selected{{ end }}
+              >
+                Off
+              </option>
+              <option
+                value="review"
+                {{ if eq .Settings.Mode "review" }}selected{{ end }}
+              >
+                Review proposals first
+              </option>
+              <option
+                value="auto"
+                {{ if eq .Settings.Mode "auto" }}selected{{ end }}
+              >
+                Automatically assign
+              </option>
+            </select></label
+          ><label class="block text-sm"
+            >Allowed mail payload<select
+              name="payload"
+              class="mt-2 block w-full rounded-lg border border-line bg-canvas p-2"
+            >
+              <option
+                value="metadata"
+                {{ if eq .Settings.Payload "metadata" }}selected{{ end }}
+              >
+                Sender, recipients and subject only
+              </option>
+              <option
+                value="text"
+                {{ if eq .Settings.Payload "text" }}selected{{ end }}
+              >
+                Metadata plus ordinary text (up to 4 KiB)
+              </option>
+            </select></label
+          >
+          <p class="text-xs leading-relaxed text-muted">
+            The configured provider receives the selected fields and the first
+            512 bytes of each Space description. OpenRouter is an external
+            service. Encrypted messages, attachments and browser-decrypted
+            content are always excluded. Only incoming, supported cached mail is
+            eligible. Manual assignments win. Up to three new requests per
+            minute per enabled user; model usage may incur charges. Configure
+            provider spending limits before enabling automatic mode.
+          </p>
+          <label class="flex items-start gap-2 text-sm"
+            ><input
+              type="checkbox"
+              name="consent"
+              value="allow"
+              class="mt-1"
+            />I allow this provider to receive the chosen fields for my eligible
+            mail and Space descriptions. Required for review or automatic
+            mode.</label
+          ><button class="rounded-lg bg-action px-4 py-2 text-sm text-white">
+            Save settings
+          </button>
+          <p class="text-xs text-muted">
+            Saving starts a new settings version and allows eligible messages to
+            be evaluated again. Off stops future work; already submitted
+            provider requests cannot be recalled.
+          </p>
+        </form>
+        <section class="mt-8">
+          <h2 class="text-lg font-semibold">Decision trace</h2>
+          <p class="mt-2 text-xs text-muted">
+            Only source/Space references, versions, proposed ids, confidence and
+            state are retained. No prompts, mail bodies, model explanations or
+            raw responses. Replay validates the saved result without a new model
+            call. Apply approves a saved proposal and protects it as a manual
+            decision.
+          </p>
+          <div class="mt-4 space-y-3">
+            {{ range .Runs }}
+              <article class="rounded-xl border border-line bg-panel p-4">
+                <div class="flex flex-wrap items-center gap-2 text-xs">
+                  <strong>{{ .State }}</strong
+                  ><time class="text-muted"
+                    >{{ .CreatedAt.Format "2006-01-02 15:04 UTC" }}</time
+                  ><code class="break-all text-muted">{{ .ID }}</code>
+                </div>
+                <p class="my-3 break-all text-xs">
+                  <a href="{{ $.SourceURL . }}" class="text-accent"
+                    >View original message</a
+                  >
+                  · Spaces:
+                  {{ range .Proposal.SpaceIDs }}
+                    <code class="mr-2">{{ $.SpaceName . }}</code>
+                  {{ else }}
+                    none
+                  {{ end }}
+                  · confidence
+                  {{ .Proposal.Confidence }}
+                </p>
+                <div class="flex gap-3">
+                  {{ if or (eq .State "review") (eq .State "dry-run") }}
+                    <form
+                      action="/automation/runs/{{ .ID }}/apply"
+                      method="post"
+                    >
+                      <input
+                        type="hidden"
+                        name="csrf"
+                        value="{{ $.CSRF }}"
+                      /><button class="text-xs font-medium text-accent">
+                        Approve &amp; apply
+                      </button>
+                    </form>
+                  {{ end }}{{ if or (eq .State "review") (eq .State "dry-run") (eq .State "applied") }}
+                    <form
+                      action="/automation/runs/{{ .ID }}/replay"
+                      method="post"
+                    >
+                      <input
+                        type="hidden"
+                        name="csrf"
+                        value="{{ $.CSRF }}"
+                      /><button class="text-xs text-accent">
+                        Replay validation
+                      </button>
+                    </form>
+                  {{ end }}
+                </div>
+              </article>
+            {{ else }}
+              <p class="rounded-xl border border-line p-5 text-sm text-muted">
+                No decisions yet. Describe your Spaces, choose review mode, then
+                use Classify preview on an eligible message or wait for the next
+                worker cycle.
+              </p>
+            {{ end }}
+          </div>
+        </section>
+      </main>
+    </body>
+  </html>
+{{ end }}

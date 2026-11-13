@@ -190,7 +190,7 @@ func (s *Service) Assign(ctx context.Context, owner, kind, id string, ref mail.S
 				return ErrCapacity
 			}
 		}
-		result, err = tx.ExecContext(ctx, "INSERT INTO message_collection_memberships(collection_id,account_id,account_revision,message_key,source,actor_id,created_at) VALUES(?,?,?,?,'manual',?,?) ON CONFLICT(collection_id,message_key) DO NOTHING", id, identity.AccountID, identity.Revision, identity.Key, owner, time.Now().Unix())
+		result, err = tx.ExecContext(ctx, "INSERT INTO message_collection_memberships(collection_id,account_id,account_revision,message_key,source,actor_id,created_at) VALUES(?,?,?,?,'manual',?,?) ON CONFLICT(collection_id,message_key) DO UPDATE SET source='manual',actor_id=excluded.actor_id WHERE message_collection_memberships.source!='manual'", id, identity.AccountID, identity.Revision, identity.Key, owner, time.Now().Unix())
 	} else {
 		result, err = tx.ExecContext(ctx, "DELETE FROM message_collection_memberships WHERE collection_id=? AND message_key=? AND account_id=? AND account_revision=?", id, identity.Key, identity.AccountID, identity.Revision)
 	}

@@ -6,6 +6,7 @@ import (
 	"crypto/subtle"
 	"errors"
 	"mailspace.local/mailspace/internal/accounts"
+	"mailspace.local/mailspace/internal/decision"
 	"mailspace.local/mailspace/internal/identity"
 	"mailspace.local/mailspace/internal/mailnet"
 	"mailspace.local/mailspace/internal/mailsync"
@@ -21,6 +22,7 @@ import (
 )
 
 type AuthConfig struct {
+	Decisions            *decision.Service
 	Synthetic            bool
 	Outbox               *outbox.Service
 	Sync                 *mailsync.Service
@@ -540,6 +542,7 @@ func NewPersonal(sourceDir string, store *identity.Store, config AuthConfig) (ht
 		http.Redirect(w, r, "/workspaces/"+r.PathValue("id"), 303)
 	}))
 
+	decisionRoutes(mux, config, store, protected, mutation)
 	hasTimeline := timelineRoutes(mux, config, store, protected, mutation, withConnectionBudget, func() { <-connectionSlots })
 	cryptoRoutes(mux, config, store, protected, mutation, withConnectionBudget, func() { <-connectionSlots })
 	mux.HandleFunc("GET /keys", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
@@ -553,7 +556,7 @@ func NewPersonal(sourceDir string, store *identity.Store, config AuthConfig) (ht
 		reply(w, map[string]string{"status": "ok", "mode": "personal"})
 	})
 	mux.HandleFunc("GET /api/capabilities", func(w http.ResponseWriter, r *http.Request) {
-		reply(w, map[string]any{"mode": "personal", "synthetic": config.Synthetic, "identity": true, "workspaces": true, "spaces": hasTimeline, "unifiedTimeline": hasTimeline, "localKeyVault": true, "encryptedMimeAlpha": config.Outbox != nil && config.Sync != nil, "threadSharing": false, "mailAccounts": config.Accounts != nil, "mail": config.Sync != nil, "readOnlyMail": config.Sync != nil, "sending": config.Outbox != nil, "openpgp": false, "telemetry": false, "modules": map[string]bool{"team": false, "ai": false, "drive": false, "decisionEngine": false, "fullText": false, "semanticSearch": false}})
+		reply(w, map[string]any{"mode": "personal", "synthetic": config.Synthetic, "identity": true, "workspaces": true, "spaces": hasTimeline, "unifiedTimeline": hasTimeline, "localKeyVault": true, "encryptedMimeAlpha": config.Outbox != nil && config.Sync != nil, "threadSharing": false, "mailAccounts": config.Accounts != nil, "mail": config.Sync != nil, "readOnlyMail": config.Sync != nil, "sending": config.Outbox != nil, "openpgp": false, "telemetry": false, "modules": map[string]bool{"team": false, "ai": false, "drive": false, "decisionEngine": config.Decisions != nil && config.Decisions.Available(), "fullText": false, "semanticSearch": false}})
 	})
 	mux.HandleFunc("GET /login", func(w http.ResponseWriter, r *http.Request) {
 		if _, err := sessionFor(r); err == nil {

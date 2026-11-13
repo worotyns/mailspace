@@ -21,16 +21,18 @@ RUN CGO_ENABLED=0 go run scripts/notices.go > /go-notices.txt
 RUN CGO_ENABLED=0 go build -trimpath -o /mailspace ./cmd/mailspace
 FROM alpine:3.23 AS source
 WORKDIR /source
-COPY LICENSE README.md AGENTS.md CONTRIBUTING.md SECURITY.md CHANGELOG.md go.mod go.sum Makefile Dockerfile compose.yaml compose.personal.yaml .env.example .gitignore .dockerignore ./
+COPY LICENSE README.md AGENTS.md CONTRIBUTING.md SECURITY.md CHANGELOG.md go.mod go.sum Makefile Dockerfile compose.yaml compose.personal.yaml compose.backup.yaml .env.example .gitignore .dockerignore ./
 COPY cmd/ cmd/
 COPY internal/ internal/
 COPY docs/ docs/
+COPY deploy/ deploy/
 COPY licenses/ licenses/
 COPY web/ web/
 COPY .github/ .github/
 COPY scripts/ scripts/
 RUN tar -czf /source.tar.gz .
-FROM alpine:3.23
+FROM litestream/litestream:0.5.18-scratch AS litestream-bin
+FROM alpine:3.23 AS app
 RUN apk add --no-cache ca-certificates && addgroup -S mailspace && adduser -S -G mailspace mailspace
 WORKDIR /app
 RUN mkdir -p /app/data && chown mailspace:mailspace /app/data
@@ -43,3 +45,13 @@ USER mailspace
 ENV MAILSPACE_ADDR=0.0.0.0:8080
 EXPOSE 8080
 ENTRYPOINT ["/app/mailspace"]
+
+# Optional sidecar target; the default runtime does not include/start Litestream.
+FROM app AS backup
+USER root
+RUN mkdir -p /backups && chown mailspace:mailspace /backups
+COPY --from=litestream-bin /usr/local/bin/litestream /app/litestream
+USER mailspace
+ENTRYPOINT ["/app/litestream"]
+CMD ["replicate", "-config", "/etc/litestream.yml"]
+FROM app AS runtime

@@ -88,10 +88,19 @@ func main() {
 		if err = outgoing.Recover(ctx); err != nil {
 			log.Fatal(err)
 		}
+		classifier, err := decisions(store, mailAccounts, syncer, outgoing)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if classifier != nil {
+			done := make(chan struct{})
+			go func() { defer close(done); classifier.Run(ctx) }()
+			defer func() { stop(); <-done }()
+		}
 		syncDone = make(chan struct{})
 		go func() { defer close(syncDone); syncer.Run(ctx) }()
 		defer func() { stop(); <-syncDone }()
-		handler, err = httpapi.NewPersonal(dir, store, httpapi.AuthConfig{Outbox: outgoing, Sync: syncer, Accounts: mailAccounts, MailEndpointsEnabled: policy.HasEndpoints(), Origin: os.Getenv("MAILSPACE_ORIGIN"), InsecureLoopback: os.Getenv("MAILSPACE_INSECURE_HTTP") == "1", Dev: os.Getenv("MAILSPACE_DEV") == "1"})
+		handler, err = httpapi.NewPersonal(dir, store, httpapi.AuthConfig{Decisions: classifier, Outbox: outgoing, Sync: syncer, Accounts: mailAccounts, MailEndpointsEnabled: policy.HasEndpoints(), Origin: os.Getenv("MAILSPACE_ORIGIN"), InsecureLoopback: os.Getenv("MAILSPACE_INSECURE_HTTP") == "1", Dev: os.Getenv("MAILSPACE_DEV") == "1"})
 		if err != nil {
 			log.Fatal(err)
 		}

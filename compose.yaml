@@ -5,6 +5,11 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
     environment:
+      MAILSPACE_JEV_PROVIDER: ${MAILSPACE_JEV_PROVIDER:-}
+      MAILSPACE_JEV_MODEL: ${MAILSPACE_JEV_MODEL:-}
+      MAILSPACE_JEV_API_TOKEN: ${MAILSPACE_JEV_API_TOKEN:-}
+      MAILSPACE_JEV_KEY_FILE: ${MAILSPACE_JEV_KEY_FILE:-}
+      MAILSPACE_JEV_ENDPOINT: ${MAILSPACE_JEV_ENDPOINT:-}
       MAILSPACE_MODE: personal
       MAILSPACE_DB: /app/data/mailspace.db
       MAILSPACE_ORIGIN: ${MAILSPACE_ORIGIN:?Set the browser-facing HTTPS origin in .env}

@@ -204,7 +204,10 @@
         <a href="/accounts/new" class="block hover:text-accent"
           >Connect mail account</a
         ><a href="/keys" class="block hover:text-accent">Local keys</a
-        ><a href="/settings" class="block hover:text-accent">Settings</a
+        ><a href="/automation" class="block py-2 text-xs text-accent"
+          >Space automation</a
+        >
+        <a href="/settings" class="block hover:text-accent">Settings</a
         >{{ if .Accounts }}
         {{ end }}
       </div>
@@ -302,6 +305,9 @@
                   >Label: {{ .Name }}</a
                 >
               {{ end }}
+              <a href="/automation" class="block py-2 text-xs text-accent"
+                >Space automation</a
+              >
               <a href="/settings" class="block px-3 py-2 text-sm"
                 >Settings &amp; accounts</a
               >
@@ -731,6 +737,15 @@
       {{ end }}
     </div>
     {{ if .Expanded }}
+      <form action="/automation/preview" method="post" hx-disable class="mt-2">
+        <input type="hidden" name="csrf" value="{{ .CSRF }}" /><input
+          type="hidden"
+          name="reference"
+          value="{{ .Token }}"
+        /><button class="text-[10px] text-accent">
+          Classify preview (dry-run)
+        </button>
+      </form>
       <details class="mt-2" open>
         <summary class="w-fit cursor-pointer text-[10px] text-muted">
           Spaces &amp; labels
