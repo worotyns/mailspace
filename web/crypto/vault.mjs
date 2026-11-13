@@ -385,6 +385,66 @@ export class LocalVault {
     if (epoch !== this.#epoch) throw new VaultError("locked");
     return encrypted;
   }
+  // Local-only detached signing. This does not authorize plaintext submission.
+  // Return the snapshot actually signed so caller mutation cannot change it.
+  async signDetached(data, from) {
+    if (!this.#unlocked) throw new VaultError("locked");
+    if (!(data instanceof Uint8Array) || !data.length || data.length > 4 << 20)
+      throw new VaultError("message-limit");
+    const bytes = data.slice();
+    const epoch = this.#epoch;
+    const key = this.#unlocked;
+    from = email(from);
+    const binding = await this.#store.binding(from);
+    if (epoch !== this.#epoch) throw new VaultError("locked");
+    if (!binding || binding.fingerprint !== this.fingerprint)
+      throw new VaultError("sender-key-mismatch");
+    try {
+      await key.verifyPrimaryKey(undefined, { email: from }, cryptoConfig);
+      const primary = await key.getPrimaryUser(
+        undefined,
+        { email: from },
+        cryptoConfig,
+      );
+      if (email(primary.user.userID.email) !== from)
+        throw new VaultError("identity-mismatch");
+      await key.getSigningKey(
+        undefined,
+        undefined,
+        { email: from },
+        cryptoConfig,
+      );
+    } catch {
+      throw new VaultError("unusable-key");
+    }
+    if (epoch !== this.#epoch) throw new VaultError("locked");
+    let signature;
+    try {
+      signature = await pgp.sign({
+        message: await pgp.createMessage({ binary: bytes }),
+        signingKeys: key,
+        detached: true,
+        format: "armored",
+        config: cryptoConfig,
+      });
+      const parsed = await pgp.readSignature({
+        armoredSignature: signature,
+        config: cryptoConfig,
+      });
+      if (
+        parsed.packets.length !== 1 ||
+        parsed.packets[0].hashAlgorithm !== pgp.enums.hash.sha512
+      )
+        throw new Error("unexpected signature algorithm");
+    } catch {
+      throw new VaultError("signing-failed");
+    }
+    if (epoch !== this.#epoch) throw new VaultError("locked");
+    if ((await this.#store.binding(from))?.fingerprint !== binding.fingerprint)
+      throw new VaultError("key-changed");
+    if (epoch !== this.#epoch) throw new VaultError("locked");
+    return { data: bytes, signature };
+  }
   async decryptSigned(armoredMessage, claimedSender) {
     if (!this.#unlocked) throw new VaultError("locked");
     if (

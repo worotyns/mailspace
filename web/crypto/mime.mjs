@@ -52,6 +52,39 @@ export function encryptedEntity(armored) {
   const ciphertext = armored.replace(/\r\n|\r|\n/g, "\r\n").trimEnd();
   return `MIME-Version: 1.0\r\nContent-Type: multipart/encrypted; protocol="application/pgp-encrypted";\r\n boundary="${boundary}"\r\n\r\n--${boundary}\r\nContent-Type: application/pgp-encrypted\r\n\r\nVersion: 1\r\n\r\n--${boundary}\r\nContent-Type: application/octet-stream\r\nContent-Disposition: inline; filename="encrypted.asc"\r\n\r\n${ciphertext}\r\n--${boundary}--\r\n`;
 }
+// Accept only the canonical seven-bit entity produced by composeEntity. Never
+// normalize signed data: headers, transfer encodings and CRLF are authenticated.
+export function signedEntity(data, signature) {
+  if (!(data instanceof Uint8Array) || !data.length || data.length > 4 << 20)
+    throw new VaultError("message-limit");
+  if (
+    data.some((byte) => byte > 126 || (byte < 32 && byte !== 13 && byte !== 10))
+  )
+    throw new VaultError("invalid-mime");
+  const source = decoder.decode(data);
+  if (
+    !source.includes("\r\n\r\n") ||
+    !source.endsWith("\r\n") ||
+    /(?<!\r)\n|\r(?!\n)|[ \t]\r\n/.test(source)
+  )
+    throw new VaultError("invalid-mime");
+  if (
+    typeof signature !== "string" ||
+    encoder.encode(signature).length > 256 << 10 ||
+    !/^-----BEGIN PGP SIGNATURE-----\r?\n[\x09\x0a\x0d\x20-\x7e]+\r?\n-----END PGP SIGNATURE-----\s*$/.test(
+      signature,
+    )
+  )
+    throw new VaultError("invalid-signature");
+  const boundary =
+    "mailspace-signed-" +
+    Array.from(crypto.getRandomValues(new Uint8Array(16)), (n) =>
+      n.toString(16).padStart(2, "0"),
+    ).join("");
+  if (source.includes(boundary)) throw new VaultError("invalid-mime");
+  const armored = signature.replace(/\r\n|\r|\n/g, "\r\n").trimEnd();
+  return `MIME-Version: 1.0\r\nContent-Type: multipart/signed; protocol="application/pgp-signature"; micalg=pgp-sha512;\r\n boundary="${boundary}"\r\n\r\n--${boundary}\r\n${source}\r\n--${boundary}\r\nContent-Type: application/pgp-signature\r\nContent-Disposition: attachment; filename="signature.asc"\r\n\r\n${armored}\r\n--${boundary}--\r\n`;
+}
 export async function extractEncrypted(raw) {
   const parsed = await parseLocalMime(raw);
   const types = parsed.headers.filter((h) => h.key === "content-type");

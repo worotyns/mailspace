@@ -4,6 +4,8 @@ Te instrukcje obowiązują w całym repo. Zmiana produktu wymaga spełnienia pon
 
 ## Zakres i sposób pracy
 
+Praca zlecona przez właściciela repo odbywa się bezpośrednio na `main`: małe commity po testach i push do `origin/main`, bez tworzenia PR, chyba że użytkownik wyraźnie zmieni tę zasadę. Nie force-pushuj. Contribution zewnętrzny nadal fork → PR → review → merge.
+
 1. Przeczytaj README, docs/ROADMAP.md, właściwy ADR i issue przed zmianą. Wybierz jeden mały wycinek; nie implementuj całej roadmapy w jednym PR.
 2. Pisz kod i identyfikatory po angielsku. Dokumentacja produktowa może być po polsku. Każde TODO musi wskazywać MS-xxx lub opis blokady.
 3. Nie nadpisuj cudzych zmian. Sprawdź `git status` i diff; dodawaj do commita wyłącznie pliki własnego wycinka. Nie force-pushuj, nie publikuj release ani nie wysyłaj wiadomości bez upoważnienia.

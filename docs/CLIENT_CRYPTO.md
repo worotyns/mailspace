@@ -27,3 +27,7 @@ Write first, choose Encrypt beside Send. Ordinary replies require the explicit S
 ## Explicit selected-excerpt exception
 
 See [ADR-0021](adr/0021.md) and [AUTOMATION.md](AUTOMATION.md). After local decryption, a user can approve one exact excerpt for the displayed classifier. Only that excerpt crosses the backend in memory; keys/passphrases/rest of mail stay local. No excerpt/hash/headers persist in trace. Results always require human approval. This does not permit generic decrypted exports, named form fields, HTMX serialization or silent background calls.
+
+## Detached signing foundation
+
+`LocalVault.signDetached` snapshots its input, revalidates the explicitly bound sender/signing key and rejects lock or binding changes. `signedEntity` preserves canonical seven-bit MIME bytes under multipart/signed with checked SHA-512 signatures. This is a local-only foundation (ADR-0028), not a signed-only sending feature. It grants no new decrypted-content export permission; plaintext submission and encrypted-parent downgrade remain unavailable through this helper.

@@ -49,3 +49,5 @@ Accepted oznacza decyzję projektową, nie gotową implementację. Zmiany przez 
 - [0026 — Fresh connections and explicit recent import](0026.md)
 
 - [0027 — Reviewed local header rules](0027.md)
+
+- [0028 — Local detached signing foundation](0028.md)

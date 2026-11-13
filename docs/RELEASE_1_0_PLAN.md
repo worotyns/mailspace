@@ -14,7 +14,7 @@ Optional Drive, full-text/semantic indexing, AI compose, PostgreSQL and YunoHost
 
 ## Current evidence
 
-Main f2266a2 has passing GitHub CI, including crypto tests, Go race tests, Docker build and continuous SQLite write/restore drill. 1.0 compatibility/team/security gates remain open. The implementation branch is release/1.0-readiness; each completed slice updates this record and RELEASE_READINESS.md before publication.
+Main f2266a2 has passing GitHub CI, including crypto tests, Go race tests, Docker build and continuous SQLite write/restore drill. 1.0 compatibility/team/security gates remain open. The tested readiness work is merged into main. Work continues directly on main in tested, bounded commits; no pull request is required for owner-directed work. Each completed slice updates this record and RELEASE_READINESS.md before publication.
 
 ### MS-006 first compatibility slice
 
@@ -31,3 +31,7 @@ Migration 008 implements fresh new connections, durable UID baselines and explic
 ### Completed slice: reviewed local rules
 
 Schema 9 adds disabled-by-default exact sender/domain and subject-phrase rules, read-only cached previews, explicit enable and bounded post-sync assignment. Manual membership changes veto automatic rules. Sender suggestions after manual assignment are drafts only. Provider-side spam training/moves, archived-rule replay and unbounded history remain outside this slice. See [RULES.md](RULES.md) and ADR-0027.
+
+### MS-006 local signing foundation
+
+ADR-0028 implements local detached signing and exact-byte multipart/signed composition, with application → GnuPG verification and tamper rejection. No signed-only submission endpoint or visible send control is connected by this slice. Signing-only send UX, secure quoting and actual Thunderbird acceptance remain open.

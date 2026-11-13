@@ -17,6 +17,7 @@ import { extractSigned } from "../../internal/webui/assets/crypto/signed-mime.mj
 import {
   composeEntity,
   encryptedEntity,
+  signedEntity,
   extractEncrypted,
 } from "../../internal/webui/assets/crypto/mime.mjs";
 
@@ -202,6 +203,34 @@ test(
         "interop@example.test",
       );
       assert.equal(checked.signatures[0].trustedSender, true);
+      const appSigned = await vault.signDetached(
+        mimePlain,
+        "interop@example.test",
+      );
+      const appSignedEnvelope = await extractSigned(
+        new TextEncoder().encode(
+          signedEntity(appSigned.data, appSigned.signature),
+        ),
+      );
+      assert.deepEqual(appSignedEnvelope.data, mimePlain);
+      await writeFile(signedFile, appSignedEnvelope.data, { mode: 0o600 });
+      await writeFile(detachedFile, appSignedEnvelope.signature, {
+        mode: 0o600,
+      });
+      gpg(["--verify", detachedFile, signedFile]);
+      const mutated = appSignedEnvelope.data.slice();
+      mutated[mutated.length - 4] ^= 1;
+      await writeFile(signedFile, mutated, { mode: 0o600 });
+      const badSignature = spawnSync(
+        "gpg",
+        ["--homedir", home, "--batch", "--verify", detachedFile, signedFile],
+        { encoding: "utf8", timeout: 20_000 },
+      );
+      assert.notEqual(
+        badSignature.status,
+        0,
+        "GnuPG accepted modified signed MIME",
+      );
       const binaryFile = join(home, "gpg-encrypted-binary.pgp");
       gpg([
         "--trust-model",

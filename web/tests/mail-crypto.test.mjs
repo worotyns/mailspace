@@ -13,6 +13,7 @@ import {
   composeEntity,
   readAttachments,
   encryptedEntity,
+  signedEntity,
   extractEncrypted,
   parseLocalMime,
 } from "../../internal/webui/assets/crypto/mime.mjs";
@@ -320,6 +321,70 @@ test("binary OpenPGP/MIME preserves ciphertext octets through base64 and quoted-
     });
     alice.vault.lock();
     await assert.rejects(alice.vault.decryptSigned(binary, alice.address), {
+      code: "locked",
+    });
+  } finally {
+    await alice.vault.close();
+  }
+});
+
+test("local detached signing preserves exact MIME, sender binding, locks and attachments without network", async () => {
+  const alice = await person("signer@example.test");
+  try {
+    const input = composeEntity("Visible signed text: Zażółć\nFrom example", [
+      { name: "receipt.bin", data: new Uint8Array([0, 255, 13, 10, 42]) },
+    ]);
+    const original = input.slice();
+    const pending = alice.vault.signDetached(input, alice.address);
+    input.fill(0); // A caller mutation while signing must not alter signed bytes.
+    const signed = await pending;
+    assert.deepEqual(signed.data, original);
+    const { extractSigned } = await import(
+      "../../internal/webui/assets/crypto/signed-mime.mjs"
+    );
+    const raw = new TextEncoder().encode(
+      signedEntity(signed.data, signed.signature),
+    );
+    const extracted = await extractSigned(raw);
+    assert.deepEqual(extracted.data, original);
+    const result = await alice.vault.verifyDetached(
+      extracted.data,
+      extracted.signature,
+      alice.address,
+    );
+    assert.equal(result.signatures[0].trustedSender, true);
+    const parsed = await parseLocalMime(extracted.data);
+    assert.match(parsed.text, /Visible signed text/);
+    assert.deepEqual(
+      new Uint8Array(parsed.attachments[0].content),
+      new Uint8Array([0, 255, 13, 10, 42]),
+    );
+    await assert.rejects(
+      alice.vault.signDetached(original, "forged@example.test"),
+      { code: "sender-key-mismatch" },
+    );
+    assert.throws(
+      () =>
+        signedEntity(
+          new TextEncoder().encode(
+            "Content-Type: text/plain\n\nwrong endings\n",
+          ),
+          signed.signature,
+        ),
+      { code: "invalid-mime" },
+    );
+    assert.throws(
+      () =>
+        signedEntity(
+          new TextEncoder().encode("Content-Type: text/plain\r\n\r\nraw é\r\n"),
+          signed.signature,
+        ),
+      { code: "invalid-mime" },
+    );
+    const whileLocking = alice.vault.signDetached(original, alice.address);
+    alice.vault.lock();
+    await assert.rejects(whileLocking, { code: "locked" });
+    await assert.rejects(alice.vault.signDetached(original, alice.address), {
       code: "locked",
     });
   } finally {

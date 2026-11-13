@@ -26,3 +26,5 @@ Optional JEV (ADR-0020), consented selected-excerpt classification (ADR-0021) an
 1.0 work is tracked in [RELEASE_1_0_PLAN.md](RELEASE_1_0_PLAN.md). Binary OpenPGP/MIME read support is implemented in ADR-0023 and detached signature reading in ADR-0024; detached-only sending, secure quoting and the real Thunderbird matrix remain open.
 
 The testing branch also implements explicit cached-message Jev previews and an incoming Unsorted queue with an inbox-zero state (ADR-0025), fresh new connections with explicit bounded recent import (ADR-0026), and reviewed local header rules (ADR-0027). HTML-only readers automatically show inert text; formatted preview is optional. Two synthetic live Jev Decisions requests passed under explicit user authorization; this is not a production-mail accuracy or general provider availability claim.
+
+Local detached signing and multipart/signed composition now have an application → GnuPG interoperability test (ADR-0028). They are not yet connected to a signed-only send action or submission endpoint; the remaining sending gate is unchanged. Owner-directed work continues directly on main.
