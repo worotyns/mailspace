@@ -83,3 +83,19 @@ func TestDialogRunsAndTimezoneKeepSourcesSeparate(t *testing.T) {
 		t.Fatal("thread reply context lost")
 	}
 }
+
+func TestTriageExcludesOwnMailAndKeepsAllActivity(t *testing.T) {
+	incoming := timeline.Record{Identity: mail.MessageIdentity{Key: "incoming"}, Preview: mailsync.Preview{Status: "ready", Sender: "sender@example.test"}}
+	own := timeline.Record{Identity: mail.MessageIdentity{Key: "own"}, Own: true, Preview: mailsync.Preview{Status: "ready"}}
+	space := collections.Item{ID: "space", Kind: "space", Name: "Payments"}
+	data := TimelineData{Filter: "unsorted", Timezone: "UTC"}
+	FormatTimeline([]timeline.Record{incoming, own}, []collections.Item{space}, nil, map[string][]string{"incoming": {"space"}}, &data)
+	if data.Unsorted != 0 || len(data.Messages) != 0 {
+		t.Fatal("assigned/own messages kept triage nonempty")
+	}
+	all := TimelineData{Filter: "all", Timezone: "UTC"}
+	FormatTimeline([]timeline.Record{incoming, own}, []collections.Item{space}, nil, map[string][]string{"incoming": {"space"}}, &all)
+	if len(all.Messages) != 2 {
+		t.Fatal("inbox zero hid retained activity")
+	}
+}

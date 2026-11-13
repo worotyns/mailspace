@@ -43,3 +43,5 @@ Accepted oznacza decyzję projektową, nie gotową implementację. Zmiany przez 
 - [0023 — Local binary OpenPGP/MIME input](0023.md)
 
 - [0024 — Local detached OpenPGP/MIME verification](0024.md)
+
+- [0025 — Inbox-zero triage and cached-mail previews](0025.md)

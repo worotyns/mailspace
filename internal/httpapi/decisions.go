@@ -3,6 +3,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"mailspace.local/mailspace/internal/collections"
 	"mailspace.local/mailspace/internal/decision"
@@ -41,6 +42,8 @@ func decisionRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 		}
 		notice := ""
 		switch r.URL.Query().Get("notice") {
+		case "enable":
+			notice = "Choose Manual previews only (no background requests), Review or Auto, then approve the displayed provider and payload before requesting a message preview."
 		case "saved":
 			notice = "Settings saved. Future decisions use this version; previous in-flight decisions cannot apply against it."
 		case "ready":
@@ -123,14 +126,18 @@ func decisionRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 			return
 		}
 		ref, err := decodeSource(r.FormValue("reference"))
+		var run decision.Run
 		if err == nil {
-			_, err = engine.Evaluate(r.Context(), s.User.ID, ref, true)
+			run, err = engine.Evaluate(r.Context(), s.User.ID, ref, true)
 		}
-		notice := "ready"
-		if err != nil {
-			notice = "failed"
+		target := "/automation?notice=failed"
+		if errors.Is(err, decision.ErrDisabled) {
+			target = "/automation?notice=enable"
 		}
-		http.Redirect(w, r, "/automation?notice="+notice, 303)
+		if err == nil {
+			target = "/automation?notice=ready#run-" + run.ID
+		}
+		http.Redirect(w, r, target, 303)
 	}))
 	for _, action := range []string{"apply", "replay"} {
 		mux.HandleFunc("POST /automation/runs/{id}/"+action, protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {

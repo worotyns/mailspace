@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -111,7 +112,7 @@ func (p *ChatProvider) exchange(ctx context.Context, endpoint string, request an
 	}
 	defer response.Body.Close()
 	if response.StatusCode != 200 {
-		return nil, ErrProvider
+		return nil, fmt.Errorf("%w: HTTP %d", ErrProvider, response.StatusCode)
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, (64<<10)+1))
 	if err != nil || len(data) > 64<<10 {

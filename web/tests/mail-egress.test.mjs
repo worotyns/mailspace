@@ -237,7 +237,8 @@ test("actual composer event submits only ciphertext, never key/passphrase/plaint
     await import(
       "../../internal/webui/assets/crypto/mail-ui.mjs?signed-reader-fixture"
     );
-    await listeners.get("mail-decrypt:click")();
+    // Ordinary mail opens directly in text mode; no extra Read-as-text click.
+
     assert.equal(reads, 1);
     assert.equal(element("decrypted-text").textContent, body);
     assert.match(

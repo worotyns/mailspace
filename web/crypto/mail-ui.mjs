@@ -37,6 +37,7 @@ const downloads = [];
 let drafts,
   activeDraft = null,
   restoredFiles = [];
+let readMessage;
 let requestId = root.dataset.requestId;
 let replyLocator = {
   folder: root.dataset.replyFolder,
@@ -312,8 +313,8 @@ try {
     const { ClientSelection } = await import("./client-selection.mjs");
     selectionClassifier = new ClientSelection(root);
   }
-  if (reading)
-    el("mail-decrypt").addEventListener("click", () =>
+  if (reading) {
+    readMessage = () =>
       perform(async (current) => {
         notify("Fetching ciphertext and decrypting locally…");
         request = new AbortController();
@@ -393,9 +394,9 @@ try {
             ? "Text view ready. HTML appears only when you explicitly open its isolated preview."
             : "Decrypted locally. No content, attachment or signature payload was sent back to the server.",
         );
-      }),
-    );
-  else
+      });
+    el("mail-decrypt").addEventListener("click", readMessage);
+  } else
     el("secure-send").addEventListener("click", () =>
       perform(async (current) => {
         if (submitted) return;
@@ -493,6 +494,7 @@ try {
       lock();
   }, 1000);
   available = true;
+  if (reading && ordinary) await readMessage();
 } catch {
   available = false;
   lock();

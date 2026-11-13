@@ -132,7 +132,10 @@
           </p>
           <div class="mt-4 space-y-3">
             {{ range .Runs }}
-              <article class="rounded-xl border border-line bg-panel p-4">
+              <article
+                id="run-{{ .ID }}"
+                class="rounded-xl border border-line bg-panel p-4"
+              >
                 <div class="flex flex-wrap items-center gap-2 text-xs">
                   <strong>{{ .State }}</strong
                   ><time class="text-muted"

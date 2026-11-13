@@ -86,9 +86,9 @@
       >
       <nav aria-label="Timeline filters" class="space-y-1">
         <a
-          href="{{ .Link "filter" "" }}"
-          hx-get="{{ .Link "filter" "" }}"
-          class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-hover {{ if and (not .SpaceID) (not .Filter) }}
+          href="{{ .Link "filter" "all" }}"
+          hx-get="{{ .Link "filter" "all" }}"
+          class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-hover {{ if eq .Filter "all" }}
             bg-canvas font-semibold text-accent
           {{ end }}"
           >{{ template "timeline-icon" "messages" }}All activity</a
@@ -270,8 +270,8 @@
               class="absolute left-0 top-full z-30 mt-2 w-64 rounded-xl border border-line bg-panel p-2 shadow-lg"
             >
               <a
-                href="{{ .Link "filter" "" }}"
-                hx-get="{{ .Link "filter" "" }}"
+                href="{{ .Link "filter" "all" }}"
+                hx-get="{{ .Link "filter" "all" }}"
                 class="block rounded px-3 py-2 text-sm"
                 >All activity</a
               ><a
@@ -692,7 +692,7 @@
             {{ if .SpaceID }}
               This Space is ready
             {{ else if eq .Filter "unsorted" }}
-              Everything has a home
+              Inbox zero. Everything has a home.
             {{ else }}
               Nothing here yet
             {{ end }}
@@ -703,6 +703,10 @@
               Space.
             {{ else if not .Accounts }}
               Connect your mailbox to start your timeline.
+            {{ else if eq .Filter "unsorted" }}
+              No incoming messages are waiting for a Space. Your mail is still
+              in Spaces and All activity; nothing was deleted or moved on the
+              server.
             {{ else }}
               Try another person or date, or refresh your recent mail.
             {{ end }}
@@ -736,16 +740,18 @@
         >
       {{ end }}
     </div>
-    {{ if .Expanded }}
+    {{ if .Classifier }}
       <form action="/automation/preview" method="post" hx-disable class="mt-2">
         <input type="hidden" name="csrf" value="{{ .CSRF }}" /><input
           type="hidden"
           name="reference"
           value="{{ .Token }}"
         /><button class="text-[10px] text-accent">
-          Classify preview (dry-run)
+          Preview Space suggestions
         </button>
       </form>
+    {{ end }}
+    {{ if .Expanded }}
       <details class="mt-2" open>
         <summary class="w-fit cursor-pointer text-[10px] text-muted">
           Spaces &amp; labels

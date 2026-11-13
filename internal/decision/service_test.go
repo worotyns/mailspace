@@ -336,3 +336,29 @@ func TestProviderChangeRequiresNewConsent(t *testing.T) {
 		t.Fatal("old consent applied with different provider")
 	}
 }
+
+func TestExplicitHistoricalPreviewIncludesManuallyOrganizedCachedMail(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	if err := f.engine.Save(ctx, f.owner, "manual", "metadata"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.groups.Assign(ctx, f.owner, "space", f.space.ID, f.ref, true); err != nil {
+		t.Fatal(err)
+	}
+	f.engine.Cycle(ctx)
+	if f.provider.calls != 0 {
+		t.Fatal("manual-only settings started a historical job")
+	}
+	run, err := f.engine.Evaluate(ctx, f.owner, f.ref, true)
+	if err != nil || run.State != "dry-run" || f.provider.calls != 1 {
+		t.Fatalf("historical preview unavailable: %v", err)
+	}
+	var count int
+	if err = f.db.Database().QueryRow("SELECT count(*) FROM message_collection_memberships").Scan(&count); err != nil || count != 1 {
+		t.Fatal("historical preview changed memberships")
+	}
+	if _, err = f.engine.Evaluate(ctx, f.owner, f.ref, true); err != nil || f.provider.calls != 1 {
+		t.Fatal("unchanged historical preview re-billed")
+	}
+}

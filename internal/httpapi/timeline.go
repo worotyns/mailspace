@@ -65,7 +65,13 @@ func timelineReturn(value string) string {
 func (c *timelineController) data(r *http.Request, s identity.Session) (webui.TimelineData, error) {
 	q := r.URL.Query()
 	data := webui.TimelineData{Email: s.User.Email, UserID: s.User.ID, CSRF: s.CSRF, SessionExpires: s.ExpiresAt.UnixMilli(), Synthetic: c.config.Synthetic, AccountID: q.Get("account"), SpaceID: q.Get("space"), LabelID: q.Get("label"), Person: q.Get("person"), Filter: q.Get("filter"), Query: strings.TrimSpace(q.Get("q")), Day: q.Get("day"), Timezone: s.User.Timezone, ComposeNew: q.Get("compose") == "new", ThreadKey: q.Get("thread"), Nonce: rand.Text(), Title: "Your timeline", Description: "Messages, people and context. One place to keep things moving."}
-	if len(data.Query) > 200 || len(data.Person) > 254 || (data.Filter != "" && data.Filter != "unsorted" && data.Filter != "unread") {
+	// The default queue contains only incoming mail still needing a Space.
+	// All activity is an explicit view, never a second physical IMAP Inbox.
+	if data.Filter == "" && data.SpaceID == "" && data.LabelID == "" && data.Person == "" && data.Query == "" && data.Day == "" && data.ThreadKey == "" && q.Get("reply") == "" && !data.ComposeNew {
+		data.Filter = "unsorted"
+	}
+	data.Classifier = c.config.Decisions != nil && c.config.Decisions.Available()
+	if len(data.Query) > 200 || len(data.Person) > 254 || (data.Filter != "" && data.Filter != "all" && data.Filter != "unsorted" && data.Filter != "unread") {
 		return data, timeline.ErrInput
 	}
 	if data.ThreadKey != "" {
@@ -163,7 +169,7 @@ func (c *timelineController) data(r *http.Request, s identity.Session) (webui.Ti
 			}
 			related[i] = resolved.Record
 		}
-		threadData := webui.TimelineData{Timezone: data.Timezone, CSRF: data.CSRF, ThreadKey: data.ThreadKey}
+		threadData := webui.TimelineData{Classifier: data.Classifier, Timezone: data.Timezone, CSRF: data.CSRF, ThreadKey: data.ThreadKey}
 		webui.FormatTimeline(related, spaces, labels, memberships, &threadData)
 		data.Messages = threadData.Messages
 		data.Total = len(data.Messages)
@@ -499,7 +505,7 @@ func (c *timelineController) renderMembership(w http.ResponseWriter, r *http.Req
 		http.Error(w, "Assignments unavailable", 503)
 		return
 	}
-	message := webui.TimelineMessage{Record: resolved.Record, Token: webui.EncodeSource(ref), CSRF: s.CSRF, ReturnURL: timelineReturn(r.FormValue("return_to")), Expanded: true}
+	message := webui.TimelineMessage{Classifier: c.config.Decisions != nil && c.config.Decisions.Available() && !resolved.Record.Own && !resolved.Record.Preview.Encrypted && resolved.Record.Preview.Status == "ready", Record: resolved.Record, Token: webui.EncodeSource(ref), CSRF: s.CSRF, ReturnURL: timelineReturn(r.FormValue("return_to")), Expanded: true}
 	for _, item := range spaces {
 		message.Spaces = append(message.Spaces, webui.CollectionView{Item: item})
 	}

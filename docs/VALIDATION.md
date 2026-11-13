@@ -108,3 +108,9 @@ Linux Podman build of the optional Litestream 0.5.18 target succeeded. A file re
 The same authenticated synthetic UI was checked at desktop 1280×720 and mobile 390×844, including independent feed scrolling, light/dark modes, inline accepted synthetic reply and provider-disabled automation/manual mode. Document dimensions matched each viewport; no console errors were observed. README screenshots contain only synthetic .test mail and generic Spaces. The user's port 8080 was not restarted.
 
 Follow-up startup diagnostics name missing model/token/endpoint settings without printing secrets. TypeSafe Jev transport was corrected to the documented typed Decisions API, with contract tests for independent multiple-Space Noul results, conservative confidence, incomplete/foreign/invalid answers and no tool/trace/private-identifying request fields. Ordinary-model chat compatibility remains separate. Live paid Jev/OpenRouter availability is not claimed.
+
+## Live synthetic Jev check — 2026-11-13
+
+Two explicitly authorized, bounded requests to typesafe/jev-1.13 via OpenRouter Decisions succeeded with no retries. A synthetic invoice matched Payments (routing confidence 0.920); a synthetic cinema booking matched Personal (0.880). Inputs contained only made-up .test addressing and generic briefs. No production mail, key content or raw provider response was logged/committed. This validates actual connectivity/contract/privacy routing for that test, not every future provider/model or correctness on private mail. CI skips this opt-in test unless a private operator key path is explicitly supplied.
+
+A real-browser synthetic HTML message rendered in the isolated dialog with script/image payloads absent. An extra Read-as-text click had hidden preview availability; ordinary readers now load text automatically. HTML-only MIME remains converted to inert text, with formatted preview opt-in. The legacy 8080 server remains stopped.

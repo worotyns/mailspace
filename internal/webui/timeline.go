@@ -48,6 +48,7 @@ type PersonView struct {
 	Count int
 }
 type TimelineMessage struct {
+	Classifier bool
 	timeline.Record
 	Token       string
 	Day         string
@@ -142,6 +143,7 @@ func (m TimelineMessage) ReplyURL() string {
 }
 
 type TimelineData struct {
+	Classifier     bool
 	Email          string
 	UserID         string
 	CSRF           string
@@ -281,7 +283,7 @@ func FormatTimeline(records []timeline.Record, spaces, labels []collections.Item
 			collection.Count++
 			all[id] = collection
 		}
-		if !hasSpace {
+		if !hasSpace && !record.Own {
 			data.Unsorted++
 		}
 		if record.Unread {
@@ -294,7 +296,7 @@ func FormatTimeline(records []timeline.Record, spaces, labels []collections.Item
 			person.Count++
 			people[person.Email] = person
 		}
-		if !spaceMatch || !labelMatch || data.Filter == "unsorted" && hasSpace || data.Filter == "unread" && !record.Unread {
+		if !spaceMatch || !labelMatch || data.Filter == "unsorted" && (hasSpace || record.Own) || data.Filter == "unread" && !record.Unread {
 			continue
 		}
 		if data.Person != "" {
@@ -312,7 +314,7 @@ func FormatTimeline(records []timeline.Record, spaces, labels []collections.Item
 		if data.Day != "" && record.At.In(location).Format("2006-01-02") != data.Day {
 			continue
 		}
-		message := TimelineMessage{Record: record, Token: EncodeSource(record.Ref), Day: record.At.In(location).Format("Monday, 2 January 2006"), Time: record.At.In(location).Format("15:04"), ReturnURL: data.CurrentURL(), CSRF: data.CSRF}
+		message := TimelineMessage{Classifier: data.Classifier && !record.Own && !record.Preview.Encrypted && record.Preview.Status == "ready", Record: record, Token: EncodeSource(record.Ref), Day: record.At.In(location).Format("Monday, 2 January 2006"), Time: record.At.In(location).Format("15:04"), ReturnURL: data.CurrentURL(), CSRF: data.CSRF}
 		for _, id := range ids {
 			if collection, ok := all[id]; ok {
 				message.Memberships = append(message.Memberships, collection)

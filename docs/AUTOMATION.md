@@ -53,7 +53,7 @@ The result is always a dry-run, even in Auto. Apply it explicitly in Space autom
 
 ## Troubleshooting
 
-Unavailable adapter: check provider/model, exactly one token source and file ownership/0600. Errors are deliberately generic; do not turn on body/token logging. A busy, rate-limited or capacity-limited request can also fail safely. Invalid model JSON, invented IDs and unavailable privacy routes are rejected. If settings/Space/mail-account revisions changed, obtain a new preview; never bypass the gate. No paid/live OpenRouter request is included in the automated test suite.
+Unavailable adapter: check provider/model, exactly one token source and file ownership/0600. Errors are deliberately generic; do not turn on body/token logging. A busy, rate-limited or capacity-limited request can also fail safely. Invalid model JSON, invented IDs and unavailable privacy routes are rejected. If settings/Space/mail-account revisions changed, obtain a new preview; never bypass the gate. CI does not use a paid key. An explicitly opted-in synthetic live check is available through MAILSPACE_LIVE_JEV_KEY_FILE; it makes exactly two requests with no retries.
 
 ## TypeSafe Jev protocol
 
@@ -62,3 +62,5 @@ Jev is a decision model, not a generative chat model. For `typesafe/jev-*` (excl
 For each Space, a probability >= 0.5 proposes membership. The proposal's confidence is the minimum certainty across all Space decisions (`p` for proposed membership, `1-p` otherwise), so one uncertain Space keeps the whole proposal in review below the 0.8 auto threshold. This is a conservative routing score, not Jev's separate Choice confidence or proof of calibration for your mail. Missing/extra answers, wrong types and invalid/out-of-range probabilities reject the proposal. Provider/model/protocol changes require new per-user consent. Prefer pinned model IDs to aliases that can change upstream.
 
 Contract sources: [OpenRouter Jev guide](https://openrouter.ai/docs/guides/community/jev), [Decisions API](https://openrouter.ai/docs/api/api-reference/alphadecisions/submit-a-decisions-request). Requests retain no-collection/ZDR/parameter support requirements and explicitly disable provider fallback for Decisions. Availability with an actual paid account remains untested locally; rejected privacy routes do not silently weaken policy.
+
+Incoming Unsorted is now the default triage queue; when all incoming cached messages have a Space, it shows inbox zero. All activity and Spaces retain the messages. Use **Preview Space suggestions** on an eligible message in any cached historical view. Even manually organized cached mail can be previewed explicitly, while automatic reassignment remains blocked by its manual epoch. Preview never starts a history import and requires separate approval to apply.
