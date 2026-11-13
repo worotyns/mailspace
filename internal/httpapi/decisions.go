@@ -2,6 +2,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -54,6 +55,8 @@ func decisionRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 			notice = "Stored decision applied once; no new provider request."
 		case "replayed":
 			notice = "Stored decision passed current validation. Replay made no provider request or assignment."
+		case "busy-failed", "rate-failed", "changed-failed", "provider-failed", "input-failed", "timeout-failed":
+			notice = decisionFailureMessage(r.URL.Query().Get("notice"))
 		case "failed":
 			notice = "Could not complete this action. Check provider configuration, source/Space revisions and manual overrides. No plaintext fallback or automatic retry."
 		}
@@ -145,7 +148,7 @@ func decisionRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 		if errors.Is(err, decision.ErrDisabled) {
 			notice = "enable"
 		} else if err != nil {
-			notice = "failed"
+			notice = decisionFailureNotice(err)
 		}
 		http.Redirect(w, r, "/automation?notice="+notice, 303)
 	}))
@@ -158,7 +161,7 @@ func decisionRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 		if err == nil {
 			run, err = engine.Evaluate(r.Context(), s.User.ID, ref, true)
 		}
-		target := "/automation?notice=failed"
+		target := "/automation?notice=" + decisionFailureNotice(err)
 		if errors.Is(err, decision.ErrDisabled) {
 			target = "/automation?notice=enable"
 		}
@@ -167,7 +170,7 @@ func decisionRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 		}
 		if r.Header.Get("HX-Request") == "true" {
 			if err != nil {
-				http.Error(w, "Unable to check suggestions. Open Space automation to review consent/provider settings. No automatic retry.", 422)
+				http.Error(w, decisionFailureMessage(decisionFailureNotice(err)), 422)
 				return
 			}
 			sources := timeline.New(store, config.Accounts, config.Sync, config.Outbox)
@@ -193,9 +196,47 @@ func decisionRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 				notice = "replayed"
 			}
 			if err != nil {
-				notice = "failed"
+				notice = decisionFailureNotice(err)
 			}
 			http.Redirect(w, r, "/automation?"+url.Values{"notice": {notice}}.Encode(), 303)
 		}))
+	}
+}
+
+// Only fixed categories reach the UI; provider response bodies may contain mail.
+func decisionFailureNotice(err error) string {
+	switch {
+	case errors.Is(err, decision.ErrBusy):
+		return "busy-failed"
+	case errors.Is(err, decision.ErrRateLimited):
+		return "rate-failed"
+	case errors.Is(err, decision.ErrChanged):
+		return "changed-failed"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "timeout-failed"
+	case errors.Is(err, decision.ErrProvider):
+		return "provider-failed"
+	case errors.Is(err, decision.ErrInput):
+		return "input-failed"
+	default:
+		return "failed"
+	}
+}
+func decisionFailureMessage(kind string) string {
+	switch kind {
+	case "busy-failed":
+		return "Another Space check is running. Wait for it to finish, then try again. No automatic retry."
+	case "rate-failed":
+		return "The limit of 6 new classification attempts per minute was reached. Wait one minute before checking again."
+	case "changed-failed":
+		return "This decision is outdated: the message, Spaces, settings or manual assignment changed. Request a fresh preview and review it."
+	case "timeout-failed":
+		return "The Space check timed out. No automatic retry was made."
+	case "provider-failed":
+		return "The provider request failed or returned an unsupported response. Check provider availability, model and credentials. No automatic retry."
+	case "input-failed":
+		return "This message or decision is not eligible for this action. Check its source and Space definitions."
+	default:
+		return "Could not complete this action. No plaintext fallback or automatic retry."
 	}
 }

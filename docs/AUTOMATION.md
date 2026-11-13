@@ -68,3 +68,9 @@ Incoming Unsorted is now the default triage queue; when all incoming cached mess
 ## Deterministic local rules
 
 The independent [local rules](RULES.md) module needs no provider or API key. Saving/editing disables a rule; explicit enable covers cached and future eligible mail. It matches headers only and preserves manual organization. Rules do not enable Jev, inspect encrypted content or mutate remote mail. Jev may separately propose additional Spaces under its own saved consent.
+
+## Interpreting failed checks
+
+Each message uses one provider request containing every owned Space definition (up to 32); Jev evaluates each Space independently, so several can match. A batch checks up to three eligible messages. An unchanged stored result may be reused without a new request.
+
+The UI distinguishes an already-running check, the local limit of six new attempts per user per minute, an outdated decision after source/Space/settings/manual changes, ineligible input, and provider failure. Failed attempts count toward the minute limit. Wait for the running check or minute window before trying again; outdated results need a fresh preview. Provider errors can mean a network failure, rejected HTTP request or invalid response, and do not prove credentials are wrong. There is no automatic retry or plaintext fallback. Raw provider errors and message content are never displayed as diagnostics.

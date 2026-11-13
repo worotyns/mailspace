@@ -23,6 +23,9 @@ import (
 	"unicode/utf8"
 )
 
+var ErrBusy = errors.New("classification check already running")
+var ErrRateLimited = errors.New("classification request limit reached")
+
 var ErrDisabled = errors.New("classification is disabled")
 var ErrChanged = errors.New("classification input, manual choice or Space definition changed")
 var ErrInput = errors.New("invalid classification decision")
@@ -193,7 +196,7 @@ func (s *Service) prepare(ctx context.Context, owner string, ref mail.SourceRef,
 }
 func (s *Service) Evaluate(ctx context.Context, owner string, ref mail.SourceRef, dry bool) (Run, error) {
 	if !s.busy.TryLock() {
-		return Run{}, ErrProvider
+		return Run{}, ErrBusy
 	}
 	defer s.busy.Unlock()
 	purpose := "classification"
@@ -222,7 +225,7 @@ func (s *Service) evaluatePrepared(ctx context.Context, owner string, snap snaps
 		return Run{}, err
 	}
 	if recent >= 6 {
-		return Run{}, ErrProvider
+		return Run{}, ErrRateLimited
 	}
 	if s.runCount(ctx, owner) >= 5000 {
 		return Run{}, collections.ErrCapacity
@@ -520,7 +523,7 @@ func (s *Service) EvaluateSelection(ctx context.Context, owner string, ref mail.
 		return Run{}, ErrInput
 	}
 	if !s.busy.TryLock() {
-		return Run{}, ErrProvider
+		return Run{}, ErrBusy
 	}
 	defer s.busy.Unlock()
 	settings, err := s.Settings(ctx, owner)
