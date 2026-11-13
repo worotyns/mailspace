@@ -13,6 +13,7 @@ import {
   cryptoConfig,
 } from "../../internal/webui/assets/crypto/vault.mjs";
 
+import { extractSigned } from "../../internal/webui/assets/crypto/signed-mime.mjs";
 import {
   composeEntity,
   encryptedEntity,
@@ -167,6 +168,40 @@ test(
       );
       assert.deepEqual(fromGnuPG.data, plaintext);
       assert.equal(fromGnuPG.signatures[0].trustedSender, true);
+      const signedFile = join(home, "signed-entity.mime");
+      const detachedFile = join(home, "detached.asc");
+      await writeFile(signedFile, mimePlain, { mode: 0o600 });
+      gpg([
+        "--armor",
+        "--local-user",
+        generated.fingerprint,
+        "--output",
+        detachedFile,
+        "--detach-sign",
+        signedFile,
+      ]);
+      const detachedArmor = await readFile(detachedFile, "utf8");
+      const signedRaw = new Uint8Array(
+        Buffer.concat([
+          Buffer.from(
+            'Content-Type: multipart/signed; protocol="application/pgp-signature"; boundary="gnupg-detached"\r\n\r\n--gnupg-detached\r\n',
+          ),
+          Buffer.from(mimePlain),
+          Buffer.from(
+            "\r\n--gnupg-detached\r\nContent-Type: application/pgp-signature\r\n\r\n" +
+              detachedArmor.trimEnd() +
+              "\r\n--gnupg-detached--\r\n",
+          ),
+        ]),
+      );
+      const detached = await extractSigned(signedRaw);
+      assert.deepEqual(detached.data, mimePlain);
+      const checked = await vault.verifyDetached(
+        detached.data,
+        detached.signature,
+        "interop@example.test",
+      );
+      assert.equal(checked.signatures[0].trustedSender, true);
       const binaryFile = join(home, "gpg-encrypted-binary.pgp");
       gpg([
         "--trust-model",

@@ -19,3 +19,7 @@ Main f2266a2 has passing GitHub CI, including crypto tests, Go race tests, Docke
 ### MS-006 first compatibility slice
 
 Binary OpenPGP/MIME input is implemented locally (ADR-0023), including MIME transfer-encoding preservation and authenticated local decrypt. Detached signatures/secure quoting/Thunderbird acceptance remain open; no full crypto or 1.0 completion claim.
+
+### MS-006 detached verification slice
+
+ADR-0024 adds exact-octet multipart/signed verification for ordinary and decrypted-inner MIME in the reader. GnuPG detached output and shipped-reader egress/identity behavior are tested. Detached-only sending, secure quotes, wider legacy acceptance and actual Thunderbird remain open.

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { messageText, MailHTMLPreview } from "./mail-html.mjs";
 import { LocalDrafts } from "./drafts.mjs";
+import { extractSigned } from "./signed-mime.mjs";
 import { VaultStore } from "./store.mjs";
 import { LocalVault, VaultError } from "./vault.mjs";
 import {
@@ -138,6 +139,12 @@ const errors = {
   "invalid-recipients": "Enter valid email addresses for all recipients.",
   "decryption-failed":
     "Decryption failed. Check the selected key or download the original mail in another compatible client.",
+  "invalid-signature":
+    "The detached OpenPGP signature could not be parsed or verified. No valid-signature claim was made.",
+  "unsupported-signature":
+    "This signed MIME format is not supported. Download the original for another client.",
+  "verification-unavailable":
+    "Local signature verification requires HTTPS, browser cryptography and enabled local key storage.",
   "unsupported-encryption":
     "This message uses an unsupported OpenPGP/MIME form. Its content was not displayed.",
   "html-limit":
@@ -318,32 +325,49 @@ try {
         });
         if (!response.ok) throw new Error("ciphertext unavailable");
         const bytes = new Uint8Array(await response.arrayBuffer());
-        const result = ordinary
+        let result = ordinary
           ? { data: bytes, signatures: [], provenance: "ordinary-mail" }
           : await vault.decryptSigned(
               await extractEncrypted(bytes),
               root.dataset.sender,
             );
+        const detached = await extractSigned(result.data);
+        if (detached) {
+          if (!isSecureContext || !crypto.subtle || !indexedDB)
+            throw new VaultError("verification-unavailable");
+          vault ??= new LocalVault(new VaultStore(root.dataset.userId));
+          const verified = await vault.verifyDetached(
+            detached.data,
+            detached.signature,
+            root.dataset.sender,
+          );
+          result = {
+            ...result,
+            data: verified.data,
+            signatures: [...result.signatures, ...verified.signatures],
+          };
+        }
         const parsed = await parseLocalMime(result.data);
         if (current !== epoch) return;
         el("decrypted-text").textContent = messageText(parsed);
         currentHTML = typeof parsed.html === "string" ? parsed.html : null;
         el("html-preview-open").hidden = !currentHTML;
-        el("mail-signature").textContent = ordinary
-          ? "Ordinary mail · no OpenPGP signature verified"
-          : !result.signatures.length
-            ? "Unsigned message. Sender identity is not verified."
-            : result.signatures
-                .map((s) =>
-                  s.status === "valid"
-                    ? s.trustedSender
-                      ? "Valid signature · verified sender fingerprint"
-                      : "Valid signature · sender identity not trusted"
-                    : s.status === "invalid"
-                      ? "INVALID signature · do not trust this message"
-                      : "Unknown signing key · signature not verified",
-                )
-                .join("; ");
+        el("mail-signature").textContent =
+          ordinary && !result.signatures.length
+            ? "Ordinary mail · no OpenPGP signature verified"
+            : !result.signatures.length
+              ? "Unsigned message. Sender identity is not verified."
+              : result.signatures
+                  .map((s) =>
+                    s.status === "valid"
+                      ? s.trustedSender
+                        ? "Valid signature · verified sender fingerprint"
+                        : "Valid signature · sender identity not trusted"
+                      : s.status === "invalid"
+                        ? "INVALID signature · do not trust this message"
+                        : "Unknown signing key · signature not verified",
+                  )
+                  .join("; ");
         const attachments = el("decrypted-attachments");
         attachments.replaceChildren();
         for (const attachment of parsed.attachments) {

@@ -2,9 +2,13 @@
 import "fake-indexeddb/auto";
 import test from "node:test";
 import assert from "node:assert/strict";
+import * as pgp from "../../internal/webui/assets/vendor/openpgp/openpgp.min.mjs";
 import { LocalDrafts } from "../../internal/webui/assets/crypto/drafts.mjs";
 import { VaultStore } from "../../internal/webui/assets/crypto/store.mjs";
-import { LocalVault } from "../../internal/webui/assets/crypto/vault.mjs";
+import {
+  LocalVault,
+  cryptoConfig,
+} from "../../internal/webui/assets/crypto/vault.mjs";
 import {
   extractEncrypted,
   encryptedEntity,
@@ -156,6 +160,24 @@ test("actual composer event submits only ciphertext, never key/passphrase/plaint
       "egress@example.test",
       ["egress@example.test"],
     );
+    const signingKey = await pgp.decryptKey({
+      privateKey: await pgp.readPrivateKey({
+        armoredKey: await sender.exportPrivate(generated.fingerprint),
+      }),
+      passphrase: password,
+      config: cryptoConfig,
+    });
+    const signedData = textEntity(body);
+    const detachedSignature = await pgp.sign({
+      message: await pgp.createMessage({ binary: signedData }),
+      signingKeys: signingKey,
+      detached: true,
+      format: "armored",
+      config: cryptoConfig,
+    });
+    const signedRaw = new TextEncoder().encode(
+      `Content-Type: multipart/signed; protocol="application/pgp-signature"; boundary="reader-detached"\r\n\r\n--reader-detached\r\n${new TextDecoder().decode(signedData)}\r\n--reader-detached\r\nContent-Type: application/pgp-signature\r\n\r\n${detachedSignature.trimEnd()}\r\n--reader-detached--\r\n`,
+    );
     await sender.close();
     const raw = new TextEncoder().encode(encryptedEntity(encrypted));
     elements.clear();
@@ -192,6 +214,39 @@ test("actual composer event submits only ciphertext, never key/passphrase/plaint
     assert.equal(element("decrypted-text").textContent, "");
     assert.equal(element("decrypted-content").hidden, true);
     assert.equal(reads, 1);
+    // The ordinary signed reader verifies using public contacts only: no unlock
+    // and no network request other than the authorized original MIME fetch.
+    elements.clear();
+    listeners.clear();
+    reads = 0;
+    element("secure-mail").dataset = {
+      userId: id,
+      sessionExpires: String(Date.now() + 60000),
+      read: "true",
+      ordinary: "true",
+      rawUrl: "/api/messages/raw?reference=SYNTHETIC_SIGNED",
+      sender: "egress@example.test",
+    };
+    globalThis.fetch = async (url, request) => {
+      reads++;
+      assert.equal(url, "/api/messages/raw?reference=SYNTHETIC_SIGNED");
+      assert.equal(request.method, undefined);
+      assert.equal(request.body, undefined);
+      return { ok: true, arrayBuffer: async () => signedRaw.buffer };
+    };
+    await import(
+      "../../internal/webui/assets/crypto/mail-ui.mjs?signed-reader-fixture"
+    );
+    await listeners.get("mail-decrypt:click")();
+    assert.equal(reads, 1);
+    assert.equal(element("decrypted-text").textContent, body);
+    assert.match(
+      element("mail-signature").textContent,
+      /verified sender fingerprint/,
+    );
+    assert.equal(element("mail-passphrase").value, "");
+    listeners.get("mail-lock:click")();
+    assert.equal(element("decrypted-text").textContent, "");
     // A draft database failure after the key UI is installed must not leave an
     // operational unlock handler without its auto-lock lifecycle.
     elements.clear();

@@ -399,19 +399,7 @@ export class LocalVault {
     )
       throw new VaultError("message-limit");
     const epoch = this.#epoch;
-    const knownKeys = [];
-    for (const record of await this.#store.publicKeys()) {
-      try {
-        knownKeys.push(
-          await pgp.readKey({
-            armoredKey: record.armoredKey,
-            config: cryptoConfig,
-          }),
-        );
-      } catch {
-        /* An unusable public contact cannot validate a signature. */
-      }
-    }
+    const knownKeys = await this.#verificationKeys();
     let result;
     try {
       result = await pgp.decrypt({
@@ -431,6 +419,31 @@ export class LocalVault {
     }
     if (!(result.data instanceof Uint8Array) || result.data.length > 4 << 20)
       throw new VaultError("message-limit");
+    const signatures = await this.#signatureResults(
+      result.signatures,
+      knownKeys,
+      claimedSender,
+    );
+    if (epoch !== this.#epoch) throw new VaultError("locked");
+    return { provenance: "client-decrypted", data: result.data, signatures };
+  }
+  async #verificationKeys() {
+    const knownKeys = [];
+    for (const record of await this.#store.publicKeys()) {
+      try {
+        knownKeys.push(
+          await pgp.readKey({
+            armoredKey: record.armoredKey,
+            config: cryptoConfig,
+          }),
+        );
+      } catch {
+        /* An unusable public contact cannot validate a signature. */
+      }
+    }
+    return knownKeys;
+  }
+  async #signatureResults(rawSignatures, knownKeys, claimedSender) {
     const signatures = [];
     let binding;
     try {
@@ -438,7 +451,7 @@ export class LocalVault {
     } catch {
       /* Untrusted outer identity. */
     }
-    for (const signature of result.signatures) {
+    for (const signature of rawSignatures) {
       const key = knownKeys.find((key) =>
         key.getKeyIDs().some((id) => id.equals(signature.keyID)),
       );
@@ -459,8 +472,45 @@ export class LocalVault {
           valid && !!binding && binding.fingerprint === fingerprint,
       });
     }
+    return signatures;
+  }
+  async verifyDetached(data, signature, claimedSender) {
+    if (
+      !(data instanceof Uint8Array) ||
+      data.length > 4 << 20 ||
+      !(typeof signature === "string" || signature instanceof Uint8Array) ||
+      (typeof signature === "string"
+        ? encoder.encode(signature).length
+        : signature.length) >
+        256 << 10
+    )
+      throw new VaultError("message-limit");
+    const epoch = this.#epoch;
+    const knownKeys = await this.#verificationKeys();
+    let result;
+    try {
+      result = await pgp.verify({
+        message: await pgp.createMessage({ binary: data }),
+        signature: await pgp.readSignature({
+          ...(typeof signature === "string"
+            ? { armoredSignature: signature }
+            : { binarySignature: signature }),
+          config: cryptoConfig,
+        }),
+        verificationKeys: knownKeys,
+        format: "binary",
+        config: cryptoConfig,
+      });
+    } catch {
+      throw new VaultError("invalid-signature");
+    }
+    const signatures = await this.#signatureResults(
+      result.signatures,
+      knownKeys,
+      claimedSender,
+    );
     if (epoch !== this.#epoch) throw new VaultError("locked");
-    return { provenance: "client-decrypted", data: result.data, signatures };
+    return { data, signatures };
   }
   async untrust(address) {
     await this.#store.untrust(email(address));

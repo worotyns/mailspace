@@ -41,3 +41,5 @@ Accepted oznacza decyzję projektową, nie gotową implementację. Zmiany przez 
 - [0022 — Optional Litestream replication](0022.md)
 
 - [0023 — Local binary OpenPGP/MIME input](0023.md)
+
+- [0024 — Local detached OpenPGP/MIME verification](0024.md)
