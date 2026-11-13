@@ -12,6 +12,7 @@ type AccountSummary struct {
 	Name    string
 }
 type AccountForm struct {
+	ImportMode      string
 	SentMailbox     string
 	ID              string
 	Name            string

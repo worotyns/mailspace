@@ -23,3 +23,7 @@ Binary OpenPGP/MIME input is implemented locally (ADR-0023), including MIME tran
 ### MS-006 detached verification slice
 
 ADR-0024 adds exact-octet multipart/signed verification for ordinary and decrypted-inner MIME in the reader. GnuPG detached output and shipped-reader egress/identity behavior are tested. Detached-only sending, secure quotes, wider legacy acceptance and actual Thunderbird remain open.
+
+### MS-018 initial import policy
+
+Migration 008 implements fresh new connections, durable UID baselines and explicit bounded recent import in account settings. Existing accounts retain their prior behavior. Full archive pagination and native IDLE remain open; no history-complete claim.

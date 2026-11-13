@@ -84,7 +84,7 @@ docker compose run --rm --no-deps mailspace user add you@example.com
 docker compose up -d
 ```
 
-Compose binds only to localhost and persists `/app/data` in a named volume. Put an HTTPS reverse proxy in front. No default password, public registration or public unauthenticated demo. Do not use `down -v` for normal stops/upgrades. The native binary does not load `.env` automatically.
+Compose binds only to localhost and persists `/app/data` in a named volume. Put an HTTPS reverse proxy in front. New mailbox connections start fresh; import the recent window explicitly from account settings if wanted. No default password, public registration or public unauthenticated demo. Do not use `down -v` for normal stops/upgrades. The native binary does not load `.env` automatically.
 
 ## Scope and limits
 

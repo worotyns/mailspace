@@ -171,7 +171,7 @@ func NewPersonal(sourceDir string, store *identity.Store, config AuthConfig) (ht
 			http.Error(w, "Mail account setup unavailable", 503)
 			return
 		}
-		render(w, "account-settings", webui.AuthPageData{Email: s.User.Email, CSRF: s.CSRF, MailEndpointsEnabled: config.MailEndpointsEnabled, Form: webui.AccountForm{SentMailbox: "Sent", Address: s.User.Email, IMAPPort: 993, IMAPTLS: "tls", SMTPPort: 465, SMTPTLS: "tls", SameCredentials: true}})
+		render(w, "account-settings", webui.AuthPageData{Email: s.User.Email, CSRF: s.CSRF, MailEndpointsEnabled: config.MailEndpointsEnabled, Form: webui.AccountForm{ImportMode: "fresh", SentMailbox: "Sent", Address: s.User.Email, IMAPPort: 993, IMAPTLS: "tls", SMTPPort: 465, SMTPTLS: "tls", SameCredentials: true}})
 	}))
 	mux.HandleFunc("GET /accounts/{id}/edit", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
 		if config.Accounts == nil {
@@ -187,7 +187,17 @@ func NewPersonal(sourceDir string, store *identity.Store, config AuthConfig) (ht
 			}
 			return
 		}
-		render(w, "account-settings", webui.AuthPageData{Email: s.User.Email, CSRF: s.CSRF, MailEndpointsEnabled: config.MailEndpointsEnabled, Form: formFor(value)})
+		form := formFor(value)
+		form.ImportMode = "recent"
+		if config.Sync != nil {
+			policy, policyErr := config.Sync.ImportPolicy(r.Context(), s.User.ID, value.ID)
+			if policyErr != nil {
+				http.Error(w, "Import settings unavailable", 503)
+				return
+			}
+			form.ImportMode = policy.Mode
+		}
+		render(w, "account-settings", webui.AuthPageData{Email: s.User.Email, CSRF: s.CSRF, MailEndpointsEnabled: config.MailEndpointsEnabled, Form: form})
 	}))
 	saveAccount := protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
 		if config.Accounts == nil {
@@ -200,6 +210,14 @@ func NewPersonal(sourceDir string, store *identity.Store, config AuthConfig) (ht
 		}
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, "Invalid form", 400)
+			return
+		}
+		importMode := r.PostForm.Get("history_mode")
+		if importMode == "" && r.PathValue("id") == "" {
+			importMode = "fresh"
+		}
+		if importMode != "" && importMode != "fresh" && importMode != "recent" {
+			http.Error(w, "Invalid import policy", 400)
 			return
 		}
 		imapPort, _ := strconv.Atoi(r.PostForm.Get("imap_port"))
@@ -231,17 +249,42 @@ func NewPersonal(sourceDir string, store *identity.Store, config AuthConfig) (ht
 			}
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(status)
-			form := webui.AccountForm{SentMailbox: input.SentMailbox, ID: r.PathValue("id"), Name: input.Name, Address: input.Address, IMAPHost: input.IMAP.Host, IMAPPort: input.IMAP.Port, IMAPTLS: input.IMAP.TLS, IMAPUser: input.IMAPLogin.Username, SMTPHost: input.SMTP.Host, SMTPPort: input.SMTP.Port, SMTPTLS: input.SMTP.TLS, SMTPUser: input.SMTPLogin.Username, SameCredentials: same}
+			form := webui.AccountForm{ImportMode: importMode, SentMailbox: input.SentMailbox, ID: r.PathValue("id"), Name: input.Name, Address: input.Address, IMAPHost: input.IMAP.Host, IMAPPort: input.IMAP.Port, IMAPTLS: input.IMAP.TLS, IMAPUser: input.IMAPLogin.Username, SMTPHost: input.SMTP.Host, SMTPPort: input.SMTP.Port, SMTPTLS: input.SMTP.TLS, SMTPUser: input.SMTPLogin.Username, SameCredentials: same}
 			render(w, "account-settings", webui.AuthPageData{Email: s.User.Email, CSRF: s.CSRF, Message: message, Form: form, MailEndpointsEnabled: config.MailEndpointsEnabled})
 			return
 		}
 		if config.Sync != nil {
+			if importMode != "" {
+				if err := config.Sync.SetImportMode(r.Context(), s.User.ID, saved.ID, importMode); err != nil {
+					http.Error(w, "Account saved, but import policy could not be set; reopen its settings before refreshing", 503)
+					return
+				}
+			}
 			config.Sync.Schedule(s.User.ID, saved.ID)
 		}
 		http.Redirect(w, r, "/?notice=account-connected", 303)
 	})
 	mux.HandleFunc("POST /accounts", saveAccount)
 	mux.HandleFunc("POST /accounts/{id}", saveAccount)
+	mux.HandleFunc("POST /accounts/{id}/history", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
+		if config.Sync == nil {
+			http.Error(w, "Mail synchronization unavailable", 503)
+			return
+		}
+		if !mutation(w, r, s) {
+			return
+		}
+		if r.FormValue("consent") != "allow" {
+			http.Error(w, "Explicit import-policy approval required", 400)
+			return
+		}
+		if err := config.Sync.SetImportMode(r.Context(), s.User.ID, r.PathValue("id"), r.FormValue("mode")); err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		config.Sync.Schedule(s.User.ID, r.PathValue("id"))
+		http.Redirect(w, r, "/accounts/"+r.PathValue("id")+"/edit", 303)
+	}))
 	mux.HandleFunc("POST /accounts/{id}/check", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
 		if config.Accounts == nil {
 			http.Error(w, "Mail account setup unavailable", 503)

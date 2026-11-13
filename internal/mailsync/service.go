@@ -69,6 +69,10 @@ func (s *Service) Sync(ctx context.Context, owner, id string) error {
 	defer s.mu.Unlock()
 	ctx, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
+	policy, err := s.ImportPolicy(ctx, owner, id)
+	if err != nil {
+		return err
+	}
 	return s.accounts.WithIMAP(ctx, owner, id, func(ep mailnet.Endpoint, login mailnet.Login, revision int64) error {
 		remote, err := s.reader.OpenRead(ctx, ep, login)
 		if err != nil {
@@ -88,6 +92,10 @@ func (s *Service) Sync(ctx context.Context, owner, id string) error {
 				return err
 			}
 			known, used, err := s.known(ctx, owner, id, snapshot)
+			if err != nil {
+				return err
+			}
+			snapshot, err = s.importWindow(ctx, id, revision, snapshot, known, policy)
 			if err != nil {
 				return err
 			}
@@ -119,7 +127,7 @@ func (s *Service) Sync(ctx context.Context, owner, id string) error {
 				pending[msg.UID] = raw
 				previews[msg.UID] = Parse(raw)
 			}
-			if err = s.apply(ctx, owner, id, revision, snapshot, pending, previews); err != nil {
+			if err = s.apply(ctx, owner, id, revision, snapshot, pending, previews, policy.Revision); err != nil {
 				return err
 			}
 		}
@@ -143,6 +151,9 @@ func (s *Service) Sync(ctx context.Context, owner, id string) error {
 			query += " AND name NOT IN (" + placeholders + ")"
 		}
 		if _, err = tx.ExecContext(ctx, query, args...); err != nil {
+			return err
+		}
+		if _, err = tx.ExecContext(ctx, strings.Replace(strings.Replace(query, "DELETE FROM mailboxes", "DELETE FROM mail_import_baselines", 1), "name NOT IN", "mailbox NOT IN", 1), args...); err != nil {
 			return err
 		}
 		return tx.Commit()
@@ -186,7 +197,7 @@ func (s *Service) checkRevision(ctx context.Context, tx *sql.Tx, owner, id strin
 	}
 	return nil
 }
-func (s *Service) apply(ctx context.Context, owner, id string, revision int64, box mailnet.Mailbox, raw map[uint32][]byte, previews map[uint32]Preview) error {
+func (s *Service) apply(ctx context.Context, owner, id string, revision int64, box mailnet.Mailbox, raw map[uint32][]byte, previews map[uint32]Preview, policyRevision ...int64) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -194,6 +205,15 @@ func (s *Service) apply(ctx context.Context, owner, id string, revision int64, b
 	defer tx.Rollback()
 	if err = s.checkRevision(ctx, tx, owner, id, revision); err != nil {
 		return err
+	}
+	if len(policyRevision) > 0 {
+		var current int64
+		if err = tx.QueryRowContext(ctx, "SELECT coalesce((SELECT revision FROM mail_import_settings WHERE account_id=?),0)", id).Scan(&current); err != nil {
+			return err
+		}
+		if current != policyRevision[0] {
+			return ErrChanged
+		}
 	}
 	var validity uint32
 	err = tx.QueryRowContext(ctx, "SELECT uid_validity FROM mailboxes WHERE account_id=? AND name=?", id, box.Name).Scan(&validity)

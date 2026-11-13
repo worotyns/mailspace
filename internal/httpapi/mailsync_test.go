@@ -265,6 +265,36 @@ func TestReadOnlyMailboxEndToEndAndAuthorization(t *testing.T) {
 	if _, err = sourceService.Resolve(ctx, alice.ID, ref); err != nil {
 		t.Fatal("removing Space deleted original mail")
 	}
+	history := func(cookie, csrf, consent, mode string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("POST", "/accounts/"+account.ID+"/history", strings.NewReader(url.Values{"csrf": {csrf}, "consent": {consent}, "mode": {mode}}.Encode()))
+		req.Header.Set("Origin", "https://mail.example.test")
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.AddCookie(&http.Cookie{Name: "__Host-mailspace", Value: cookie})
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		return response
+	}
+	if history(token, "", "allow", "fresh").Code != 403 {
+		t.Fatal("import policy bypassed CSRF")
+	}
+	if history(token, session.CSRF, "", "recent").Code != 400 {
+		t.Fatal("history imported without approval")
+	}
+	if history(other, otherSession.CSRF, "allow", "recent").Code != 404 {
+		t.Fatal("foreign history policy accepted")
+	}
+	if history(token, session.CSRF, "allow", "fresh").Code != 303 {
+		t.Fatal("fresh policy unavailable")
+	}
+	if p, err := syncer.ImportPolicy(ctx, alice.ID, account.ID); err != nil || p.Mode != "fresh" {
+		t.Fatal("fresh policy not saved")
+	}
+	if res := request("GET", "/accounts/"+account.ID+"/edit", token, "", false); res.Code != 200 || !strings.Contains(res.Body.String(), "Import recent history") {
+		t.Fatal("history controls missing")
+	}
+	if history(token, session.CSRF, "allow", "recent").Code != 303 {
+		t.Fatal("explicit recent import unavailable")
+	}
 	compose := request("GET", "/compose?account="+account.ID, token, "", false)
 	if compose.Code != 200 || !strings.Contains(compose.Body.String(), "Send this message without OpenPGP encryption") {
 		t.Fatal("compose missing explicit encryption decision")

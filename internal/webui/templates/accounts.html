@@ -48,6 +48,52 @@
             allow your provider's IMAP and SMTP servers.
           </p>
         {{ end }}
+        {{ if .Form.ID }}
+          <section class="mt-5 rounded-xl border border-line bg-panel p-5">
+            <h2 class="font-semibold">
+              Change history import without re-entering passwords
+            </h2>
+            <form
+              action="/accounts/{{ .Form.ID }}/history"
+              method="post"
+              class="mt-3 space-y-3"
+            >
+              <input type="hidden" name="csrf" value="{{ .CSRF }}" />
+              <label class="block text-sm"
+                >Import policy<select
+                  name="mode"
+                  class="mt-2 block w-full rounded-lg border border-line bg-canvas p-2"
+                >
+                  <option
+                    value="fresh"
+                    {{ if eq .Form.ImportMode "fresh" }}selected{{ end }}
+                  >
+                    Only new mail; keep already cached messages
+                  </option>
+                  <option
+                    value="recent"
+                    {{ if eq .Form.ImportMode "recent" }}selected{{ end }}
+                  >
+                    Import recent history, up to 500 messages per folder
+                  </option>
+                </select></label
+              >
+              <label class="flex gap-2 text-xs"
+                ><input
+                  type="checkbox"
+                  name="consent"
+                  value="allow"
+                  required
+                />I approve this change to future downloads. Recent import may
+                download existing mail; already transmitted data cannot be
+                recalled.</label
+              >
+              <button class="rounded-lg bg-action px-4 py-2 text-sm text-white">
+                Apply import policy
+              </button>
+            </form>
+          </section>
+        {{ end }}
         <form
           action="{{ if .Form.ID }}
             /accounts/{{ .Form.ID }}
@@ -58,6 +104,35 @@
           class="mt-7 space-y-6"
         >
           <input type="hidden" name="csrf" value="{{ .CSRF }}" />
+          <section class="rounded-xl border border-line bg-panel p-5">
+            <h2 class="font-semibold">Mail history</h2>
+            <label class="mt-3 block text-sm"
+              >When connecting this mailbox<select
+                name="history_mode"
+                class="mt-2 block w-full rounded-lg border border-line bg-canvas p-2"
+              >
+                <option
+                  value="fresh"
+                  {{ if eq .Form.ImportMode "fresh" }}selected{{ end }}
+                >
+                  Start fresh — new mail from the first successful sync
+                </option>
+                <option
+                  value="recent"
+                  {{ if eq .Form.ImportMode "recent" }}selected{{ end }}
+                >
+                  Import the recent window (up to 500 messages per folder)
+                </option>
+              </select></label
+            >
+            <p class="mt-2 text-xs text-muted">
+              Fresh mode records existing UIDs without downloading their bodies.
+              New incoming mail syncs normally. Already cached mail stays
+              available within the cache budget. Importing history never moves
+              or deletes server mail and does not enable AI.
+            </p>
+          </section>
+
           <section class="rounded-xl border border-line bg-panel p-5">
             <h2 class="mb-4 font-semibold">Account</h2>
             <div class="grid gap-4 sm:grid-cols-2">
