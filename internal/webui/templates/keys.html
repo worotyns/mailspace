@@ -1,0 +1,250 @@
+{{ define "keys" }}
+  <!doctype html>
+  <html lang="en">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>Local keys · Mailspace</title>
+      <script src="/assets/theme.js"></script>
+      <script src="/assets/session.js" defer></script>
+      <link rel="stylesheet" href="/assets/app.css" />
+      <script type="module" src="/assets/crypto/ui.mjs"></script>
+    </head>
+    <body class="min-h-dvh bg-canvas" hx-history="false">
+      <header
+        class="flex flex-wrap items-center gap-3 border-b border-line bg-panel p-5"
+      >
+        <a href="/" class="font-semibold text-accent">mailspace.</a
+        ><span class="ml-auto min-w-0 max-w-[55%] truncate text-xs text-muted"
+          >{{ .Email }}</span
+        >{{ template "theme-picker" . }}
+      </header>
+      <main
+        id="local-key-vault"
+        data-user-id="{{ .UserID }}"
+        data-session-expires="{{ .SessionExpires }}"
+        hx-disable
+        hx-history="false"
+        class="mx-auto max-w-4xl p-5 sm:p-10"
+      >
+        <nav class="flex gap-4 text-xs text-accent">
+          <a href="/">← Timeline</a><a href="/profile">Profile</a
+          ><a href="/workspaces">Organizations</a>
+        </nav>
+        <h1 class="mt-6 text-2xl font-semibold">Local OpenPGP keys</h1>
+        <p class="mt-3 text-sm leading-relaxed text-muted">
+          Keys stay in this browser, protected by their passphrase. Export a
+          backup: the server cannot recover it. This page blocks network
+          connections and never submits key forms.
+        </p>
+        <p
+          id="vault-status"
+          role="status"
+          aria-live="polite"
+          class="mt-4 rounded-lg border border-line bg-panel p-4 text-sm"
+        >
+          Loading local key vault…
+        </p>
+        <noscript
+          >Local key management requires JavaScript. No keys or passphrases are
+          sent to the server.</noscript
+        >
+        <fieldset id="vault-controls" disabled class="mt-6 space-y-6">
+          <legend class="sr-only">Local key management</legend>
+          <section class="rounded-xl border border-line bg-panel p-5">
+            <h2 class="font-semibold">Unlock or lock</h2>
+            <p id="vault-lock-state" class="mt-2 text-xs text-muted">Locked</p>
+            <label class="mt-4 block text-xs font-medium"
+              >Private key<select
+                id="private-key"
+                class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 font-mono text-xs"
+              ></select></label
+            ><label class="mt-4 block text-xs font-medium"
+              >Unlock passphrase<input
+                id="unlock-passphrase"
+                type="password"
+                autocomplete="off"
+                maxlength="1024"
+                class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 text-sm"
+            /></label>
+            <div class="mt-4 flex gap-3">
+              <button
+                type="button"
+                id="unlock-key"
+                class="rounded-lg bg-action px-4 py-2 text-xs font-medium text-white"
+              >
+                Unlock in memory</button
+              ><button
+                type="button"
+                id="lock-key"
+                class="rounded-lg border border-line px-4 py-2 text-xs"
+              >
+                Lock now
+              </button>
+            </div>
+          </section>
+          <section class="rounded-xl border border-line bg-panel p-5">
+            <h2 class="font-semibold">Generate a protected key</h2>
+            <p class="mt-2 text-xs text-muted">
+              Curve25519 legacy/v4 compatibility profile · two-year expiry.
+              Generating does not upload or publish the key.
+            </p>
+            <div class="mt-4 grid gap-4 sm:grid-cols-2">
+              <label class="block text-xs font-medium"
+                >Key display name<input
+                  id="generate-name"
+                  value="{{ .ProfileName }}"
+                  maxlength="120"
+                  autocomplete="off"
+                  class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 text-sm" /></label
+              ><label class="block text-xs font-medium"
+                >Key email<input
+                  id="generate-email"
+                  value="{{ .Email }}"
+                  type="email"
+                  maxlength="254"
+                  autocomplete="off"
+                  class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 text-sm"
+              /></label>
+            </div>
+            <label class="mt-4 block text-xs font-medium"
+              >New key passphrase<input
+                id="generate-passphrase"
+                type="password"
+                minlength="12"
+                maxlength="1024"
+                autocomplete="new-password"
+                class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 text-sm" /></label
+            ><button
+              type="button"
+              id="generate-key"
+              class="mt-4 rounded-lg bg-action px-4 py-2 text-xs font-medium text-white"
+            >
+              Generate protected key</button
+            ><button
+              type="button"
+              id="export-revocation"
+              hidden
+              class="ml-3 mt-4 rounded-lg border border-line px-4 py-2 text-xs"
+            >
+              Download revocation certificate
+            </button>
+          </section>
+          <section class="rounded-xl border border-line bg-panel p-5">
+            <h2 class="font-semibold">Import a private key</h2>
+            <label class="mt-4 block text-xs font-medium"
+              >Armored private key<textarea
+                id="private-armor"
+                rows="4"
+                maxlength="2097152"
+                autocomplete="off"
+                spellcheck="false"
+                class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 font-mono text-xs"
+              ></textarea></label
+            ><label class="mt-3 block text-xs font-medium"
+              >Or private .asc file<input
+                id="private-file"
+                type="file"
+                accept=".asc"
+                class="mt-2 block max-w-full text-xs" /></label
+            ><label class="mt-4 block text-xs font-medium"
+              >Import passphrase<input
+                id="import-passphrase"
+                type="password"
+                maxlength="1024"
+                autocomplete="off"
+                class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 text-sm"
+            /></label>
+            <p class="mt-2 text-xs text-muted">
+              Use its existing passphrase. An unprotected key needs a new
+              passphrase of at least 12 characters before storage.
+            </p>
+            <button
+              type="button"
+              id="import-private"
+              class="mt-4 rounded-lg border border-line px-4 py-2 text-xs"
+            >
+              Import protected private key
+            </button>
+          </section>
+          <section class="rounded-xl border border-line bg-panel p-5">
+            <h2 class="font-semibold">Public contacts</h2>
+            <label class="mt-4 block text-xs font-medium"
+              >Armored public key<textarea
+                id="public-armor"
+                rows="4"
+                maxlength="2097152"
+                spellcheck="false"
+                class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 font-mono text-xs"
+              ></textarea></label
+            ><label class="mt-3 block text-xs font-medium"
+              >Or public .asc file<input
+                id="public-file"
+                type="file"
+                accept=".asc"
+                class="mt-2 block max-w-full text-xs" /></label
+            ><button
+              type="button"
+              id="import-public"
+              class="mt-4 rounded-lg border border-line px-4 py-2 text-xs"
+            >
+              Import public contact
+            </button>
+            <p class="mt-3 text-xs text-muted">
+              Import is discovery, not proof of identity. Verify the full
+              fingerprint independently before trusting an email binding.
+            </p>
+          </section>
+          <section class="rounded-xl border border-line bg-panel p-5">
+            <h2 class="font-semibold">Verify an email binding</h2>
+            <label class="mt-4 block text-xs font-medium"
+              >Contact key<select
+                id="trust-key"
+                class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 font-mono text-xs"
+              ></select></label
+            ><label class="mt-4 block text-xs font-medium"
+              >Verified email<input
+                id="trust-email-address"
+                type="email"
+                maxlength="254"
+                class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 text-sm" /></label
+            ><label class="mt-4 block text-xs font-medium"
+              >Complete independently verified fingerprint<input
+                id="trust-fingerprint"
+                autocomplete="off"
+                spellcheck="false"
+                class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 font-mono text-xs" /></label
+            ><label class="mt-4 flex items-start gap-2 text-xs leading-relaxed"
+              ><input
+                id="replace-binding"
+                type="checkbox"
+                class="mt-0.5"
+              />Explicitly replace an existing email binding with this different
+              fingerprint</label
+            ><button
+              type="button"
+              id="trust-email"
+              class="mt-4 rounded-lg border border-line px-4 py-2 text-xs"
+            >
+              Trust verified fingerprint
+            </button>
+            <div id="trusted-bindings" class="mt-4"></div>
+          </section>
+          <section>
+            <h2 class="font-semibold">Keys in this browser</h2>
+            <div id="key-list" class="mt-4 space-y-3"></div>
+          </section>
+        </fieldset>
+        <footer class="mt-8 border-t border-line pt-5 text-xs text-muted">
+          <a href="/source.tar.gz" class="text-accent">Source code · AGPLv3</a>
+          <p class="mt-3 leading-relaxed">
+            Unlocked state is memory-only. Locking drops references; JavaScript
+            cannot guarantee physical RAM erasure. Protect this origin, browser
+            profile and exported backups. Clearing browser data removes the
+            local vault.
+          </p>
+        </footer>
+      </main>
+    </body>
+  </html>
+{{ end }}

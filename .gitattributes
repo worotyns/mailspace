@@ -1,0 +1,2 @@
+# Preserve original RFC 5322/MIME octets, including CRLF, for signatures.
+*.eml -text -diff

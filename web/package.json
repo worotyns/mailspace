@@ -1,0 +1,30 @@
+{
+  "name": "mailspace-assets",
+  "private": true,
+  "version": "0.0.2",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs && tailwindcss -i styles.css -o ../internal/webui/assets/app.css --minify",
+    "dev": "tailwindcss -i styles.css -o ../internal/webui/assets/app.css --watch",
+    "format": "prettier --write styles.css build.mjs ../internal/webui/assets/theme.js ../internal/webui/assets/session.js crypto/*.mjs tests/*.test.mjs && prettier --plugin=prettier-plugin-go-template --parser=go-template --write ../internal/webui/templates/*.html",
+    "format:check": "prettier --check styles.css build.mjs ../internal/webui/assets/theme.js ../internal/webui/assets/session.js crypto/*.mjs tests/*.test.mjs && prettier --plugin=prettier-plugin-go-template --parser=go-template --check ../internal/webui/templates/*.html",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "dompurify": "3.4.17",
+    "htmx.org": "2.0.11",
+    "idb": "8.0.4",
+    "openpgp": "6.3.2",
+    "postal-mime": "4.2.1"
+  },
+  "devDependencies": {
+    "@tabler/icons": "3.51.0",
+    "@tailwindcss/cli": "4.3.5",
+    "fake-indexeddb": "6.2.8",
+    "jsdom": "31.0.1",
+    "prettier": "3.6.2",
+    "prettier-plugin-go-template": "0.0.15",
+    "tailwindcss": "4.3.5"
+  }
+}

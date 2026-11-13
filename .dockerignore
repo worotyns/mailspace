@@ -1,0 +1,26 @@
+.git
+web/node_modules
+web/dist
+.env*
+!.env.example
+data
+work
+
+dist
+web/dist
+internal/webui/assets/app.css
+internal/webui/assets/htmx.min.js
+internal/webui/assets/icons.svg
+internal/webui/assets/THIRD_PARTY_NOTICES.txt
+/mailspace
+
+internal/webui/assets/vendor/
+internal/webui/assets/crypto/
+
+# Operator backups never enter Git or image/source build contexts.
+backups/
+*.backup.tar.gz
+
+*.db
+*.db-*
+credential-keys/

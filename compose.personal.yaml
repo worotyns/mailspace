@@ -1,0 +1,15 @@
+# Compatibility overlay for existing installs; compose.yaml is now personal/stateful by default.
+services:
+  mailspace:
+    environment:
+      MAILSPACE_MODE: personal
+      MAILSPACE_DB: /app/data/mailspace.db
+      MAILSPACE_ORIGIN: ${MAILSPACE_ORIGIN:?Set the browser-facing HTTPS origin}
+      MAILSPACE_INSECURE_HTTP: ${MAILSPACE_INSECURE_HTTP:-0}
+      MAILSPACE_MAIL_ENDPOINTS: ${MAILSPACE_MAIL_ENDPOINTS:-}
+      MAILSPACE_PRIVATE_MAIL_ENDPOINTS: ${MAILSPACE_PRIVATE_MAIL_ENDPOINTS:-}
+      MAILSPACE_MAIL_CA_FILE: ${MAILSPACE_MAIL_CA_FILE:-}
+    volumes:
+      - mailspace-data:/app/data
+volumes:
+  mailspace-data:

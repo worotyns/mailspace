@@ -1,0 +1,256 @@
+{{ define "compose" }}
+  <!doctype html>
+  <html lang="en">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>Compose · Mailspace</title>
+      <script src="/assets/theme.js"></script>
+      <script src="/assets/session.js" defer></script>
+      <link rel="stylesheet" href="/assets/app.css" />
+    </head>
+    <body class="min-h-dvh bg-canvas">
+      <header
+        class="flex items-center gap-3 border-b border-line bg-panel px-6 py-4"
+      >
+        <a href="/" class="text-lg font-semibold text-accent">mailspace.</a
+        ><span class="ml-auto max-w-[55%] truncate text-xs text-muted"
+          >{{ .Email }}</span
+        >{{ template "theme-picker" . }}
+      </header>
+      <main class="mx-auto max-w-3xl p-5 sm:p-10">
+        <a
+          href="/?account={{ .Compose.AccountID }}"
+          class="text-xs font-medium text-accent"
+          >← Back to timeline</a
+        >
+        <h1 class="mt-5 text-2xl font-semibold">
+          {{ if .Compose.ReplyUID }}Reply{{ else }}New message{{ end }}
+        </h1>
+        <p class="mt-2 text-xs text-muted">
+          From {{ .Compose.Address }} ·
+          {{ .Compose.AccountName }}
+        </p>
+        {{ if .Message }}
+          <p
+            role="alert"
+            class="mt-4 rounded-lg border border-error-line bg-error-soft p-4 text-sm text-error"
+          >
+            {{ .Message }}
+          </p>
+        {{ end }}
+        <p class="mt-5 text-sm">
+          <a
+            href="/secure/compose?account={{ .Compose.AccountID }}"
+            class="font-medium text-accent"
+            >Compose with OpenPGP encryption →</a
+          >
+        </p>
+        <form action="/outbox/send" method="post" class="mt-6 space-y-4">
+          <input type="hidden" name="csrf" value="{{ .CSRF }}" /><input
+            type="hidden"
+            name="account"
+            value="{{ .Compose.AccountID }}"
+          /><input
+            type="hidden"
+            name="request_id"
+            value="{{ .Compose.Nonce }}"
+          /><input
+            type="hidden"
+            name="reply_folder"
+            value="{{ .Compose.ReplyFolder }}"
+          /><input
+            type="hidden"
+            name="reply_validity"
+            value="{{ .Compose.ReplyValidity }}"
+          /><input
+            type="hidden"
+            name="reply_uid"
+            value="{{ .Compose.ReplyUID }}"
+          />
+          <section class="space-y-4 rounded-xl border border-line bg-panel p-5">
+            <label class="block text-xs font-medium"
+              >To<input
+                name="to"
+                value="{{ .Compose.To }}"
+                maxlength="8192"
+                autocomplete="off"
+                placeholder="recipient@example.test"
+                class="mt-1.5 w-full rounded-lg border border-line px-3 py-2.5 text-sm"
+            /></label>
+            <div class="grid gap-4 sm:grid-cols-2">
+              <label class="block text-xs font-medium"
+                >Cc<input
+                  name="cc"
+                  value="{{ .Compose.CC }}"
+                  maxlength="8192"
+                  autocomplete="off"
+                  class="mt-1.5 w-full rounded-lg border border-line px-3 py-2.5 text-sm" /></label
+              ><label class="block text-xs font-medium"
+                >Bcc<input
+                  name="bcc"
+                  value="{{ .Compose.BCC }}"
+                  maxlength="8192"
+                  autocomplete="off"
+                  class="mt-1.5 w-full rounded-lg border border-line px-3 py-2.5 text-sm"
+              /></label>
+            </div>
+            <label class="block text-xs font-medium"
+              >Subject<input
+                name="subject"
+                value="{{ .Compose.Subject }}"
+                maxlength="200"
+                class="mt-1.5 w-full rounded-lg border border-line px-3 py-2.5 text-sm"
+            /></label>
+            <label class="block text-xs font-medium"
+              >Message<textarea
+                name="body"
+                rows="12"
+                maxlength="262144"
+                required
+                class="mt-1.5 w-full resize-y rounded-lg border border-line px-3 py-3 text-sm leading-relaxed"
+              >
+{{ .Compose.Body }}</textarea
+              >
+            </label>
+          </section>
+          <section
+            class="rounded-xl border border-warning-line bg-warning-soft p-4 text-xs leading-relaxed text-warning"
+          >
+            <p>
+              This ordinary composer can send ordinary, unencrypted mail after
+              your explicit choice. No server autosave or AI processing.
+            </p>
+            <label class="mt-3 flex items-start gap-2 font-medium"
+              ><input
+                type="checkbox"
+                name="allow_plaintext"
+                value="1"
+                required
+                {{ if .Compose.AllowPlaintext }}checked{{ end }}
+                class="mt-0.5"
+              />Send this message without OpenPGP encryption</label
+            >
+          </section>
+          <div class="flex flex-wrap items-center gap-4">
+            <button
+              class="rounded-lg bg-action px-5 py-2.5 text-sm font-medium text-white"
+            >
+              Send message</button
+            ><a
+              href="/outbox?account={{ .Compose.AccountID }}"
+              class="text-sm text-accent"
+              >Outbox</a
+            >
+          </div>
+          <p class="text-xs leading-relaxed text-muted">
+            One submission creates one send attempt. If the connection fails
+            after data transfer, check Outbox and your provider before composing
+            another copy. Attachments and encrypted drafts are subsequent work.
+          </p>
+        </form>
+      </main>
+    </body>
+  </html>
+{{ end }}
+{{ define "outbox" }}
+  <!doctype html>
+  <html lang="en">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>Outbox · Mailspace</title>
+      <script src="/assets/theme.js"></script>
+      <script src="/assets/session.js" defer></script>
+      <link rel="stylesheet" href="/assets/app.css" />
+    </head>
+    <body class="min-h-dvh bg-canvas">
+      <header
+        class="flex items-center gap-3 border-b border-line bg-panel px-6 py-4"
+      >
+        <a href="/" class="text-lg font-semibold text-accent">mailspace.</a
+        ><span class="ml-auto max-w-[55%] truncate text-xs text-muted"
+          >{{ .Email }}</span
+        >{{ template "theme-picker" . }}
+      </header>
+      <main class="mx-auto max-w-3xl p-5 sm:p-10">
+        <a
+          href="/?account={{ .AccountID }}"
+          class="text-xs font-medium text-accent"
+          >← Back to timeline</a
+        >
+        <div class="mt-5 flex items-center justify-between gap-4">
+          <div>
+            <h1 class="text-2xl font-semibold">Outbox</h1>
+            <p class="mt-1 text-xs text-muted">{{ .AccountName }}</p>
+          </div>
+          <a
+            href="/secure/compose?account={{ .AccountID }}"
+            class="rounded-lg bg-action px-4 py-2 text-xs font-medium text-white"
+            >New message</a
+          >
+        </div>
+        <p class="mt-4 text-xs leading-relaxed text-muted">
+          Accepted means the SMTP server accepted the message, not confirmed
+          delivery. Unknown outcomes are never automatically retried.
+        </p>
+        <div class="mt-6 space-y-3">
+          {{ range .Outgoing }}
+            <article
+              class="rounded-xl border border-line bg-panel p-5 [overflow-wrap:anywhere] {{ if eq .ID $.OutgoingID }}
+                ring-2 ring-accent/30
+              {{ end }}"
+            >
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <h2 class="text-sm font-semibold">
+                  {{ if .Subject }}{{ .Subject }}{{ else }}(No subject){{ end }}
+                </h2>
+                <time class="text-xs text-muted">{{ .CreatedAt }}</time>
+              </div>
+              <p
+                role="status"
+                class="mt-3 text-sm {{ if eq .State "accepted" }}
+                  text-success
+                {{ else if eq .State "unknown" }}
+                  text-warning
+                {{ else }}
+                  text-muted
+                {{ end }}"
+              >
+                {{ if eq .State "accepted" }}
+                  Accepted by mail server
+                {{ else if eq .State "unknown" }}
+                  Outcome unknown — check your provider before sending another
+                  copy
+                {{ else if eq .State "rejected" }}
+                  Not accepted — no automatic retry
+                {{ else if eq .State "sending" }}
+                  Sending — refresh this page for the result
+                {{ else }}
+                  Prepared — not sent
+                {{ end }}
+              </p>
+              <p class="mt-2 text-xs text-muted">
+                {{ if eq .CopyState "saved" }}
+                  Copy saved in Sent.
+                {{ else if eq .CopyState "unknown" }}
+                  Sent copy unconfirmed. The SMTP message is not sent again.
+                {{ else if eq .CopyState "copying" }}
+                  Saving Sent copy…
+                {{ else }}
+                  No Sent copy saved.
+                {{ end }}
+              </p>
+            </article>
+          {{ else }}
+            <p
+              class="rounded-xl border border-line bg-panel p-6 text-sm text-muted"
+            >
+              No outgoing messages yet.
+            </p>
+          {{ end }}
+        </div>
+      </main>
+    </body>
+  </html>
+{{ end }}

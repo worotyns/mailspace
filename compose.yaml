@@ -1,0 +1,30 @@
+name: mailspace
+services:
+  mailspace:
+    build: .
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      MAILSPACE_MODE: personal
+      MAILSPACE_DB: /app/data/mailspace.db
+      MAILSPACE_ORIGIN: ${MAILSPACE_ORIGIN:?Set the browser-facing HTTPS origin in .env}
+      MAILSPACE_MAIL_ENDPOINTS: ${MAILSPACE_MAIL_ENDPOINTS:-}
+      MAILSPACE_PRIVATE_MAIL_ENDPOINTS: ${MAILSPACE_PRIVATE_MAIL_ENDPOINTS:-}
+      MAILSPACE_MAIL_CA_FILE: ${MAILSPACE_MAIL_CA_FILE:-}
+    volumes:
+      - mailspace-data:/app/data
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: [/tmp]
+    stop_grace_period: 60s
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+volumes:
+  mailspace-data:
+    name: ${MAILSPACE_DATA_VOLUME:-mailspace_mailspace-data}

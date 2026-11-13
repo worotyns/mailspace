@@ -1,0 +1,305 @@
+[
+  {
+    "id": "website",
+    "subject": "A little more room for the good stuff",
+    "channel": "design",
+    "tags": [
+      "design",
+      "needs-review"
+    ],
+    "messages": [
+      {
+        "id": "w1",
+        "sender": "maya@northstar.test",
+        "name": "Maya Chen",
+        "initials": "MC",
+        "tone": "lilac",
+        "time": "10:42",
+        "text": "Morning team! The refreshed website is ready for a first look.\n\nWe simplified the navigation, gave the work more breathing room, and brought a little more personality into the details. Would love your thoughts before we hand this over.",
+        "encrypted": false,
+        "attachments": [
+          {
+            "name": "Website exploration.fig",
+            "kind": "Figma document",
+            "size": "4.2 MB"
+          },
+          {
+            "name": "Homepage-preview.pdf",
+            "kind": "PDF document",
+            "size": "1.8 MB"
+          }
+        ]
+      },
+      {
+        "id": "w2",
+        "sender": "leo@northstar.test",
+        "name": "Leo Martin",
+        "initials": "LM",
+        "tone": "green",
+        "time": "10:48",
+        "text": "This is feeling really good. The quieter header makes the projects stand out a lot more.",
+        "encrypted": false,
+        "attachments": []
+      },
+      {
+        "id": "w3",
+        "sender": "nina@northstar.test",
+        "name": "Nina Patel",
+        "initials": "NP",
+        "tone": "peach",
+        "time": "10:51",
+        "text": "Love the direction. Could we try the warmer background on the case study pages too?",
+        "encrypted": false,
+        "attachments": []
+      },
+      {
+        "id": "w4",
+        "sender": "maya@northstar.test",
+        "name": "Maya Chen",
+        "initials": "MC",
+        "tone": "lilac",
+        "time": "10:56",
+        "text": "Yes! I'll add that variation to the file. Let's keep feedback in this thread so nothing gets lost.",
+        "encrypted": false,
+        "attachments": []
+      },
+      {
+        "id": "w5",
+        "sender": "jamie@northstar.test",
+        "name": "Jamie Parker",
+        "initials": "JP",
+        "tone": "lilac",
+        "time": "11:02",
+        "text": "The spacing feels much better. I'll take another pass through the mobile layouts this afternoon.",
+        "encrypted": false,
+        "attachments": []
+      }
+    ],
+    "unread": true,
+    "starred": true,
+    "folder": "inbox"
+  },
+  {
+    "id": "launch",
+    "subject": "A small update on the November launch",
+    "channel": "product",
+    "tags": [
+      "launch"
+    ],
+    "messages": [
+      {
+        "id": "l1",
+        "sender": "alex@northstar.test",
+        "name": "Alex Morgan",
+        "initials": "AM",
+        "tone": "blue",
+        "time": "09:34",
+        "text": "Quick check-in: we're on track for next Thursday. The changelog is drafted and the last onboarding improvements are in review.\n\nAnything we should make sure is in the announcement?",
+        "encrypted": false,
+        "attachments": []
+      },
+      {
+        "id": "l2",
+        "sender": "sam@northstar.test",
+        "name": "Sam Rivera",
+        "initials": "SR",
+        "tone": "rose",
+        "time": "09:41",
+        "text": "Worth calling out the new keyboard shortcuts. They've made my inbox so much calmer.",
+        "encrypted": false,
+        "attachments": []
+      },
+      {
+        "id": "l3",
+        "sender": "alex@northstar.test",
+        "name": "Alex Morgan",
+        "initials": "AM",
+        "tone": "blue",
+        "time": "09:46",
+        "text": "Added! I'll share the final draft here tomorrow.",
+        "encrypted": false,
+        "attachments": []
+      }
+    ],
+    "unread": true,
+    "starred": false,
+    "folder": "inbox"
+  },
+  {
+    "id": "api",
+    "subject": "Re: API handoff notes",
+    "channel": "engineering",
+    "tags": [
+      "engineering",
+      "important"
+    ],
+    "messages": [
+      {
+        "id": "a1",
+        "sender": "leo@northstar.test",
+        "name": "Leo Martin",
+        "initials": "LM",
+        "tone": "green",
+        "time": "09:12",
+        "text": "I've put the integration notes together for the next handoff. The examples now cover pagination, rate limits, and the error cases we discussed.\n\nNo rush — take a look when you have a moment.",
+        "encrypted": false,
+        "attachments": [
+          {
+            "name": "Integration-notes.pdf",
+            "kind": "PDF document",
+            "size": "624 KB"
+          }
+        ]
+      },
+      {
+        "id": "a2",
+        "sender": "jamie@northstar.test",
+        "name": "Jamie Parker",
+        "initials": "JP",
+        "tone": "lilac",
+        "time": "09:26",
+        "text": "Thanks Leo. The error examples answer the last questions on my list.",
+        "encrypted": false,
+        "attachments": []
+      }
+    ],
+    "unread": false,
+    "starred": true,
+    "folder": "inbox"
+  },
+  {
+    "id": "coffee",
+    "subject": "Friday, coffee, and a few good links",
+    "channel": "general",
+    "tags": [
+      "team"
+    ],
+    "messages": [
+      {
+        "id": "c1",
+        "sender": "nina@northstar.test",
+        "name": "Nina Patel",
+        "initials": "NP",
+        "tone": "peach",
+        "time": "08:55",
+        "text": "A tiny ritual for the end of the week: share something you enjoyed making, reading, or finding.\n\nMine is a lovely essay on making software feel a little more human.",
+        "encrypted": false,
+        "attachments": []
+      },
+      {
+        "id": "c2",
+        "sender": "maya@northstar.test",
+        "name": "Maya Chen",
+        "initials": "MC",
+        "tone": "lilac",
+        "time": "09:05",
+        "text": "Finally found a sketchbook that doesn't fall apart in my bag. Small wins!",
+        "encrypted": false,
+        "attachments": []
+      },
+      {
+        "id": "c3",
+        "sender": "sam@northstar.test",
+        "name": "Sam Rivera",
+        "initials": "SR",
+        "tone": "rose",
+        "time": "09:11",
+        "text": "My contribution: a playlist with absolutely no lyrics. Perfect for a quiet morning.",
+        "encrypted": false,
+        "attachments": []
+      }
+    ],
+    "unread": false,
+    "starred": false,
+    "folder": "inbox"
+  },
+  {
+    "id": "private",
+    "subject": "Private: notes for the partnership",
+    "channel": "general",
+    "tags": [
+      "private"
+    ],
+    "messages": [
+      {
+        "id": "p1",
+        "sender": "sam@northstar.test",
+        "name": "Sam Rivera",
+        "initials": "SR",
+        "tone": "rose",
+        "time": "Yesterday",
+        "text": "",
+        "encrypted": true,
+        "attachments": []
+      }
+    ],
+    "unread": false,
+    "starred": true,
+    "folder": "inbox"
+  },
+  {
+    "id": "week",
+    "subject": "A good week — thank you, everyone",
+    "channel": "general",
+    "tags": [
+      "team"
+    ],
+    "messages": [
+      {
+        "id": "g1",
+        "sender": "jamie@northstar.test",
+        "name": "Jamie Parker",
+        "initials": "JP",
+        "tone": "lilac",
+        "time": "Yesterday",
+        "text": "A quick thank-you before the weekend. Lots of thoughtful work this week, and even better conversations along the way.\n\nGo close some tabs. See you Monday.",
+        "encrypted": false,
+        "attachments": []
+      },
+      {
+        "id": "g2",
+        "sender": "alex@northstar.test",
+        "name": "Alex Morgan",
+        "initials": "AM",
+        "tone": "blue",
+        "time": "Yesterday",
+        "text": "Right back at you. Have a lovely weekend, everyone.",
+        "encrypted": false,
+        "attachments": []
+      }
+    ],
+    "unread": false,
+    "starred": false,
+    "folder": "sent"
+  },
+  {
+    "id": "assets",
+    "subject": "Brand assets, all in one place",
+    "channel": "design",
+    "tags": [
+      "design"
+    ],
+    "messages": [
+      {
+        "id": "b1",
+        "sender": "maya@northstar.test",
+        "name": "Maya Chen",
+        "initials": "MC",
+        "tone": "lilac",
+        "time": "Tuesday",
+        "text": "The final brand kit is attached. This is the approved version for the launch — the old exports can retire now.",
+        "encrypted": false,
+        "attachments": [
+          {
+            "name": "Northstar-brand-kit.zip",
+            "kind": "ZIP archive",
+            "size": "12.6 MB"
+          }
+        ]
+      }
+    ],
+    "unread": false,
+    "starred": false,
+    "folder": "archive"
+  }
+]

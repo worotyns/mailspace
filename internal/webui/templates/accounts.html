@@ -1,0 +1,236 @@
+{{ define "account-settings" }}
+  <!doctype html>
+  <html lang="en">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>Mail server settings · Mailspace</title>
+      <script src="/assets/theme.js"></script>
+      <script src="/assets/session.js" defer></script>
+      <link rel="stylesheet" href="/assets/app.css" />
+    </head>
+    <body class="min-h-dvh bg-canvas">
+      <header
+        class="flex items-center gap-4 border-b border-line bg-panel px-6 py-4"
+      >
+        <a href="/" class="text-lg font-semibold text-accent">mailspace.</a
+        ><span class="ml-auto min-w-0 max-w-[55%] truncate text-xs text-muted"
+          >{{ .Email }}</span
+        >{{ template "theme-picker" . }}
+      </header>
+      <main class="mx-auto max-w-2xl p-6 sm:p-10">
+        <a href="/" class="text-xs font-medium text-accent"
+          >← Back to workspace</a
+        >
+        <h1 class="mt-5 text-2xl font-semibold">
+          {{ if .Form.ID }}
+            Mail server settings
+          {{ else }}
+            Connect your mail
+          {{ end }}
+        </h1>
+        <p class="mt-2 text-sm leading-relaxed text-muted">
+          Use the IMAP and SMTP settings from your email provider. Connections
+          require verified TLS. Passwords are never displayed again.
+        </p>
+        {{ if .Message }}
+          <p
+            role="alert"
+            class="mt-5 rounded-lg border border-error-line bg-error-soft p-4 text-sm text-error"
+          >
+            {{ .Message }}
+          </p>
+        {{ end }}{{ if not .MailEndpointsEnabled }}
+          <p
+            class="mt-5 rounded-lg border border-warning-line bg-warning-soft p-4 text-sm text-warning"
+          >
+            Your administrator has not enabled a mail endpoint yet. Ask them to
+            allow your provider's IMAP and SMTP servers.
+          </p>
+        {{ end }}
+        <form
+          action="{{ if .Form.ID }}
+            /accounts/{{ .Form.ID }}
+          {{ else }}
+            /accounts
+          {{ end }}"
+          method="post"
+          class="mt-7 space-y-6"
+        >
+          <input type="hidden" name="csrf" value="{{ .CSRF }}" />
+          <section class="rounded-xl border border-line bg-panel p-5">
+            <h2 class="mb-4 font-semibold">Account</h2>
+            <div class="grid gap-4 sm:grid-cols-2">
+              <label class="block text-xs font-medium"
+                >Account name<input
+                  name="name"
+                  required
+                  maxlength="120"
+                  value="{{ .Form.Name }}"
+                  placeholder="Work"
+                  class="mt-1.5 w-full rounded-lg border border-line px-3 py-2.5 text-sm" /></label
+              ><label class="block text-xs font-medium"
+                >Email address<input
+                  name="address"
+                  type="email"
+                  required
+                  maxlength="254"
+                  value="{{ .Form.Address }}"
+                  autocomplete="email"
+                  class="mt-1.5 w-full rounded-lg border border-line px-3 py-2.5 text-sm"
+              /></label>
+            </div>
+          </section>
+          <section class="rounded-xl border border-line bg-panel p-5">
+            <h2 class="mb-4 font-semibold">Incoming mail · IMAP</h2>
+            <div class="grid gap-4 sm:grid-cols-[1fr_110px]">
+              <label class="block text-xs font-medium"
+                >Server<input
+                  name="imap_host"
+                  required
+                  maxlength="253"
+                  value="{{ .Form.IMAPHost }}"
+                  placeholder="imap.example.test"
+                  spellcheck="false"
+                  class="mt-1.5 w-full rounded-lg border border-line px-3 py-2.5 text-sm" /></label
+              ><label class="block text-xs font-medium"
+                >Port<input
+                  name="imap_port"
+                  type="number"
+                  required
+                  min="1"
+                  max="65535"
+                  value="{{ .Form.IMAPPort }}"
+                  class="mt-1.5 w-full rounded-lg border border-line px-3 py-2.5 text-sm"
+              /></label>
+            </div>
+            <label class="mt-4 block text-xs font-medium"
+              >Security<select
+                name="imap_tls"
+                class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 text-sm"
+              >
+                <option
+                  value="tls"
+                  {{ if eq .Form.IMAPTLS "tls" }}selected{{ end }}
+                >
+                  TLS (usually port 993)
+                </option>
+                <option
+                  value="starttls"
+                  {{ if eq .Form.IMAPTLS "starttls" }}selected{{ end }}
+                >
+                  Required STARTTLS (usually port 143)
+                </option>
+              </select></label
+            ><label class="mt-4 block text-xs font-medium"
+              >Mail username<input
+                name="imap_user"
+                required
+                maxlength="254"
+                value="{{ .Form.IMAPUser }}"
+                autocomplete="off"
+                class="mt-1.5 w-full rounded-lg border border-line px-3 py-2.5 text-sm" /></label
+            ><label class="mt-4 block text-xs font-medium"
+              >Mail provider password<input
+                name="imap_password"
+                type="password"
+                required
+                maxlength="4096"
+                autocomplete="new-password"
+                class="mt-1.5 w-full rounded-lg border border-line px-3 py-2.5 text-sm"
+            /></label>
+          </section>
+          <section class="rounded-xl border border-line bg-panel p-5">
+            <h2 class="mb-4 font-semibold">Outgoing mail · SMTP</h2>
+            <label class="mb-4 block text-xs font-medium"
+              >Sent folder (exact IMAP name)<input
+                name="sent_mailbox"
+                value="{{ .Form.SentMailbox }}"
+                placeholder="Sent"
+                maxlength="1024"
+                class="mt-1.5 w-full rounded-lg border border-line px-3 py-2.5 text-sm"
+            /></label>
+            <div class="grid gap-4 sm:grid-cols-[1fr_110px]">
+              <label class="block text-xs font-medium"
+                >Server<input
+                  name="smtp_host"
+                  required
+                  maxlength="253"
+                  value="{{ .Form.SMTPHost }}"
+                  placeholder="smtp.example.test"
+                  spellcheck="false"
+                  class="mt-1.5 w-full rounded-lg border border-line px-3 py-2.5 text-sm" /></label
+              ><label class="block text-xs font-medium"
+                >Port<input
+                  name="smtp_port"
+                  type="number"
+                  required
+                  min="1"
+                  max="65535"
+                  value="{{ .Form.SMTPPort }}"
+                  class="mt-1.5 w-full rounded-lg border border-line px-3 py-2.5 text-sm"
+              /></label>
+            </div>
+            <label class="mt-4 block text-xs font-medium"
+              >Security<select
+                name="smtp_tls"
+                class="mt-1.5 w-full rounded-lg border border-line bg-panel px-3 py-2.5 text-sm"
+              >
+                <option
+                  value="tls"
+                  {{ if eq .Form.SMTPTLS "tls" }}selected{{ end }}
+                >
+                  TLS (usually port 465)
+                </option>
+                <option
+                  value="starttls"
+                  {{ if eq .Form.SMTPTLS "starttls" }}selected{{ end }}
+                >
+                  Required STARTTLS (usually port 587)
+                </option>
+              </select></label
+            ><label class="mt-4 flex items-start gap-2 text-xs leading-relaxed"
+              ><input
+                type="checkbox"
+                name="same_credentials"
+                value="1"
+                {{ if .Form.SameCredentials }}checked{{ end }}
+                class="mt-0.5"
+              />Use the same username and password as IMAP</label
+            >
+            <div class="mt-4 grid gap-4 sm:grid-cols-2">
+              <label class="block text-xs font-medium"
+                >SMTP username (if different)<input
+                  name="smtp_user"
+                  maxlength="254"
+                  value="{{ .Form.SMTPUser }}"
+                  autocomplete="off"
+                  class="mt-1.5 w-full rounded-lg border border-line px-3 py-2.5 text-sm" /></label
+              ><label class="block text-xs font-medium"
+                >SMTP password (if different)<input
+                  name="smtp_password"
+                  type="password"
+                  maxlength="4096"
+                  autocomplete="new-password"
+                  class="mt-1.5 w-full rounded-lg border border-line px-3 py-2.5 text-sm"
+              /></label>
+            </div>
+          </section>
+          <p class="text-xs leading-relaxed text-muted">
+            This checks authentication and saves the account. It does not send
+            mail. OpenPGP private keys and their passphrases belong only in the
+            local browser vault.
+          </p>
+          <div class="flex items-center gap-4">
+            <button
+              {{ if not .MailEndpointsEnabled }}disabled{{ end }}
+              class="rounded-lg bg-action px-5 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Test &amp; save account</button
+            ><a href="/" class="text-sm text-muted">Cancel</a>
+          </div>
+        </form>
+      </main>
+    </body>
+  </html>
+{{ end }}

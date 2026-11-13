@@ -1,0 +1,29 @@
+MIME-Version: 1.0
+Content-Type: multipart/encrypted; protocol="application/pgp-encrypted";
+ boundary="mailspace-704ae492bf64c55f183da8961b5dbb2b"
+
+--mailspace-704ae492bf64c55f183da8961b5dbb2b
+Content-Type: application/pgp-encrypted
+
+Version: 1
+
+--mailspace-704ae492bf64c55f183da8961b5dbb2b
+Content-Type: application/octet-stream
+Content-Disposition: inline; filename="encrypted.asc"
+
+-----BEGIN PGP MESSAGE-----
+
+wV4DAAAAAAAAAAASAQdAu+VPd3RCiGjUWy/x8qpZE96gH7UV2iOM342glu77
+RVUw7y5hGoW0czCDI1sKIp3MOB4UgH4DEjvWzii3M25E5lcFEgWC//SeS+G3
+RD6SreJ20sDFAZPhJN8PmO33uVwAZlwD/XCK0K8+U8C2saQqkDk2MxWFyoD3
+U2V1mmHbvXLYIweC0+Mdb1U5jNQNALkH4G3tVm0gZUnUxRTQjPPs74zGmMMH
+pAqItF06LfrUVoUcMeMQwnAqlnd+1N2/mCrQp1uKT3Ostdysvi0XY9w/MbdE
+yfghxzD9W1TGbW1XY4XVrEjx1pHIdiDeWYDyz1mW5KmqxQGAv03B5Y+eTOsB
++LqWxaJPBWK1bvuBnUCpzHqeFBuiSPvXHZu+lNo/HuffcqJg3IsIhM1kFhog
+cDnRl33nLDwfgJCDfBnBrXyueHoQQqfzoOA3gc176Xv5kZLofxKR8pG0COr3
+b43PJwl0GEBsCWz9pKdA1EhU+wbgGfru7IZYmzCyrV8hhqJrV6PPBg4y5v+L
+N2CgUNdbUUVVxuwV8CYiR7cqmpiMXfhKfaurouCnzHLUro6V9LD5MkhFGnYb
+fEwZ4YcIo0ePfhbNeHv2Gaa20YJaq6xEG0CHi4Jqi5H45TwA5AY=
+=tKOm
+-----END PGP MESSAGE-----
+--mailspace-704ae492bf64c55f183da8961b5dbb2b--

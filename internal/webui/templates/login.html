@@ -1,0 +1,183 @@
+{{ define "login" }}
+  <!doctype html>
+  <html lang="en">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>Sign in · Mailspace</title>
+      <script src="/assets/theme.js"></script>
+      <script src="/assets/session.js" defer></script>
+      <link rel="stylesheet" href="/assets/app.css" />
+    </head>
+    <body class="flex min-h-dvh items-center justify-center bg-canvas p-6">
+      <main
+        class="w-full max-w-sm rounded-2xl border border-line bg-panel p-8 shadow-sm"
+      >
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <a href="/" class="text-xl font-semibold text-accent">mailspace.</a
+          >{{ template "theme-picker" . }}
+        </div>
+        <h1 class="mt-7 text-2xl font-semibold tracking-tight">
+          Your mail. Your space.
+        </h1>
+        <p class="mt-2 text-sm text-muted">
+          Sign in to your self-hosted workspace.
+        </p>
+        {{ if .Message }}
+          <p
+            role="alert"
+            class="mt-5 rounded-md bg-error-soft p-3 text-sm text-error"
+          >
+            {{ .Message }}
+          </p>
+        {{ end }}
+        <form method="post" action="/auth/login" class="mt-6 space-y-4">
+          <div>
+            <label for="email" class="text-xs font-medium">Email</label
+            ><input
+              id="email"
+              name="email"
+              type="email"
+              autocomplete="username"
+              required
+              maxlength="254"
+              class="mt-1.5 w-full rounded-lg border border-line px-3 py-2.5 outline-accent"
+            />
+          </div>
+          <div>
+            <label for="password" class="text-xs font-medium">Password</label
+            ><input
+              id="password"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              required
+              maxlength="1024"
+              class="mt-1.5 w-full rounded-lg border border-line px-3 py-2.5 outline-accent"
+            />
+          </div>
+          <button
+            class="w-full rounded-lg bg-action px-4 py-2.5 text-sm font-medium text-white"
+          >
+            Sign in
+          </button>
+        </form>
+        <p class="mt-6 text-[11px] leading-relaxed text-muted">
+          Accounts are provisioned by your instance administrator. No
+          third-party account or tracking.
+        </p>
+      </main>
+    </body>
+  </html>
+{{ end }}
+{{ define "identity-home" }}
+  <!doctype html>
+  <html lang="en">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>Your workspace · Mailspace</title>
+      <script src="/assets/theme.js"></script>
+      <script src="/assets/session.js" defer></script>
+      <link rel="stylesheet" href="/assets/app.css" />
+    </head>
+    <body class="min-h-dvh bg-canvas">
+      <header
+        class="flex flex-wrap items-center gap-4 border-b border-line bg-panel px-6 py-4"
+      >
+        <a href="/" class="text-lg font-semibold text-accent">mailspace.</a
+        ><span class="ml-auto min-w-0 max-w-[55%] truncate text-xs text-muted"
+          >{{ .Email }}</span
+        >{{ template "theme-picker" . }}
+        <form action="/auth/logout" method="post">
+          <input type="hidden" name="csrf" value="{{ .CSRF }}" /><button
+            class="rounded-md border border-line px-3 py-1.5 text-xs"
+          >
+            Sign out
+          </button>
+        </form>
+      </header>
+      <nav class="mx-auto flex max-w-3xl gap-5 px-6 pt-5 text-xs text-accent">
+        <a href="/">Timeline</a><a href="/profile">Profile</a
+        ><a href="/workspaces">Organizations</a>
+      </nav>
+      <main class="mx-auto max-w-3xl p-6 sm:p-12">
+        <p class="text-xs font-medium uppercase tracking-wider text-muted">
+          Personal workspace
+        </p>
+        <h1 class="mt-2 text-2xl font-semibold">Settings</h1>
+        <section class="mt-8 rounded-xl border border-line bg-panel p-6">
+          <h2 class="font-semibold">Mail accounts</h2>
+          {{ range .Accounts }}
+            <div
+              class="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3"
+            >
+              <a
+                href="/?account={{ .ID }}"
+                class="text-sm font-medium text-accent"
+                >{{ .Name }} → Open timeline</a
+              >
+              {{ if $.MailAccountsAvailable }}
+                <div class="flex items-center gap-3">
+                  <a
+                    href="/accounts/{{ .ID }}/edit"
+                    class="text-xs font-medium text-accent"
+                    >Settings</a
+                  >
+                  <form action="/accounts/{{ .ID }}/check" method="post">
+                    <input
+                      type="hidden"
+                      name="csrf"
+                      value="{{ $.CSRF }}"
+                    /><button class="text-xs font-medium text-accent">
+                      Check connection
+                    </button>
+                  </form>
+                </div>
+              {{ end }}
+            </div>
+          {{ else }}
+            <p class="mt-3 text-sm leading-relaxed text-muted">
+              No mail accounts connected yet. Connect your existing IMAP/SMTP
+              server to prepare your personal workspace.
+            </p>
+          {{ end }}
+        </section>
+        {{ if .MailAccountsAvailable }}
+          <div class="mt-4 flex flex-wrap items-center gap-3">
+            <a
+              href="/accounts/new"
+              class="rounded-lg bg-action px-4 py-2.5 text-sm font-medium text-white"
+              >Connect mail account</a
+            >{{ if not .MailEndpointsEnabled }}
+              <p class="text-xs text-muted">
+                Your administrator needs to enable a mail server first.
+              </p>
+            {{ end }}
+          </div>
+        {{ end }}
+        {{ if .Message }}
+          <p
+            role="status"
+            class="mt-4 rounded-lg border border-success-line bg-success-soft p-4 text-sm text-success"
+          >
+            {{ .Message }}
+          </p>
+        {{ end }}
+        <section class="mt-6 rounded-xl border border-line bg-panel p-6">
+          <h2 class="font-semibold">Sessions</h2>
+          <p class="mt-2 text-sm text-muted">
+            You can revoke all active sessions for your user.
+          </p>
+          <form action="/auth/logout-all" method="post" class="mt-4">
+            <input type="hidden" name="csrf" value="{{ .CSRF }}" /><button
+              class="rounded-md border border-line px-3 py-2 text-xs"
+            >
+              Sign out on all devices
+            </button>
+          </form>
+        </section>
+      </main>
+    </body>
+  </html>
+{{ end }}

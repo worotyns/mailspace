@@ -1,0 +1,135 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+@import "tailwindcss";
+@source "../internal/webui/templates";
+@source "../internal/webui/timeline.go";
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+:root {
+  --ms-ink: #24272e;
+  --ms-muted: #747680;
+  --ms-line: #eaeaf0;
+  --ms-accent: #6652ca;
+  --ms-action: #6652ca;
+  --ms-canvas: #fcfcfd;
+  --ms-panel: #ffffff;
+  --ms-panel-subtle: #fdfdfd;
+  --ms-hover: #faf9fd;
+  --ms-body: #575b65;
+  --ms-success: #166534;
+  --ms-success-soft: #f0fdf4;
+  --ms-success-line: #bbf7d0;
+  --ms-warning: #78350f;
+  --ms-warning-soft: #fffbeb;
+  --ms-warning-line: #fde68a;
+  --ms-error: #991b1b;
+  --ms-error-soft: #fef2f2;
+  --ms-error-line: #fecaca;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --ms-ink: #ededf5;
+  --ms-muted: #aaa9bd;
+  --ms-line: #343441;
+  --ms-accent: #c0afff;
+  --ms-action: #7050cf;
+  --ms-canvas: #11131b;
+  --ms-panel: #191b25;
+  --ms-panel-subtle: #161821;
+  --ms-hover: #232331;
+  --ms-body: #c9c8d6;
+  --ms-success: #9de5b3;
+  --ms-success-soft: #193225;
+  --ms-success-line: #31553e;
+  --ms-warning: #f3d392;
+  --ms-warning-soft: #352c1b;
+  --ms-warning-line: #65532d;
+  --ms-error: #ffb1b1;
+  --ms-error-soft: #371f29;
+  --ms-error-line: #6b3545;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --ms-ink: #ededf5;
+    --ms-muted: #aaa9bd;
+    --ms-line: #343441;
+    --ms-accent: #c0afff;
+    --ms-action: #7050cf;
+    --ms-canvas: #11131b;
+    --ms-panel: #191b25;
+    --ms-panel-subtle: #161821;
+    --ms-hover: #232331;
+    --ms-body: #c9c8d6;
+    color-scheme: dark;
+  }
+}
+@theme inline {
+  --font-sans: "Inter", "Segoe UI", system-ui, sans-serif;
+  --color-ink: var(--ms-ink);
+  --color-muted: var(--ms-muted);
+  --color-line: var(--ms-line);
+  --color-accent: var(--ms-accent);
+  --color-canvas: var(--ms-canvas);
+  --color-action: var(--ms-action);
+  --color-panel: var(--ms-panel);
+  --color-panel-subtle: var(--ms-panel-subtle);
+  --color-hover: var(--ms-hover);
+  --color-body: var(--ms-body);
+  --color-success: var(--ms-success);
+  --color-success-soft: var(--ms-success-soft);
+  --color-success-line: var(--ms-success-line);
+  --color-warning: var(--ms-warning);
+  --color-warning-soft: var(--ms-warning-soft);
+  --color-warning-line: var(--ms-warning-line);
+  --color-error: var(--ms-error);
+  --color-error-soft: var(--ms-error-soft);
+  --color-error-line: var(--ms-error-line);
+}
+@layer base {
+  body {
+    @apply bg-panel font-sans text-ink antialiased;
+    font-size: 14px;
+  }
+  button,
+  a,
+  input,
+  textarea {
+    -webkit-tap-highlight-color: transparent;
+  }
+  button,
+  a {
+    touch-action: manipulation;
+  }
+  button:not(:disabled),
+  summary {
+    cursor: pointer;
+  }
+  :focus-visible {
+    outline: 2px solid var(--ms-accent);
+    outline-offset: 3px;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--ms-accent) 25%, transparent);
+  }
+}
+@layer components {
+  .icon {
+    @apply inline-block size-4 shrink-0 align-middle;
+  }
+  .htmx-indicator {
+    @apply opacity-0 transition-opacity;
+  }
+  .htmx-request .htmx-indicator,
+  .htmx-request.htmx-indicator {
+    @apply opacity-100;
+  }
+}
+/* One viewport: the Space navigation and timeline own their scrolling. */
+.app-shell {
+  height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.app-shell > header {
+  flex-shrink: 0;
+}

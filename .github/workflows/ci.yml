@@ -1,0 +1,25 @@
+name: checks
+on: [push, pull_request]
+env:
+  MAILSPACE_ORIGIN: https://mail.example.test
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci && npm run format:check && npm run build && npm test
+        working-directory: web
+      - run: go vet ./...
+      - run: go test -race ./...
+      - run: docker compose config --quiet
+      - run: docker compose build

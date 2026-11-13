@@ -1,0 +1,288 @@
+{{ define "secure-mail" }}
+  <!doctype html>
+  <html lang="en">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>Secure mail · Mailspace</title>
+      <script src="/assets/theme.js"></script>
+      <script src="/assets/session.js" defer></script>
+      <script type="module" src="/assets/crypto/mail-ui.mjs"></script>
+      <link rel="stylesheet" href="/assets/app.css" />
+    </head>
+    <body class="min-h-dvh bg-canvas">
+      <header
+        class="flex items-center gap-3 border-b border-line bg-panel px-6 py-4"
+      >
+        <a href="/" class="text-lg font-semibold text-accent">mailspace.</a
+        ><span class="ml-auto truncate text-xs text-muted">{{ .Email }}</span
+        >{{ template "theme-picker" . }}
+      </header>
+      <main
+        id="secure-mail"
+        hx-disable
+        hx-history="false"
+        data-user-id="{{ .UserID }}"
+        data-session-expires="{{ .SessionExpires }}"
+        data-read="{{ .SecureRead }}"
+        data-ordinary="{{ .OrdinaryRead }}"
+        data-account="{{ .AccountID }}"
+        data-from="{{ .Compose.Address }}"
+        data-csrf="{{ .CSRF }}"
+        data-request-id="{{ .Compose.Nonce }}"
+        data-reply-folder="{{ .Compose.ReplyFolder }}"
+        data-reply-validity="{{ .Compose.ReplyValidity }}"
+        data-reply-uid="{{ .Compose.ReplyUID }}"
+        data-raw-url="{{ .RawURL }}"
+        data-sender="{{ .ClaimedSender }}"
+        class="mx-auto max-w-3xl space-y-5 p-5 sm:p-10"
+      >
+        <a href="/?account={{ .AccountID }}" class="text-xs text-accent"
+          >← Back to timeline</a
+        >
+        <h1 class="text-2xl font-semibold">
+          {{ if .SecureRead }}
+            {{ if .OrdinaryRead }}
+              Read message
+            {{ else }}
+              Read encrypted mail
+            {{ end }}
+          {{ else }}
+            Encrypted message
+          {{ end }}
+        </h1>
+        <p class="text-sm text-muted">
+          {{ if .OrdinaryRead }}
+            Text is the primary view. HTML preview is simplified, isolated and
+            blocks remote resources.
+          {{ else }}
+            Keys and decrypted content stay in this browser.
+            <a href="/keys" class="text-accent"
+              >Manage keys and verified contacts</a
+            >. Leaving or hiding this page locks the key and clears its private
+            content. No draft autosave.
+          {{ end }}
+        </p>
+        <p
+          id="secure-status"
+          role="status"
+          aria-live="polite"
+          class="rounded-lg border border-line bg-panel p-4 text-sm"
+        >
+          Loading message tools…
+        </p>
+        <section
+          {{ if .OrdinaryRead }}hidden{{ end }}
+          class="space-y-3 rounded-xl border border-line bg-panel p-5"
+        >
+          <h2 class="font-semibold">Unlock a local key</h2>
+          <label class="block text-xs"
+            >Private key<select
+              id="mail-private-key"
+              class="mt-1 w-full rounded-lg border border-line bg-panel px-3 py-2"
+            ></select></label
+          ><label class="block text-xs"
+            >Key passphrase<input
+              id="mail-passphrase"
+              type="password"
+              autocomplete="off"
+              class="mt-1 w-full rounded-lg border border-line px-3 py-2"
+          /></label>
+          <div class="flex gap-4">
+            <button
+              id="mail-unlock"
+              type="button"
+              class="rounded-lg bg-action px-4 py-2 text-sm text-white"
+              disabled
+            >
+              Unlock</button
+            ><button id="mail-lock" type="button" class="text-sm text-accent">
+              Lock and clear
+            </button>
+          </div>
+        </section>
+        {{ if .SecureRead }}
+          <a href="{{ .RawURL }}" class="block text-xs text-accent"
+            >Download original message</a
+          >
+          <button
+            id="mail-decrypt"
+            type="button"
+            class="rounded-lg bg-action px-5 py-3 text-sm text-white"
+            disabled
+          >
+            {{ if .OrdinaryRead }}Read as text{{ else }}Decrypt locally{{ end }}
+          </button>
+          <section
+            id="decrypted-content"
+            class="space-y-4 rounded-xl border border-line bg-panel p-5"
+            hidden
+          >
+            <p id="mail-signature" class="text-sm font-medium"></p>
+            <p
+              id="decrypted-text"
+              class="whitespace-pre-wrap break-words text-sm leading-relaxed"
+            ></p>
+            <button
+              id="html-preview-open"
+              type="button"
+              class="text-sm text-accent"
+              hidden
+            >
+              Preview HTML
+            </button>
+            <div id="decrypted-attachments" class="space-y-2"></div>
+            <dialog
+              id="html-preview-dialog"
+              class="m-auto w-[94vw] max-w-5xl rounded-xl border border-line bg-panel p-4 text-ink backdrop:bg-black/60"
+            >
+              <div class="mb-3 flex items-start gap-4">
+                <div>
+                  <h2 class="font-semibold">Isolated HTML preview</h2>
+                  <p class="text-xs text-muted">
+                    Formatting is simplified. Scripts, links, forms and images
+                    are blocked; no remote content is loaded.
+                  </p>
+                </div>
+                <button
+                  id="html-preview-close"
+                  type="button"
+                  class="ml-auto shrink-0 text-sm text-accent"
+                >
+                  Close preview
+                </button>
+              </div>
+              <div id="html-preview-frame"></div>
+            </dialog>
+          </section>
+        {{ else }}
+          <p class="text-xs text-muted">
+            From {{ .Compose.Address }} · {{ .Compose.AccountName }}. Signed and
+            encrypted to every recipient and your own key. Subject and envelope
+            remain visible to mail servers.
+          </p>
+          <section class="space-y-3 rounded-xl border border-line bg-panel p-5">
+            <h2 class="font-semibold">Encrypted local drafts</h2>
+            <p class="text-xs text-muted">
+              Save explicitly to this browser, encrypted to your own key. No
+              server or IMAP draft. Clearing browser data removes these copies.
+            </p>
+            <label class="block text-xs"
+              >Saved draft<select
+                id="local-draft"
+                class="mt-1 w-full rounded-lg border border-line bg-panel px-3 py-2"
+              ></select
+            ></label>
+            <div class="flex flex-wrap gap-4 text-sm">
+              <button
+                id="draft-save"
+                type="button"
+                class="text-accent"
+                disabled
+              >
+                Save encrypted draft</button
+              ><button
+                id="draft-load"
+                type="button"
+                class="text-accent"
+                disabled
+              >
+                Load selected draft</button
+              ><button
+                id="draft-delete"
+                type="button"
+                class="text-accent"
+                disabled
+              >
+                Delete selected local draft
+              </button>
+            </div>
+          </section>
+          <fieldset
+            id="secure-compose-fields"
+            disabled
+            class="space-y-4 rounded-xl border border-line bg-panel p-5"
+          >
+            <label class="block text-xs"
+              >To<input
+                id="secure-to"
+                value="{{ .Compose.To }}"
+                autocomplete="off"
+                maxlength="8192"
+                placeholder="recipient@example.test"
+                class="mt-1 w-full rounded-lg border border-line px-3 py-2 text-sm"
+            /></label>
+            <div class="grid gap-4 sm:grid-cols-2">
+              <label class="block text-xs"
+                >Cc<input
+                  id="secure-cc"
+                  autocomplete="off"
+                  maxlength="8192"
+                  class="mt-1 w-full rounded-lg border border-line px-3 py-2 text-sm" /></label
+              ><label class="block text-xs"
+                >Bcc<input
+                  id="secure-bcc"
+                  autocomplete="off"
+                  maxlength="8192"
+                  class="mt-1 w-full rounded-lg border border-line px-3 py-2 text-sm"
+              /></label>
+            </div>
+            <label class="block text-xs"
+              >Subject<input
+                id="secure-subject"
+                value="{{ .Compose.Subject }}"
+                autocomplete="off"
+                maxlength="200"
+                class="mt-1 w-full rounded-lg border border-line px-3 py-2 text-sm" /></label
+            ><label class="block text-xs"
+              >Message<textarea
+                id="secure-body"
+                rows="12"
+                autocomplete="off"
+                class="mt-1 w-full rounded-lg border border-line p-3 text-sm"
+              ></textarea>
+            </label>
+            <label class="block text-xs"
+              >Encrypted attachments<input
+                id="secure-files"
+                type="file"
+                multiple
+                class="mt-1 block w-full text-xs"
+            /></label>
+            <p id="restored-attachments" class="text-xs text-muted"></p>
+            <button
+              id="clear-restored-attachments"
+              type="button"
+              class="text-xs text-accent"
+              hidden
+            >
+              Remove restored attachments
+            </button>
+            <p class="text-xs text-muted">
+              Up to 10 files, 1 MiB total. Files and filenames are encrypted in
+              this browser, with no plaintext upload.
+            </p>
+            <button
+              id="secure-send"
+              type="button"
+              class="rounded-lg bg-action px-5 py-3 text-sm text-white"
+            >
+              Sign, encrypt and send
+            </button>
+          </fieldset>
+          {{ if not .Compose.ReplyUID }}
+            <p class="text-xs">
+              <a href="/compose?account={{ .AccountID }}" class="text-accent"
+                >Choose ordinary unencrypted mail instead</a
+              >
+            </p>
+          {{ end }}
+          <noscript
+            >Encrypted mail requires JavaScript in a secure browser context. No
+            private message is submitted without it.</noscript
+          >
+        {{ end }}
+      </main>
+    </body>
+  </html>
+{{ end }}
