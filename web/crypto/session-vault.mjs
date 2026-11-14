@@ -5,6 +5,19 @@ import { VaultStore } from "./store.mjs";
 // A passive document owner prevents last-port gaps during HTMX replacement.
 // It sends no crypto/activity RPC or network request; pagehide only disconnects.
 let documentKeeper = null;
+function retireKeeper(keeper) {
+  if (!keeper) return;
+  try {
+    keeper.worker.port.postMessage({
+      id: 1,
+      userID: keeper.userID,
+      op: "disconnect",
+      args: [],
+    });
+  } catch {}
+  keeper.worker.port.close?.();
+  if (documentKeeper === keeper) documentKeeper = null;
+}
 function keepSharedWorker(url, options, userID) {
   if (
     documentKeeper ||
@@ -12,24 +25,16 @@ function keepSharedWorker(url, options, userID) {
     typeof window.addEventListener !== "function"
   )
     return;
-  documentKeeper = new SharedWorker(url, options);
-  documentKeeper.port.start?.();
-  window.addEventListener(
-    "pagehide",
-    () => {
-      try {
-        documentKeeper?.port.postMessage({
-          id: 1,
-          userID,
-          op: "disconnect",
-          args: [],
-        });
-      } catch {}
-      documentKeeper?.port.close?.();
-      documentKeeper = null;
-    },
-    { once: true },
-  );
+  const keeper = {
+    worker: new SharedWorker(url, options),
+    url: url.href,
+    userID,
+  };
+  documentKeeper = keeper;
+  keeper.worker.port.start?.();
+  window.addEventListener("pagehide", () => retireKeeper(keeper), {
+    once: true,
+  });
 }
 
 class SessionVault extends EventTarget {
@@ -41,13 +46,20 @@ class SessionVault extends EventTarget {
   #epoch = 0;
   #locking = false;
   #unavailable = false;
+  #responseSeen = false;
+  #nonListDispatched = false;
+  #startupFallbackUsed = false;
+  #transportGeneration = 0;
+  #removeListeners = () => {};
+  #url;
+  #keeper;
   #state = { locked: true, fingerprint: null, expiresAt: 0 };
   constructor(userID) {
     super();
     if (!/^[A-Za-z0-9_-]{16,128}$/.test(userID))
       throw new VaultError("invalid-user");
     this.userID = userID;
-    const url = new URL("./session-worker.mjs", import.meta.url);
+    const url = (this.#url = new URL("./session-worker.mjs", import.meta.url));
     try {
       if (typeof SharedWorker !== "function") throw new Error("unavailable");
       const options = {
@@ -56,6 +68,7 @@ class SessionVault extends EventTarget {
         extendedLifetime: true,
       };
       keepSharedWorker(url, options, userID);
+      this.#keeper = documentKeeper;
       this.#worker = new SharedWorker(url, options);
       this.#port = this.#worker.port;
       this.sessionMode = "shared";
@@ -69,33 +82,97 @@ class SessionVault extends EventTarget {
       this.sessionMode = "dedicated";
       this.shared = false;
     }
-    this.#port.addEventListener("message", (event) => {
-      const message = event.data;
-      if (message?.event === "state") {
-        if (!this.#locking || message.state?.locked !== false)
-          this.#update(message.state);
+    this.#listen();
+  }
+  #listen() {
+    const port = this.#port,
+      worker = this.#worker;
+    const generation = ++this.#transportGeneration;
+    const current = () =>
+      !this.#closed && generation === this.#transportGeneration;
+    const message = (event) => {
+      if (!current()) return;
+      // Any response proves startup happened; RPC/auth errors never fail over.
+      this.#responseSeen = true;
+      const value = event.data;
+      if (value?.event === "state") {
+        if (!this.#locking || value.state?.locked !== false)
+          this.#update(value.state);
         return;
       }
-      const pending = this.#pending.get(message?.id);
+      const pending = this.#pending.get(value?.id);
       if (!pending) return;
-      this.#pending.delete(message.id);
+      this.#pending.delete(value.id);
+      clearTimeout(pending.timer);
       if (pending.epoch !== this.#epoch) {
-        clearTimeout(pending.timer);
         pending.reject(new VaultError("locked"));
         return;
       }
-      if (message.state && (!this.#locking || message.state.locked !== false))
-        this.#update(message.state);
-      clearTimeout(pending.timer);
-      if (message.error) pending.reject(new VaultError(message.error));
-      else pending.resolve(message.result);
-    });
-    this.#worker.addEventListener("error", () => {
+      if (value.state && (!this.#locking || value.state.locked !== false))
+        this.#update(value.state);
+      if (value.error) pending.reject(new VaultError(value.error));
+      else pending.resolve(value.result);
+    };
+    const unavailable = () => {
+      if (!current()) return;
       this.#unavailable = true;
+      this.#removeListeners();
+      this.#transportGeneration++;
       this.#fail("worker-unavailable");
-    });
-    this.#port.addEventListener("messageerror", () => this.#fail());
-    this.#port.start?.();
+    };
+    const error = () => {
+      if (!current()) return;
+      if (this.#fallbackStartup()) return;
+      unavailable();
+    };
+    port.addEventListener("message", message);
+    port.addEventListener("messageerror", unavailable);
+    worker.addEventListener("error", error);
+    this.#removeListeners = () => {
+      port.removeEventListener("message", message);
+      port.removeEventListener("messageerror", unavailable);
+      worker.removeEventListener("error", error);
+    };
+    port.start?.();
+  }
+  #fallbackStartup() {
+    if (
+      !this.shared ||
+      this.#startupFallbackUsed ||
+      this.#responseSeen ||
+      this.#nonListDispatched ||
+      this.#closed ||
+      this.#locking ||
+      this.#unavailable ||
+      [...this.#pending.values()].some((p) => p.op !== "list")
+    )
+      return false;
+    this.#startupFallbackUsed = true;
+    this.#removeListeners();
+    this.#transportGeneration++;
+    this.#port.close?.();
+    retireKeeper(this.#keeper);
+    try {
+      // Only metadata listing can be retried. The fresh worker uses the same
+      // authenticated kernel; private arguments are never retained or replayed.
+      const worker = new Worker(this.#url, {
+        type: "module",
+        name: "mailspace-vault-v2",
+      });
+      this.#worker = this.#port = worker;
+      this.sessionMode = "dedicated";
+      this.shared = false;
+      this.#listen();
+      for (const [id] of this.#pending)
+        worker.postMessage({ id, userID: this.userID, op: "list", args: [] });
+      return true;
+    } catch {
+      this.#unavailable = true;
+      this.#removeListeners();
+      this.#transportGeneration++;
+      this.#fail("worker-unavailable");
+      return true;
+    }
   }
   #update(value) {
     const wasLocked = this.#state.locked;
@@ -135,24 +212,28 @@ class SessionVault extends EventTarget {
       return Promise.reject(new VaultError("locked"));
     const id = ++this.#id;
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(
+      const pending = { resolve, reject, op, epoch: this.#epoch };
+      pending.timer = setTimeout(
         () => {
+          if (this.#pending.get(id) !== pending) return;
           this.#pending.delete(id);
           this.lock();
           reject(new VaultError("locked"));
         },
         ["list", "touch"].includes(op) ? 8000 : 60000,
       );
-      this.#pending.set(id, { resolve, reject, timer, epoch: this.#epoch });
+      this.#pending.set(id, pending);
       try {
+        if (op !== "list") this.#nonListDispatched = true;
         this.#port.postMessage({ id, userID: this.userID, op, args });
       } catch {
-        clearTimeout(timer);
+        clearTimeout(pending.timer);
         this.#pending.delete(id);
         reject(new VaultError("locked"));
       }
     });
   }
+
   list() {
     return this.#call("list");
   }
@@ -195,6 +276,8 @@ class SessionVault extends EventTarget {
       });
     } catch {}
     this.#closed = true;
+    this.#removeListeners();
+    this.#transportGeneration++;
     this.#fail();
     this.#port.close?.();
     if (!this.shared) this.#worker.terminate();

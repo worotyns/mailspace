@@ -215,3 +215,324 @@ test("asynchronous worker loading errors fail immediately without silently chang
     globalThis.Worker = saved.Worker;
   }
 });
+
+function startupFixture({ keeper = false, denyDedicated = false } = {}) {
+  const saved = {
+    Worker: globalThis.Worker,
+    SharedWorker: globalThis.SharedWorker,
+    window: globalThis.window,
+  };
+  const shared = [],
+    dedicated = [],
+    pagehide = [];
+  class Port extends EventTarget {
+    sent = [];
+    closed = false;
+    terminated = false;
+    postMessage(value) {
+      this.sent.push(value);
+    }
+    start() {}
+    close() {
+      this.closed = true;
+    }
+    terminate() {
+      this.terminated = true;
+    }
+    emit(value) {
+      this.dispatchEvent(new MessageEvent("message", { data: value }));
+    }
+  }
+  class Shared extends EventTarget {
+    constructor() {
+      super();
+      this.port = new Port();
+      shared.push(this);
+    }
+  }
+  class Dedicated extends Port {
+    constructor() {
+      super();
+      if (denyDedicated) throw new Error("unavailable");
+      dedicated.push(this);
+    }
+  }
+  globalThis.SharedWorker = Shared;
+  globalThis.Worker = Dedicated;
+  if (keeper)
+    globalThis.window = {
+      addEventListener(type, callback) {
+        if (type === "pagehide") pagehide.push(callback);
+      },
+    };
+  else delete globalThis.window;
+  const vault = createSessionVault("SYNTHETIC_STARTUP_USER_123");
+  return {
+    vault,
+    shared,
+    dedicated,
+    pagehide,
+    async close() {
+      await vault.close();
+      for (const callback of pagehide) callback();
+      for (const [name, value] of Object.entries(saved)) {
+        if (value === undefined) delete globalThis[name];
+        else globalThis[name] = value;
+      }
+    },
+  };
+}
+test("only metadata listing recovers once into a fresh dedicated worker; old transport stays inert", async () => {
+  const f = startupFixture();
+  try {
+    const pending = f.vault.list(),
+      old = f.shared[0],
+      request = old.port.sent.at(-1);
+    old.dispatchEvent(new Event("error"));
+    assert.equal(f.vault.sessionMode, "dedicated");
+    assert.equal(f.vault.locked, true);
+    assert.equal(old.port.closed, true);
+    assert.deepEqual(f.dedicated[0].sent, [
+      {
+        id: request.id,
+        userID: "SYNTHETIC_STARTUP_USER_123",
+        op: "list",
+        args: [],
+      },
+    ]);
+    old.port.emit({
+      id: request.id,
+      result: { keys: ["stale"] },
+      state: {
+        locked: false,
+        fingerprint: "A".repeat(40),
+        expiresAt: Date.now() + 60000,
+      },
+    });
+    old.dispatchEvent(new Event("error"));
+    assert.equal(f.vault.locked, true);
+    f.dedicated[0].emit({
+      id: request.id,
+      result: { keys: [], locked: true },
+      state: { locked: true },
+    });
+    assert.deepEqual(await pending, { keys: [], locked: true });
+    const next = f.vault.list(),
+      rejected = assert.rejects(next, (e) => e.code === "worker-unavailable");
+    f.dedicated[0].dispatchEvent(new Event("error"));
+    await rejected;
+    assert.equal(f.dedicated.length, 1);
+  } finally {
+    await f.close();
+  }
+});
+for (const response of [
+  { event: "state", state: { locked: true } },
+  { id: 99999, result: null },
+])
+  test(
+    "any response prevents startup failover: " + JSON.stringify(response),
+    async () => {
+      const f = startupFixture();
+      try {
+        const pending = f.vault.list(),
+          rejected = assert.rejects(
+            pending,
+            (e) => e.code === "worker-unavailable",
+          );
+        f.shared[0].port.emit(response);
+        f.shared[0].dispatchEvent(new Event("error"));
+        await rejected;
+        assert.equal(f.dedicated.length, 0);
+      } finally {
+        await f.close();
+      }
+    },
+  );
+test("authentication denial never retries in another worker", async () => {
+  const f = startupFixture();
+  try {
+    const pending = f.vault.list(),
+      rejected = assert.rejects(pending, (e) => e.code === "locked"),
+      request = f.shared[0].port.sent.at(-1);
+    f.shared[0].port.emit({
+      id: request.id,
+      error: "locked",
+      state: { locked: true },
+    });
+    await rejected;
+    f.shared[0].dispatchEvent(new Event("error"));
+    assert.equal(f.dedicated.length, 0);
+    assert.equal(f.vault.locked, true);
+  } finally {
+    await f.close();
+  }
+});
+test("dispatching a private operation permanently prevents startup failover and argument replay", async () => {
+  const f = startupFixture();
+  try {
+    const pending = f.vault.unlock(
+        "A".repeat(40),
+        "PRIVATE_STARTUP_PASS_CANARY",
+      ),
+      rejected = assert.rejects(
+        pending,
+        (e) => e.code === "worker-unavailable",
+      );
+    f.shared[0].dispatchEvent(new Event("error"));
+    await rejected;
+    assert.equal(f.dedicated.length, 0);
+  } finally {
+    await f.close();
+  }
+});
+test("messageerror and explicit lock never trigger startup failover", async () => {
+  for (const action of ["messageerror", "lock"]) {
+    const f = startupFixture();
+    try {
+      const pending = f.vault.list(),
+        rejected = assert.rejects(pending);
+      if (action === "lock") f.vault.lock();
+      else f.shared[0].port.dispatchEvent(new Event("messageerror"));
+      f.shared[0].dispatchEvent(new Event("error"));
+      await rejected;
+      assert.equal(f.dedicated.length, 0);
+    } finally {
+      await f.close();
+    }
+  }
+});
+test("replacement constructor denial stays unavailable instead of using a page-local vault", async () => {
+  const f = startupFixture({ denyDedicated: true });
+  try {
+    const pending = f.vault.list(),
+      rejected = assert.rejects(
+        pending,
+        (e) => e.code === "worker-unavailable",
+      );
+    f.shared[0].dispatchEvent(new Event("error"));
+    await rejected;
+    assert.equal(f.vault.sessionMode, "shared");
+    await assert.rejects(
+      f.vault.list(),
+      (e) => e.code === "worker-unavailable",
+    );
+  } finally {
+    await f.close();
+  }
+});
+test("failed keeper cleanup and stale pagehide do not disconnect a later keeper", async () => {
+  const f = startupFixture({ keeper: true });
+  let other;
+  try {
+    const pending = f.vault.list();
+    f.shared[1].dispatchEvent(new Event("error"));
+    assert.equal(f.shared[0].port.closed, true);
+    const request = f.dedicated[0].sent.at(-1);
+    f.dedicated[0].emit({
+      id: request.id,
+      result: { keys: [] },
+      state: { locked: true },
+    });
+    await pending;
+    other = createSessionVault("SYNTHETIC_STARTUP_USER_123");
+    const newKeeper = f.shared[2];
+    f.pagehide[0]();
+    assert.equal(newKeeper.port.closed, false);
+    await other.close();
+    f.pagehide[1]();
+    assert.equal(newKeeper.port.closed, true);
+  } finally {
+    await other?.close();
+    await f.close();
+  }
+});
+test("list deadline is retained across startup retry and a settled old timer cannot lock the new transport", async () => {
+  const saved = {
+      setTimeout: globalThis.setTimeout,
+      clearTimeout: globalThis.clearTimeout,
+    },
+    timers = [];
+  globalThis.setTimeout = (fn, ms) => {
+    timers.push({ fn, ms });
+    return timers.length;
+  };
+  globalThis.clearTimeout = () => {};
+  const f = startupFixture();
+  try {
+    const pending = f.vault.list();
+    assert.equal(timers[0].ms, 8000);
+    f.shared[0].dispatchEvent(new Event("error"));
+    const request = f.dedicated[0].sent.at(-1);
+    f.dedicated[0].emit({
+      id: request.id,
+      result: { keys: [] },
+      state: { locked: true },
+    });
+    await pending;
+    const count = f.dedicated[0].sent.length;
+    timers[0].fn();
+    assert.equal(f.dedicated[0].sent.length, count);
+    const late = f.vault.list(),
+      rejected = assert.rejects(late, (e) => e.code === "locked");
+    timers[1].fn();
+    await rejected;
+    f.dedicated[0].dispatchEvent(new Event("error"));
+    assert.equal(f.dedicated.length, 1);
+  } finally {
+    await f.close();
+    globalThis.setTimeout = saved.setTimeout;
+    globalThis.clearTimeout = saved.clearTimeout;
+  }
+});
+
+test("failed transport never restores unlocked UI state from late messages", async () => {
+  const f = startupFixture();
+  try {
+    const pending = f.vault.list(),
+      request = f.shared[0].port.sent.at(-1);
+    f.shared[0].port.emit({
+      id: request.id,
+      result: { keys: [] },
+      state: { locked: true },
+    });
+    await pending;
+    f.shared[0].dispatchEvent(new Event("error"));
+    f.shared[0].port.emit({
+      event: "state",
+      state: {
+        locked: false,
+        fingerprint: "A".repeat(40),
+        expiresAt: Date.now() + 60000,
+      },
+    });
+    assert.equal(f.vault.locked, true);
+    assert.equal(f.vault.fingerprint, null);
+    assert.equal(f.dedicated.length, 0);
+  } finally {
+    await f.close();
+  }
+});
+test("old shared client fallback cannot retire a newer keeper generation", async () => {
+  const f = startupFixture({ keeper: true });
+  let second, third;
+  try {
+    second = createSessionVault("SYNTHETIC_STARTUP_USER_123");
+    const oldKeeper = f.shared[0],
+      a = f.shared[1],
+      b = f.shared[2];
+    a.dispatchEvent(new Event("error"));
+    assert.equal(oldKeeper.port.closed, true);
+    third = createSessionVault("SYNTHETIC_STARTUP_USER_123");
+    const newKeeper = f.shared[3];
+    b.dispatchEvent(new Event("error"));
+    assert.equal(second.sessionMode, "dedicated");
+    assert.equal(newKeeper.port.closed, false);
+    f.pagehide[0]();
+    assert.equal(newKeeper.port.closed, false);
+  } finally {
+    await second?.close();
+    await third?.close();
+    await f.close();
+  }
+});

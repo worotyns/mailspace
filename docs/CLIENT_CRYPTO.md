@@ -42,3 +42,6 @@ Ordinary and decrypted text presentation follows ADR-0034: fixed DOM from bounde
 
 
 Unlock feedback is visible before asynchronous worker/key metadata loading. A failed worker load reports an unavailable session immediately; subsequent calls do not wait on a dead worker. Metadata RPCs time out after eight seconds while cryptographic operations retain their separate longer limit. Failed authentication or transport never silently changes vault mode, sends plaintext, or retries a send. Closing the dialog invalidates a pending display update.
+
+
+If a SharedWorker's module fails during initial loading, an argument-free list request may recover once in a fresh dedicated worker under ADR-0032. That worker performs the same authentication checks and starts locked. Private operations, login refusals and timeouts are never replayed. Dedicated mode is tab-local; a reload may ask for the passphrase again.
