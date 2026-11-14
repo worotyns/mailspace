@@ -481,6 +481,14 @@ func (m TimelineMessage) ThreadURL() string {
 	parsed.RawQuery = q.Encode()
 	return parsed.String()
 }
+
+// ThreadReplyURL targets the original selected message, never an inferred subject match.
+func (d TimelineData) ThreadReplyURL() string {
+	if d.ThreadKey == "" {
+		return ""
+	}
+	return d.Link("reply", d.ThreadKey) + "#thread-composer"
+}
 func (d TimelineData) BackToSpaceURL() string { d.ThreadKey = ""; return d.CurrentURL() }
 func (m TimelineMessage) topic() string {
 	if len(m.Preview.References) > 0 {
@@ -490,8 +498,17 @@ func (m TimelineMessage) topic() string {
 }
 func (m TimelineMessage) TopicLabel() string {
 	subject := strings.TrimSpace(m.Preview.Subject)
-	for strings.HasPrefix(strings.ToLower(subject), "re:") {
-		subject = strings.TrimSpace(subject[3:])
+	for {
+		prefix, rest, found := strings.Cut(subject, ":")
+		if !found {
+			break
+		}
+		switch strings.ToLower(strings.TrimSpace(prefix)) {
+		case "re", "odp":
+			subject = strings.TrimSpace(rest)
+		default:
+			return subject
+		}
 	}
 	if subject == "" {
 		return "Untitled email"

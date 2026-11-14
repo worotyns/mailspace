@@ -1,6 +1,6 @@
 {{ define "keys" }}
   <!doctype html>
-  <html lang="en">
+  <html lang="en" class="settings-document">
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -14,10 +14,9 @@
       <script type="module" src="/assets/crypto/ui.mjs"></script>
     </head>
     <body class="min-h-dvh bg-canvas" hx-history="false">
-      <header
-        class="flex flex-wrap items-center gap-3 border-b border-line bg-panel p-5"
-      >
-        <a href="/" class="font-semibold text-accent">mailspace.</a
+      <header class="settings-header">
+        <a href="/" class="brand-wordmark text-lg text-accent"
+          >{{ template "brand-wordmark" . }}</a
         ><span class="ml-auto min-w-0 max-w-[55%] truncate text-xs text-muted"
           >{{ .Email }}</span
         >{{ template "theme-picker" . }}
@@ -28,9 +27,9 @@
         data-session-expires="{{ .SessionExpires }}"
         hx-disable
         hx-history="false"
-        class="mx-auto max-w-4xl p-5 sm:p-10"
+        class="settings-main"
       >
-        {{ template "settings-navigation" . }}
+        {{ template "settings-navigation" "keys" }}
         <h1 class="mt-6 text-2xl font-semibold">Encryption &amp; signatures</h1>
         <p class="mt-3 text-sm leading-relaxed text-muted">
           To send encrypted mail: add your private key, add the recipient’s

@@ -29,7 +29,7 @@
         class="flex h-11 shrink-0 items-center gap-3 border-b border-line bg-panel px-4"
       >
         <a href="/" class="text-lg font-semibold tracking-tight text-accent"
-          >mailspace.</a
+          >{{ template "brand-wordmark" . }}</a
         >
         <div class="ml-auto flex items-center gap-3">
           <button
@@ -1414,24 +1414,30 @@
           ></div>
         </form>
       {{ else }}
-        <div
-          class="flex items-center gap-3 rounded-xl border border-line bg-canvas px-4 py-3"
-        >
-          <span class="text-xs text-muted"
-            >Reply to a message above, or start a new email in this Space.</span
-          >{{ if not .ThreadKey }}
-            <a
-              href="{{ .NewURL }}"
-              hx-get="{{ .NewURL }}"
-              class="ml-auto shrink-0 text-xs font-medium text-accent"
-              >{{ if .ThreadKey }}
-                Choose a message to reply
-              {{ else }}
-                Write something →
-              {{ end }}</a
-            >
-          {{ end }}
-        </div>
+        {{ if .ThreadKey }}
+          <a
+            href="{{ .ThreadReplyURL }}"
+            hx-get="{{ .ThreadReplyURL }}"
+            hx-target="#thread-content"
+            hx-swap="innerHTML"
+            hx-push-url="false"
+            class="flex min-h-11 items-center justify-between gap-3 rounded-xl border border-line bg-canvas px-4 py-3 text-xs hover:border-accent"
+          >
+            <span>Reply in this thread…</span
+            ><span class="shrink-0 text-accent">Write a reply →</span>
+          </a>
+        {{ else }}
+          <a
+            href="{{ .NewURL }}"
+            hx-get="{{ .NewURL }}"
+            class="flex min-h-11 items-center justify-between gap-3 rounded-xl border border-line bg-canvas px-4 py-3 text-xs hover:border-accent"
+          >
+            <span class="text-muted"
+              >Reply to a message above, or start a new email in this
+              Space.</span
+            ><span class="shrink-0 text-accent">Write something →</span>
+          </a>
+        {{ end }}
       {{ end }}
     </div>
   </footer>
@@ -1561,7 +1567,10 @@
 {{ end }}
 {{ define "collection-page" }}
   <!doctype html>
-  <html lang="en">
+  <html
+    lang="en"
+    {{ if eq .Item.Kind "label" }}class="settings-document"{{ end }}
+  >
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -1573,8 +1582,21 @@
       <link rel="stylesheet" href="/assets/app.css" />
     </head>
     <body class="min-h-dvh bg-canvas">
-      <main class="mx-auto max-w-xl p-6 sm:p-10">
-        <a href="/" class="text-xs text-accent">← Timeline</a>
+      {{ if eq .Item.Kind "label" }}
+        {{ template "settings-simple-header" . }}
+      {{ end }}
+      <main
+        class="{{ if eq .Item.Kind "label" }}
+          settings-main
+        {{ else }}
+          mx-auto max-w-xl p-6 sm:p-10
+        {{ end }}"
+      >
+        {{ if eq .Item.Kind "label" }}
+          {{ template "settings-navigation" "labels" }}
+        {{ else }}
+          <a href="/" class="text-xs text-accent">← Timeline</a>
+        {{ end }}
         <h1 class="mb-6 mt-6 text-2xl font-semibold">
           {{ .Title }} definition
         </h1>

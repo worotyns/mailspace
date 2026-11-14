@@ -1,6 +1,6 @@
 {{ define "rules-page" }}
   <!doctype html>
-  <html lang="en">
+  <html lang="en" class="settings-document">
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -12,9 +12,11 @@
       <script src="/assets/toasts.js" defer></script>
     </head>
     <body class="min-h-dvh bg-canvas text-ink">
-      <main class="mx-auto max-w-3xl space-y-6 p-5 sm:p-10">
-        {{ template "settings-navigation" . }}
-        <a href="/" class="text-sm text-accent">← Space timeline</a>
+      {{ template "settings-simple-header" . }}
+      <main class="settings-main space-y-6">
+        {{ template "settings-navigation" "rules" }}
+
+
         <h1 class="text-2xl font-semibold">Local rules</h1>
         <p class="text-sm text-muted">
           Combine sender, domain, subject or ordinary cached text conditions to

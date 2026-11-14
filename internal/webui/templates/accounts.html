@@ -1,6 +1,6 @@
 {{ define "account-settings" }}
   <!doctype html>
-  <html lang="en">
+  <html lang="en" class="settings-document">
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -13,18 +13,15 @@
       <link rel="stylesheet" href="/assets/app.css" />
     </head>
     <body class="min-h-dvh bg-canvas">
-      <header
-        class="flex items-center gap-4 border-b border-line bg-panel px-6 py-4"
-      >
-        <a href="/" class="text-lg font-semibold text-accent">mailspace.</a
+      <header class="settings-header">
+        <a href="/" class="brand-wordmark text-lg text-accent"
+          >{{ template "brand-wordmark" . }}</a
         ><span class="ml-auto min-w-0 max-w-[55%] truncate text-xs text-muted"
           >{{ .Email }}</span
         >{{ template "theme-picker" . }}
       </header>
-      <main class="mx-auto max-w-2xl p-6 sm:p-10">
-        <a href="/" class="text-xs font-medium text-accent"
-          >← Back to workspace</a
-        >
+      <main class="settings-main">
+        {{ template "settings-navigation" "accounts" }}
         <h1 class="mt-5 text-2xl font-semibold">
           {{ if .Form.ID }}
             Mail server settings

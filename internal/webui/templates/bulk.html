@@ -104,7 +104,7 @@
 {{ end }}
 {{ define "labels-page" }}
   <!doctype html>
-  <html lang="en">
+  <html lang="en" class="settings-document">
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -115,9 +115,10 @@
       <script src="/assets/toasts.js" defer></script>
       <link rel="stylesheet" href="/assets/app.css" />
     </head>
-    <body>
-      {{ template "settings-navigation" . }}
-      <main class="mx-auto max-w-2xl p-5">
+    <body class="min-h-dvh bg-canvas text-ink">
+      {{ template "settings-simple-header" . }}
+      <main class="settings-main">
+        {{ template "settings-navigation" "labels" }}
         <h1 class="text-xl font-semibold">Labels / statuses</h1>
         <p class="my-3 text-sm text-muted">
           Todo, done, complete or your own status labels. Independent of Spaces;

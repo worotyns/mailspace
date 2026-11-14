@@ -17,7 +17,8 @@
         class="w-full max-w-sm rounded-2xl border border-line bg-panel p-8 shadow-sm"
       >
         <div class="flex flex-wrap items-center justify-between gap-3">
-          <a href="/" class="text-xl font-semibold text-accent">mailspace.</a
+          <a href="/" class="brand-wordmark text-xl text-accent"
+            >{{ template "brand-wordmark" . }}</a
           >{{ template "theme-picker" . }}
         </div>
         <h1 class="mt-7 text-2xl font-semibold tracking-tight">
@@ -75,7 +76,7 @@
 {{ end }}
 {{ define "identity-home" }}
   <!doctype html>
-  <html lang="en">
+  <html lang="en" class="settings-document">
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -88,10 +89,9 @@
       <link rel="stylesheet" href="/assets/app.css" />
     </head>
     <body class="min-h-dvh bg-canvas">
-      <header
-        class="flex flex-wrap items-center gap-4 border-b border-line bg-panel px-6 py-4"
-      >
-        <a href="/" class="text-lg font-semibold text-accent">mailspace.</a
+      <header class="settings-header">
+        <a href="/" class="brand-wordmark text-lg text-accent"
+          >{{ template "brand-wordmark" . }}</a
         ><span class="ml-auto min-w-0 max-w-[55%] truncate text-xs text-muted"
           >{{ .Email }}</span
         >{{ template "theme-picker" . }}
@@ -103,35 +103,11 @@
           </button>
         </form>
       </header>
-      {{ template "settings-navigation" . }}
-      <main class="mx-auto max-w-3xl p-6 sm:p-12">
-        <p class="text-xs font-medium uppercase tracking-wider text-muted">
-          Personal workspace
-        </p>
-        <h1 class="mt-2 text-2xl font-semibold">Settings</h1>
-        <div class="settings-cards">
-          <a href="/keys"
-            ><strong>Encryption &amp; signatures</strong
-            ><span>My sending key and recipient keys</span></a
-          ><a href="/rules"
-            ><strong>Local rules</strong
-            ><span>Deterministic filters and Space assignment</span></a
-          ><a href="/labels"
-            ><strong>Labels / statuses</strong
-            ><span>Create and edit todo, done or your own labels</span></a
-          ><a href="/automation"
-            ><strong>Space automation</strong
-            ><span>Jev consent, saved decisions and bulk approval</span></a
-          ><a href="/workspaces"
-            ><strong>Context / organizations</strong
-            ><span>Choose context and manage membership</span></a
-          ><a href="/profile"
-            ><strong>Profile &amp; appearance</strong
-            ><span>Name, timezone and local theme</span></a
-          >
-        </div>
+      <main class="settings-main">
+        {{ template "settings-navigation" "accounts" }}
+        <h1 class="text-2xl font-semibold">Mail accounts</h1>
         <section class="mt-8 rounded-xl border border-line bg-panel p-6">
-          <h2 class="font-semibold">Mail accounts</h2>
+          <h2 class="font-semibold">Connected accounts</h2>
           {{ range .Accounts }}
             <div
               class="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3"

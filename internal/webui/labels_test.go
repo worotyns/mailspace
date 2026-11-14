@@ -8,6 +8,7 @@ import (
 
 	"mailspace.local/mailspace/internal/collections"
 	"mailspace.local/mailspace/internal/mail"
+	"mailspace.local/mailspace/internal/mailsync"
 	"mailspace.local/mailspace/internal/timeline"
 )
 
@@ -69,5 +70,37 @@ func TestSidebarLabelsStartUserDefinedQuickFilter(t *testing.T) {
 	data := TimelineData{AccountID: "account-one", Filter: "unsorted", SpaceID: "space-one", Person: "someone@example.test", Query: "stale", ThreadKey: "thread-one"}
 	if got := data.SidebarLabelLink("custom-status"); got != "/?account=account-one&label=custom-status" {
 		t.Fatalf("unexpected label link %s", got)
+	}
+}
+
+func TestThreadFooterOpensComposerForSelectedOriginal(t *testing.T) {
+	data := TimelineData{ThreadKey: "original-key", SpaceID: "project"}
+	want := "/?reply=original-key&space=project&thread=original-key#thread-composer"
+	if got := data.ThreadReplyURL(); got != want {
+		t.Fatalf("unexpected target %q", got)
+	}
+	request := httptest.NewRequest("GET", "/?thread=original-key", nil)
+	request.Header.Set("HX-Request", "true")
+	request.Header.Set("HX-Target", "thread-content")
+	response := httptest.NewRecorder()
+	if err := RenderTimeline(response, request, false, data); err != nil {
+		t.Fatal(err)
+	}
+	html := response.Body.String()
+	for _, expected := range []string{`Reply in this thread…`, `hx-target="#thread-content"`, `hx-swap="innerHTML"`, `reply=original-key`, `#thread-composer`} {
+		if !strings.Contains(html, expected) {
+			t.Fatalf("missing %s", expected)
+		}
+	}
+	if strings.Contains(html, "Reply to a message above") {
+		t.Fatal("thread still displays inert generic footer")
+	}
+}
+func TestLocalizedReplyPrefixIsOnlyAPresentationLabel(t *testing.T) {
+	for _, subject := range []string{"Siema", "Odp: Siema", "Re: Odp: Siema"} {
+		message := TimelineMessage{Record: timeline.Record{Preview: mailsync.Preview{Subject: subject}}}
+		if got := message.TopicLabel(); got != "Siema" {
+			t.Fatalf("label for %q: %q", subject, got)
+		}
 	}
 }

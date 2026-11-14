@@ -416,41 +416,59 @@
 .in-app-panel main {
   padding-block: 1rem;
 }
+.settings-document {
+  scrollbar-gutter: stable;
+}
+.settings-header {
+  @apply flex min-h-16 items-center gap-3 border-b border-line bg-panel px-5 py-3 sm:px-8;
+}
+.settings-header > a,
+.settings-header > form {
+  flex-shrink: 0;
+}
+.brand-wordmark {
+  white-space: nowrap;
+  font-weight: 400;
+}
+.settings-main {
+  @apply mx-auto w-full max-w-5xl px-5 py-6 sm:px-8 sm:py-8;
+  min-inline-size: 0;
+}
+.in-app-panel .settings-main {
+  padding-block: 1.5rem;
+}
+.settings-main > h1 {
+  @apply mt-6 text-2xl font-semibold;
+}
 .settings-navigation {
   display: flex;
-  flex-wrap: wrap;
   gap: 0.25rem;
-  max-width: 64rem;
-  margin: 1rem auto;
-  padding-inline: 1rem;
+  overflow-x: auto;
+  margin-block-end: 1.5rem;
+  padding: 0.25rem;
+  border-block-end: 1px solid var(--ms-line);
   font-size: 0.75rem;
 }
 .settings-navigation a {
-  padding: 0.5rem 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  min-block-size: 2.75rem;
+  padding-inline: 0.75rem;
   border-radius: 0.5rem;
+  color: var(--ms-body);
+  white-space: nowrap;
+}
+.settings-navigation .settings-back {
+  margin-inline-end: 0.5rem;
   color: var(--ms-accent);
 }
 .settings-navigation a:hover {
   background: var(--ms-hover);
 }
-.settings-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-  gap: 0.75rem;
-  margin-top: 1.5rem;
-}
-.settings-cards a {
-  display: grid;
-  gap: 0.4rem;
-  border: 1px solid var(--ms-line);
-  border-radius: 0.75rem;
-  background: var(--ms-panel);
-  padding: 1rem;
-  font-size: 0.8125rem;
-}
-.settings-cards span {
-  font-size: 0.75rem;
-  color: var(--ms-muted);
+.settings-navigation a:focus-visible {
+  outline: 2px solid var(--ms-accent);
+  outline-offset: -2px;
 }
 @media (max-width: 600px) {
   .app-panel-dialog {
@@ -482,6 +500,9 @@
 }
 
 .settings-navigation a[aria-current="page"] {
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 0.35em;
   background: var(--color-hover);
   color: var(--color-ink);
 }

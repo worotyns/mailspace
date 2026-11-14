@@ -1,6 +1,6 @@
 {{ define "automation-page" }}
   <!doctype html>
-  <html lang="en">
+  <html lang="en" class="settings-document">
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -12,8 +12,11 @@
       <link rel="stylesheet" href="/assets/app.css" />
     </head>
     <body class="min-h-dvh bg-canvas">
-      <main class="mx-auto max-w-3xl p-6 sm:p-10">
-        <a href="/" class="text-xs text-accent">← Space timeline</a>
+      {{ template "settings-simple-header" . }}
+      <main class="settings-main">
+        {{ template "settings-navigation" "automation" }}
+
+
         <h1 class="mt-6 text-2xl font-semibold">Space automation</h1>
         <p class="mt-2 text-sm text-muted">
           JEV validates model proposals against your current Spaces and manual

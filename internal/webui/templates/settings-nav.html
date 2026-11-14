@@ -1,8 +1,47 @@
+{{ define "brand-wordmark" }}
+  <strong class="font-bold">mail</strong><span class="font-normal">space</span>
+{{ end }}
+
+{{ define "settings-simple-header" }}
+  <header class="settings-header">
+    <a href="/" class="brand-wordmark text-lg text-accent"
+      >{{ template "brand-wordmark" . }}</a
+    >
+    <div class="ml-auto">{{ template "theme-picker" . }}</div>
+  </header>
+{{ end }}
+
 {{ define "settings-navigation" }}
   <nav aria-label="Settings sections" class="settings-navigation">
-    <a href="/settings">Accounts</a><a href="/keys">Keys</a
-    ><a href="/rules">Rules</a><a href="/labels">Labels / statuses</a
-    ><a href="/automation">Jev</a><a href="/profile">Profile</a
-    ><a href="/workspaces">Organizations</a>
+    <a href="/" class="settings-back" aria-label="Back to timeline"
+      >← Timeline</a
+    >
+    <a
+      href="/settings"
+      {{ if eq . "accounts" }}aria-current="page"{{ end }}
+      >Accounts</a
+    >
+    <a href="/keys" {{ if eq . "keys" }}aria-current="page"{{ end }}>Keys</a>
+    <a href="/rules" {{ if eq . "rules" }}aria-current="page"{{ end }}>Rules</a>
+    <a
+      href="/labels"
+      {{ if eq . "labels" }}aria-current="page"{{ end }}
+      >Labels</a
+    >
+    <a
+      href="/automation"
+      {{ if eq . "automation" }}aria-current="page"{{ end }}
+      >Jev</a
+    >
+    <a
+      href="/profile"
+      {{ if eq . "profile" }}aria-current="page"{{ end }}
+      >Profile</a
+    >
+    <a
+      href="/workspaces"
+      {{ if eq . "workspaces" }}aria-current="page"{{ end }}
+      >Organizations</a
+    >
   </nav>
 {{ end }}
