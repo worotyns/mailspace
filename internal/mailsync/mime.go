@@ -24,19 +24,22 @@ type Attachment struct {
 	Type string
 }
 
+const threadingVersion = 1
+
 type Preview struct {
-	Attachments []Attachment
-	ContentHash string
-	Subject     string
-	Sender      string
-	ReplyTo     string
-	To          []string
-	Name        string
-	MessageID   string
-	References  []string
-	Text        string
-	Encrypted   bool
-	Status      string
+	ThreadingVersion int
+	Attachments      []Attachment
+	ContentHash      string
+	Subject          string
+	Sender           string
+	ReplyTo          string
+	To               []string
+	Name             string
+	MessageID        string
+	References       []string
+	Text             string
+	Encrypted        bool
+	Status           string
 }
 
 func ids(value string) []string {
@@ -64,7 +67,7 @@ func text(value string, limit int) string {
 func Parse(raw []byte) Preview {
 	digest := sha256.Sum256(raw)
 	contentHash := hex.EncodeToString(digest[:])
-	result := Preview{ContentHash: contentHash, Subject: "(No subject)", Name: "Unknown sender", Status: "ready"}
+	result := Preview{ThreadingVersion: threadingVersion, ContentHash: contentHash, Subject: "(No subject)", Name: "Unknown sender", Status: "ready"}
 	root, err := message.ReadWithOptions(bytes.NewReader(raw), &message.ReadOptions{MaxHeaderBytes: 64 << 10})
 	if err != nil {
 		result.Status = "unsupported"
@@ -94,10 +97,7 @@ func Parse(raw []byte) Preview {
 	if values := ids(root.Header.Get("Message-ID")); len(values) == 1 {
 		result.MessageID = values[0]
 	}
-	result.References = ids(root.Header.Get("References"))
-	if len(result.References) == 0 {
-		result.References = ids(root.Header.Get("In-Reply-To"))
-	}
+	result.References = combinedReferences(root.Header.Get("References"), root.Header.Get("In-Reply-To"))
 	parts := 0
 	decoded := 0
 	var plain []string

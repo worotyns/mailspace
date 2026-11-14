@@ -298,18 +298,20 @@ func (s *Service) Messages(ctx context.Context, owner, id, folder string) ([]Cac
 	if err := s.authorized(ctx, owner, id); err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT mailbox,uid_validity,uid,flags,received_at,preview,CASE WHEN json_extract(preview,'$.ContentHash') IS NULL THEN raw ELSE NULL END FROM mail_messages JOIN mailboxes ON mailboxes.account_id=mail_messages.account_id AND name=mailbox WHERE mail_messages.account_id=? AND mailbox=? ORDER BY received_at,uid LIMIT 500`, id, folder)
+	rows, err := s.db.QueryContext(ctx, `SELECT m.mailbox,b.uid_validity,m.uid,m.flags,m.received_at,m.preview,CASE WHEN json_extract(m.preview,'$.ContentHash') IS NULL THEN m.raw ELSE NULL END,c.revision,CASE WHEN coalesce(json_extract(m.preview,'$.ThreadingVersion'),0)<1 AND json_extract(m.preview,'$.ContentHash') IS NOT NULL THEN `+threadingPrefixSQL+` ELSE NULL END FROM mail_messages m JOIN mailboxes b ON b.account_id=m.account_id AND b.name=m.mailbox JOIN mail_connections c ON c.account_id=m.account_id JOIN accounts a ON a.id=m.account_id WHERE m.account_id=? AND m.mailbox=? AND a.owner_id=? ORDER BY m.received_at,m.uid LIMIT 500`, id, folder, owner)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	result := []CachedMessage{}
+	repairs := []threadingRepair{}
 	for rows.Next() {
 		var m CachedMessage
 		var flags, p string
 		var at int64
-		var legacyRaw []byte
-		if err = rows.Scan(&m.Mailbox, &m.Validity, &m.UID, &flags, &at, &p, &legacyRaw); err != nil {
+		var legacyRaw, threadHeaders []byte
+		var revision int64
+		if err = rows.Scan(&m.Mailbox, &m.Validity, &m.UID, &flags, &at, &p, &legacyRaw, &revision, &threadHeaders); err != nil {
 			return nil, err
 		}
 		if json.Unmarshal([]byte(flags), &m.Flags) != nil || json.Unmarshal([]byte(p), &m.Preview) != nil {
@@ -318,11 +320,26 @@ func (s *Service) Messages(ctx context.Context, owner, id, folder string) ([]Cac
 		if legacyRaw != nil {
 			m.Preview = Parse(legacyRaw)
 		}
+		if len(threadHeaders) > 0 && m.Preview.ThreadingVersion < threadingVersion {
+			if repaired, encoded, ok := repairedPreview(m.Preview, threadHeaders); ok {
+				m.Preview = repaired
+				repairs = append(repairs, threadingRepair{uid: m.UID, validity: m.Validity, revision: revision, original: p, updated: encoded, prefix: threadHeaders})
+			}
+		}
 		m.AccountID = id
 		m.Received = time.Unix(at, 0)
 		result = append(result, m)
 	}
-	return result, rows.Err()
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	if err = rows.Close(); err != nil {
+		return nil, err
+	}
+	if err = s.repairThreading(ctx, owner, id, folder, repairs); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // Raw returns original provider bytes only after owner and generation checks.

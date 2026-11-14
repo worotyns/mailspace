@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 package timeline
 
+import "mailspace.local/mailspace/internal/mail"
+
 // Related links only unambiguous cached Message-ID references in the anchor's
 // current account/configuration. It never changes Space membership or sorts by
-// subject. Missing ancestors stay missing; identical subjects prove nothing.
+// subject. Shared uncached ancestor references can connect descendants, but no missing message or reply target is fabricated. Identical subjects prove nothing.
 func Related(records []Record, key string) ([]Record, error) {
 	anchor := -1
 	for i := range records {
@@ -22,43 +24,20 @@ func Related(records []Record, key string) ([]Record, error) {
 			scoped = append(scoped, record)
 		}
 	}
-	ids := map[string]int{}
-	parents := make([]int, len(scoped))
+
+	nodes := make([]mail.ThreadNode, len(scoped))
 	anchor = -1
 	for i, record := range scoped {
-		parents[i] = i
+		nodes[i] = mail.ThreadNode{MessageID: record.Preview.MessageID, References: record.Preview.References}
 		if record.Identity.Key == key {
 			anchor = i
 		}
-		if id := record.Preview.MessageID; id != "" {
-			if _, ok := ids[id]; ok {
-				ids[id] = -1
-			} else {
-				ids[id] = i
-			}
-		}
 	}
-	find := func(i int) int {
-		for parents[i] != i {
-			parents[i] = parents[parents[i]]
-			i = parents[i]
-		}
-		return i
-	}
-	for i, record := range scoped {
-		for _, reference := range record.Preview.References {
-			if j, ok := ids[reference]; ok && j >= 0 {
-				a, b := find(i), find(j)
-				if a != b {
-					parents[b] = a
-				}
-			}
-		}
-	}
-	root := find(anchor)
+	groups := mail.ReferenceGroups(nodes)
+	root := groups[anchor]
 	result := []Record{}
 	for i, record := range scoped {
-		if find(i) == root {
+		if groups[i] == root {
 			result = append(result, record)
 		}
 	}

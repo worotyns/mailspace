@@ -15,45 +15,20 @@ import (
 // Conversations links only unambiguous Message-ID references within one account
 // and folder. Subject similarity never joins threads; duplicate IDs stay separate.
 func Conversations(messages []CachedMessage) []mail.Conversation {
-	parent := make([]int, len(messages))
-	ids := map[string]int{}
+
+	nodes := make([]mail.ThreadNode, len(messages))
 	for i, m := range messages {
-		parent[i] = i
-		if m.Preview.MessageID != "" {
-			if _, ok := ids[m.Preview.MessageID]; ok {
-				ids[m.Preview.MessageID] = -1
-			} else {
-				ids[m.Preview.MessageID] = i
-			}
-		}
+		scope := fmt.Sprintf("%s\x00%s\x00%d", m.AccountID, m.Mailbox, m.Validity)
+		nodes[i] = mail.ThreadNode{Scope: scope, MessageID: m.Preview.MessageID, References: m.Preview.References}
 	}
-	var find func(int) int
-	find = func(i int) int {
-		for parent[i] != i {
-			parent[i] = parent[parent[i]]
-			i = parent[i]
-		}
-		return i
-	}
-	for i, m := range messages {
-		for _, ref := range m.Preview.References {
-			if j, ok := ids[ref]; ok && j >= 0 {
-				a, b := find(i), find(j)
-				if a != b {
-					if a > b {
-						a, b = b, a
-					}
-					parent[b] = a
-				}
-			}
-		}
-	}
+	parents := mail.ReferenceGroups(nodes)
 	groups := map[int][]int{}
 	for i := range messages {
-		root := find(i)
+		root := parents[i]
 		groups[root] = append(groups[root], i)
 	}
 	result := []mail.Conversation{}
+	dates := map[string]int64{}
 	for _, indices := range groups {
 		sort.Slice(indices, func(i, j int) bool {
 			a, b := messages[indices[i]], messages[indices[j]]
@@ -63,7 +38,7 @@ func Conversations(messages []CachedMessage) []mail.Conversation {
 			return a.Received.Before(b.Received)
 		})
 		first := messages[indices[0]]
-		identity := fmt.Sprintf("%s\x00%d\x00%d", first.Mailbox, first.Validity, first.UID)
+		identity := fmt.Sprintf("%s\x00%d\x00%d", first.AccountID+"\x00"+first.Mailbox, first.Validity, first.UID)
 		hash := sha256.Sum256([]byte(identity))
 		c := mail.Conversation{ID: hex.EncodeToString(hash[:16]), Subject: first.Preview.Subject, Channel: first.Mailbox, Folder: first.Mailbox}
 		for _, idx := range indices {
@@ -103,18 +78,10 @@ func Conversations(messages []CachedMessage) []mail.Conversation {
 				c.Unread = true
 			}
 		}
+		dates[c.ID] = messages[indices[len(indices)-1]].Received.Unix()
 		result = append(result, c)
 	}
-	// Use actual timestamps rather than the presentation string across years/months.
-	dates := map[string]int64{}
-	for _, c := range result {
-		for _, m := range messages {
-			if c.Messages[len(c.Messages)-1].ID == fmt.Sprint(m.Validity, "-", m.UID) {
-				dates[c.ID] = m.Received.Unix()
-				break
-			}
-		}
-	}
+	// Use actual timestamps rather than presentation strings across years/months.
 	sort.SliceStable(result, func(i, j int) bool {
 		if dates[result[i].ID] == dates[result[j].ID] {
 			return result[i].ID < result[j].ID

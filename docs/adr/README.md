@@ -58,3 +58,4 @@ Accepted oznacza decyzję projektową, nie gotową implementację. Zmiany przez 
 
 - [0032 — Memory-only browser crypto session](0032.md)
 - [0034 — Inert readable message presentation](0034.md)
+- [0035 — Scoped reference threading and bounded cached header repair](0035.md)
