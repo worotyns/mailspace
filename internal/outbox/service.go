@@ -98,6 +98,11 @@ func (s *Service) Queue(ctx context.Context, owner, account, nonce string, draft
 			return Record{}, err
 		}
 	}
+	return s.queueResolved(ctx, owner, account, nonce, draft, config, parent)
+}
+
+// queueResolved commits only while the original resolved reply source remains current.
+func (s *Service) queueResolved(ctx context.Context, owner, account, nonce string, draft Draft, config accounts.Config, parent *mailsync.Preview) (Record, error) {
 	raw, to, err := Build(config.Address, draft, parent)
 	if err != nil {
 		return Record{}, err
@@ -118,6 +123,9 @@ func (s *Service) Queue(ctx context.Context, owner, account, nonce string, draft
 		return Record{}, ErrNotFound
 	}
 	if revision != config.Revision {
+		return Record{}, ErrConflict
+	}
+	if !replySourceCurrent(ctx, tx, account, config.Revision, draft) {
 		return Record{}, ErrConflict
 	}
 	var existingID string
@@ -277,4 +285,17 @@ func (s *Service) copySent(ctx context.Context, owner, id, account string, revis
 	defer done()
 	_, err = s.db.ExecContext(durable, "UPDATE outbox SET copy_state=?,updated_at=? WHERE id=? AND copy_state='copying'", state, time.Now().Unix(), id)
 	return err
+}
+
+// replySourceCurrent runs in the same transaction as the durable send intent.
+// Account ownership and current connection revision are checked by its caller.
+func replySourceCurrent(ctx context.Context, tx *sql.Tx, account string, revision int64, draft Draft) bool {
+	var count int
+	if draft.ReplyOutgoing != "" {
+		return tx.QueryRowContext(ctx, `SELECT count(*) FROM outbox WHERE account_id=? AND id=? AND revision=?`, account, draft.ReplyOutgoing, revision).Scan(&count) == nil && count == 1
+	}
+	if draft.ReplyUID != 0 || draft.ReplyValidity != 0 || draft.ReplyFolder != "" {
+		return tx.QueryRowContext(ctx, `SELECT count(*) FROM mail_messages m JOIN mailboxes b ON b.account_id=m.account_id AND b.name=m.mailbox WHERE m.account_id=? AND m.mailbox=? AND m.uid=? AND b.uid_validity=?`, account, draft.ReplyFolder, draft.ReplyUID, draft.ReplyValidity).Scan(&count) == nil && count == 1
+	}
+	return true
 }
