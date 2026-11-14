@@ -1,9 +1,31 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { enhanceReadableMessages } from "./message-text.mjs";
 import "./recipient-picker.mjs";
 import "./app-panels.mjs";
 // Plain replies use HTMX. Encrypted mode has no serializable body field and
 // intercepts submission before HTMX; the crypto module uploads ciphertext only.
 let cleanup = () => {};
+let readerCleanup = () => {};
+let readerGeneration = 0;
+function initializeReader(shell) {
+  readerCleanup();
+  readerCleanup = () => {};
+  const generation = ++readerGeneration;
+  if (!shell.querySelector("[data-inline-encrypted]")) {
+    for (const control of document.querySelectorAll(
+      "[data-inline-reader-controls]",
+    ))
+      control.hidden = true;
+    return;
+  }
+  import("./inline-reader.mjs")
+    .then(({ InlineReader }) => {
+      if (generation !== readerGeneration || !shell.isConnected) return;
+      const reader = new InlineReader(shell);
+      readerCleanup = () => reader.dispose();
+    })
+    .catch(() => {});
+}
 const attachmentViewers = new Set();
 const attachmentRequests = new Set();
 let attachmentEpoch = 0;
@@ -26,6 +48,8 @@ function initialize() {
   cleanup = () => {};
   const shell = document.getElementById("timeline-shell");
   if (!shell) return;
+  enhanceReadableMessages(shell);
+  initializeReader(shell);
   const scope = shell.querySelector("#thread-drawer")?.open
     ? shell.querySelector("#thread-content")
     : shell;
@@ -86,7 +110,7 @@ function initialize() {
     "click",
     async () => {
       if (encrypted && !required) {
-        controller?.lock(false);
+        controller?.clearPrivate(false);
         encrypted = false;
         paint();
         return;
@@ -160,6 +184,9 @@ document.addEventListener("click", (event) => {
 });
 document.addEventListener("htmx:beforeSwap", (event) => {
   if (["timeline-shell", "thread-content"].includes(event.detail.target?.id)) {
+    readerGeneration++;
+    readerCleanup();
+    readerCleanup = () => {};
     cleanup();
     clearAttachments();
   } else if (event.detail.target?.id?.includes("membership-")) {
@@ -177,7 +204,11 @@ document.addEventListener("htmx:afterSwap", (event) => {
   if (["timeline-shell", "thread-content"].includes(event.detail.target?.id))
     initialize();
 });
-window.addEventListener("pagehide", () => cleanup());
+window.addEventListener("pagehide", () => {
+  cleanup();
+  readerGeneration++;
+  readerCleanup();
+});
 initialize();
 
 document.addEventListener("htmx:beforeRequest", () => {

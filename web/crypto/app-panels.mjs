@@ -2,18 +2,57 @@
 // Frames below contain trusted app pages only, never arbitrary URLs/mail HTML.
 const allowed =
   /^\/(settings|profile|workspaces|accounts|keys|rules|labels|automation|secure\/compose|messages\/read|outbox|archive\/preview)(\/|$)/;
+const recordedStates = new Set([
+  "pending",
+  "sending",
+  "accepted",
+  "rejected",
+  "unknown",
+]);
 let dialog,
+  confirmation,
   content,
   title,
   frame,
+  pendingAction,
   dirty = false,
   ending = false;
-function requestClose() {
-  if (dirty) {
-    dialog.querySelector("[data-unsaved]").hidden = false;
+function preventUnload(event) {
+  if (!dirty) return;
+  event.preventDefault();
+  event.returnValue = "";
+}
+function setDirty(value) {
+  dirty = value;
+  dialog?.setAttribute("closedby", dirty ? "none" : "closerequest");
+  if (dirty) window.addEventListener("beforeunload", preventUnload);
+  else window.removeEventListener("beforeunload", preventUnload);
+}
+function clearFrame() {
+  const previous = frame;
+  frame = null;
+  if (!previous) return;
+  try {
+    // This action has already passed the discard guard. Clear this document's
+    // private UI without relocking a shared worker used by another app page.
+    previous.contentWindow?.dispatchEvent(
+      new Event("mailspace:discard-composer"),
+    );
+    previous.contentWindow?.dispatchEvent(new Event("mailspace:clear-private"));
+  } catch {}
+  previous.src = "about:blank";
+  previous.remove();
+}
+function guard(action) {
+  if (!dirty) {
+    action();
     return;
   }
-  dialog.close();
+  pendingAction = action;
+  if (!confirmation.open) confirmation.showModal();
+}
+function requestClose() {
+  guard(() => dialog.close());
 }
 function setup() {
   if (dialog) return;
@@ -33,75 +72,93 @@ function setup() {
   header.append(title, close);
   content = document.createElement("div");
   content.className = "app-panel-content";
-  const warning = document.createElement("div");
-  warning.dataset.unsaved = "";
-  warning.hidden = true;
-  warning.className = "p-3 text-sm";
+  dialog.append(header, content);
+  confirmation = document.createElement("dialog");
+  confirmation.id = "app-panel-discard";
+  // These existing dialog utilities are also present in server templates.
+  confirmation.className =
+    "m-auto w-[94vw] max-w-md rounded-2xl border border-line bg-panel p-5 text-ink backdrop:bg-black/40";
+  confirmation.setAttribute("aria-labelledby", "app-discard-title");
+  confirmation.setAttribute("aria-describedby", "app-discard-message");
+  const heading = document.createElement("h2");
+  heading.id = "app-discard-title";
+  heading.className = "font-semibold";
+  heading.textContent = "Discard this unsent message?";
   const message = document.createElement("p");
+  message.id = "app-discard-message";
+  message.className = "mt-3 text-sm text-muted";
   message.textContent =
-    "There is unsent text in this composer. Keep editing or discard it before closing.";
+    "There are unsent changes to this message or its attachments. Keep editing, or discard them before leaving.";
+  const actions = document.createElement("div");
+  actions.className = "mt-4 flex justify-end gap-3";
   const keep = document.createElement("button");
   keep.textContent = "Keep editing";
   keep.type = "button";
-  keep.addEventListener("click", () => {
-    warning.hidden = true;
-    frame?.focus();
-  });
+  keep.autofocus = true;
+  keep.className = "rounded-lg border border-line px-3 py-2 text-sm";
+  keep.addEventListener("click", () => confirmation.close());
   const discard = document.createElement("button");
-  discard.textContent = "Discard unsent text and close";
+  discard.textContent = "Discard and continue";
   discard.type = "button";
+  discard.className = "rounded-lg bg-action px-3 py-2 text-sm text-white";
   discard.addEventListener("click", () => {
-    dirty = false;
-    dialog.close();
+    const action = pendingAction;
+    pendingAction = null;
+    setDirty(false);
+    confirmation.close();
+    action?.();
   });
-  warning.append(message, keep, discard);
-  dialog.append(header, warning, content);
-  document.body.append(dialog);
+  actions.append(keep, discard);
+  confirmation.append(heading, message, actions);
+  confirmation.addEventListener("close", () => {
+    pendingAction = null;
+    confirmation.returnValue = "";
+  });
+  document.body.append(dialog, confirmation);
   dialog.addEventListener("cancel", (event) => {
     if (dirty && event.cancelable) {
       event.preventDefault();
-      warning.hidden = false;
+      requestClose();
     }
   });
   dialog.addEventListener("close", () => {
-    try {
-      frame?.contentWindow?.dispatchEvent(new Event("mailspace:lock"));
-    } catch {}
-    if (frame) frame.src = "about:blank";
+    if (confirmation.open) confirmation.close();
+    pendingAction = null;
+    clearFrame();
     content.replaceChildren();
-    frame = null;
-    dirty = false;
+    setDirty(false);
     ending = false;
-    warning.hidden = true;
+    dialog.returnValue = "";
     window.dispatchEvent(new Event("mailspace:panel-closed"));
   });
 }
-function open(url) {
-  setup();
-  document.getElementById("command-menu")?.close();
-  if (frame && dirty) {
-    dialog.querySelector("[data-unsaved]").hidden = false;
-    return;
-  }
-  dirty = false;
-  content.replaceChildren();
-  frame = document.createElement("iframe");
-  frame.title = "Mailspace application panel";
-  frame.className = "app-panel-frame";
-  frame.src = url.href;
-  frame.referrerPolicy = "same-origin";
-  frame.addEventListener("load", () => {
+function replacePanel(url) {
+  clearFrame();
+  setDirty(false);
+  ending = false;
+  const openedFrame = document.createElement("iframe");
+  frame = openedFrame;
+  openedFrame.title = "Mailspace application panel";
+  openedFrame.className = "app-panel-frame";
+  openedFrame.src = url.href;
+  openedFrame.referrerPolicy = "same-origin";
+  openedFrame.addEventListener("load", () => {
+    if (frame !== openedFrame) return;
     try {
-      const current = new URL(frame.contentWindow.location.href);
+      const current = new URL(openedFrame.contentWindow.location.href);
       if (ending || current.pathname === "/login") {
+        setDirty(false);
+        clearFrame();
         location.assign("/login");
         return;
       }
       if (current.origin === location.origin && current.pathname === "/") {
         if (current.searchParams.has("notice")) {
           const notice =
-            frame.contentDocument.querySelector("[data-toast]")?.textContent;
-          dirty = false;
+            openedFrame.contentDocument.querySelector(
+              "[data-toast]",
+            )?.textContent;
+          setDirty(false);
           dialog.close();
           if (notice)
             window.dispatchEvent(
@@ -109,21 +166,40 @@ function open(url) {
                 detail: { message: notice },
               }),
             );
-        } else location.assign(current.href);
+        } else {
+          guard(() => {
+            clearFrame();
+            location.assign(current.href);
+          });
+        }
         return;
       }
-      title.textContent = frame.contentDocument.title.replace(
+      title.textContent = openedFrame.contentDocument.title.replace(
         / · Mailspace$/,
         "",
       );
-      dirty = false;
+      // Do not erase a dirty notification emitted before the frame's load event.
     } catch {
       title.textContent =
         "Open this page directly if your session has expired.";
     }
   });
-  content.append(frame);
+  content.append(openedFrame);
   if (!dialog.open) dialog.showModal();
+}
+function open(url) {
+  setup();
+  document.getElementById("command-menu")?.close();
+  guard(() => replacePanel(url));
+}
+function ownURL(value) {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value, location.href);
+    return url.origin === location.origin ? url : null;
+  } catch {
+    return null;
+  }
 }
 document.addEventListener(
   "click",
@@ -138,12 +214,14 @@ document.addEventListener(
       event.shiftKey ||
       event.altKey ||
       link.hasAttribute("download") ||
+      link.hasAttribute("data-inline-decrypt") ||
+      (link.target && link.target !== "_self") ||
       link.dataset.openDialog ||
       link.dataset.threadOpen
     )
       return;
-    const url = new URL(link.href, location.href);
-    if (url.origin !== location.origin || !allowed.test(url.pathname)) return;
+    const url = ownURL(link.href);
+    if (!url || !allowed.test(url.pathname)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     open(url);
@@ -165,27 +243,42 @@ window.addEventListener("message", (event) => {
     return;
   }
   if (data?.type === "mailspace:panel-sent") {
-    if (
-      typeof data.location !== "string" ||
-      !data.location.startsWith("/outbox?")
-    )
+    const url = ownURL(data.location);
+    if (!url || url.pathname !== "/outbox" || !recordedStates.has(data.state))
       return;
-    dirty = false;
+    setDirty(false);
+    if (confirmation.open) confirmation.close();
+    pendingAction = null;
     dialog.close();
     window.dispatchEvent(
       new CustomEvent("mailspace:sent", {
-        detail: { state: data.state, location: data.location },
+        detail: { state: data.state, location: url.pathname + url.search },
       }),
     );
+    return;
   }
-  if (data?.type === "mailspace:panel-dirty") dirty = data.dirty === true;
+  if (data?.type === "mailspace:panel-dirty" && typeof data.dirty === "boolean")
+    setDirty(data.dirty);
   if (data?.type === "mailspace:panel-navigate") {
-    const url = new URL(data.href, location.href);
-    if (url.origin === location.origin && url.pathname === "/")
-      location.assign(url.href);
+    const url = ownURL(data.href);
+    if (!url) return;
+    if (url.pathname === "/") {
+      guard(() => {
+        clearFrame();
+        location.assign(url.href);
+      });
+    } else if (allowed.test(url.pathname) || url.pathname === "/compose") {
+      guard(() => replacePanel(url));
+    }
   }
   if (data?.type === "mailspace:session-ending") {
     ending = true;
+    setDirty(false);
+    try {
+      frame.contentWindow.dispatchEvent(
+        new Event("mailspace:discard-composer"),
+      );
+    } catch {}
     window.dispatchEvent(new Event("mailspace:lock"));
   }
 });

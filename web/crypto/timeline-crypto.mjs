@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { LocalVault, VaultError } from "./vault.mjs";
-import { VaultStore } from "./store.mjs";
+import { VaultError } from "./vault.mjs";
+import { createSessionVault } from "./session-vault.mjs";
 import { composeEntity, encryptedEntity } from "./mime.mjs";
 import { addressParser } from "../vendor/postal-mime/postal-mime.js";
 export class InlineEncryption {
@@ -9,7 +9,7 @@ export class InlineEncryption {
       throw new Error("secure context required");
     this.shell = shell;
     this.form = form;
-    this.vault = new LocalVault(new VaultStore(shell.dataset.userId));
+    this.vault = createSessionVault(shell.dataset.userId);
     this.dialog = shell.querySelector("#inline-key-dialog");
     this.select = this.dialog.querySelector("select");
     this.pass = this.dialog.querySelector("input");
@@ -33,7 +33,7 @@ export class InlineEncryption {
     document.addEventListener(
       "visibilitychange",
       () => {
-        if (document.hidden) this.lock();
+        if (document.hidden) this.clearPrivate();
       },
       options,
     );
@@ -42,9 +42,17 @@ export class InlineEncryption {
         name,
         () => {
           this.activity = Date.now();
+          if (
+            this.activity - (this.lastTouch || 0) > 15000 &&
+            !this.vault.locked
+          ) {
+            this.lastTouch = this.activity;
+            void this.vault.touch?.().catch(() => {});
+          }
         },
         options,
       );
+    this.vault.addEventListener?.("lock", () => this.clearPrivate(), options);
     this.activity = Date.now();
     this.epoch = 0;
     this.timer = setInterval(() => {
@@ -75,6 +83,11 @@ export class InlineEncryption {
       option.textContent = `${key.identities.join(" · ")} · ${key.fingerprint}`;
       this.select.append(option);
     }
+    if (!snapshot.locked) {
+      this.status.textContent =
+        "Key session is unlocked locally. Ready to encrypt & sign.";
+      return;
+    }
     this.keyStatus.textContent = this.select.options.length
       ? "Unlock your key. Sending stays a separate action."
       : "No local private key. Generate or import one in Local keys, then verify recipient fingerprints.";
@@ -85,6 +98,8 @@ export class InlineEncryption {
   async unlock() {
     if (this.busy) return;
     this.busy = true;
+    const unlockButton = this.dialog.querySelector("#inline-key-unlock");
+    unlockButton.disabled = true;
     const epoch = this.epoch;
     try {
       this.check();
@@ -101,11 +116,16 @@ export class InlineEncryption {
     } finally {
       this.pass.value = "";
       this.busy = false;
+      unlockButton.disabled = !this.select.options.length;
     }
   }
   lock(clear = true) {
-    this.epoch++;
     this.vault.lock();
+    this.clearPrivate(clear);
+  }
+  clearPrivate(clear = true) {
+    this.epoch++;
+    if (this.vault.sessionMode === "page") this.vault.lock();
     this.request?.abort();
     this.pass.value = "";
     this.dialog.close();
@@ -114,14 +134,16 @@ export class InlineEncryption {
   async send() {
     if (this.busy || this.submitted) return;
     this.check();
-    if (this.vault.locked) {
-      await this.open();
-      return;
-    }
     this.busy = true;
     this.button.disabled = true;
     const epoch = this.epoch;
     try {
+      if (this.vault.locked) await this.vault.list();
+      if (epoch !== this.epoch) return;
+      if (this.vault.locked) {
+        await this.open();
+        return;
+      }
       const value = (name) => this.form.elements.namedItem(name)?.value || "";
       const to = value("to");
       if (to.length > 8192 || /[\r\n\0]/.test(to))
@@ -218,7 +240,7 @@ export class InlineEncryption {
   }
   dispose() {
     this.disposed = true;
-    this.lock();
+    this.clearPrivate();
     clearInterval(this.timer);
     this.events.abort();
     void this.vault.close();

@@ -307,7 +307,7 @@ func (c *timelineController) render(w http.ResponseWriter, r *http.Request, s id
 		http.Error(w, "UI assets unavailable", 503)
 		return
 	}
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self' "+hash+"; img-src blob:; connect-src 'self'; frame-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self' "+hash+"; img-src blob:; connect-src 'self'; worker-src 'self'; frame-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 	if err = webui.RenderTimeline(w, r, c.config.Dev, data); err != nil {
 		http.Error(w, "Unable to render timeline", 500)
 	}
@@ -667,7 +667,19 @@ func (c *timelineController) renderMembership(w http.ResponseWriter, r *http.Req
 			}
 		}
 	}
-	if r.Header.Get("HX-Request") == "true" {
+	if r.Header.Get("HX-Request") == "true" && r.Header.Get("HX-Target") == message.LabelsID() {
+		sidebarRequest := r.Clone(r.Context())
+		sidebarRequest.Method = http.MethodGet
+		sidebarRequest.URL, _ = url.Parse(message.ReturnURL)
+		sidebar, err := c.data(sidebarRequest, s)
+		if err != nil {
+			http.Error(w, "Labels unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		message.LabelsOpen = true
+		message.LabelsFocusID = r.PathValue("id")
+		webui.RenderMessageLabels(w, c.config.Dev, message, sidebar)
+	} else if r.Header.Get("HX-Request") == "true" {
 		webui.RenderMembership(w, c.config.Dev, message)
 	} else {
 		webui.RenderMembershipPage(w, c.config.Dev, message)

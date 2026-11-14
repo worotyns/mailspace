@@ -234,6 +234,31 @@ func TestReadOnlyMailboxEndToEndAndAuthorization(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	label, err := groups.Create(ctx, alice.ID, "label", "Todo", "", "blue")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assignLabel := func(cookie, csrf string) *httptest.ResponseRecorder {
+		values := url.Values{"csrf": {csrf}, "kind": {"label"}, "reference": {webui.EncodeSource(ref)}, "selected": {"1"}, "return_to": {"/?account=" + account.ID}}
+		req := httptest.NewRequest("POST", "/collections/"+label.ID+"/membership", strings.NewReader(values.Encode()))
+		req.Header.Set("Origin", "https://mail.example.test")
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("HX-Request", "true")
+		req.Header.Set("HX-Target", "labels-message-"+sourceIdentity.Key)
+		req.AddCookie(&http.Cookie{Name: "__Host-mailspace", Value: cookie})
+		res := httptest.NewRecorder()
+		handler.ServeHTTP(res, req)
+		return res
+	}
+	if res := assignLabel(other, otherSession.CSRF); res.Code != 404 {
+		t.Fatal("foreign header-label mutation accepted", res.Code)
+	}
+	if res := assignLabel(token, "wrong"); res.Code != 403 {
+		t.Fatal("header-label mutation accepted without CSRF", res.Code)
+	}
+	if res := assignLabel(token, session.CSRF); res.Code != 200 || !strings.Contains(res.Body.String(), `id="labels-message-`+sourceIdentity.Key+`"`) || !strings.Contains(res.Body.String(), `hx-swap-oob="outerHTML"`) || strings.Contains(res.Body.String(), "data-local-preview") {
+		t.Fatal("header-label response replaced private message content or omitted sidebar", res.Code, res.Body.String())
+	}
 	threadURL := "/?thread=" + sourceIdentity.Key + "&space=" + space.ID
 	if response = request("GET", threadURL, token, "", false); response.Code != 200 || !strings.Contains(response.Body.String(), "Original email thread") || !strings.Contains(response.Body.String(), "Show thread") {
 		t.Fatal("original thread unavailable", response.Code, response.Body.String())

@@ -85,3 +85,33 @@ test("standalone HTMX actions disable immediately and reject repeated clicks", a
     dom.window.close();
   }
 });
+
+test("busy label swap restores the same scoped control without stealing focus", async () => {
+  const dom = new JSDOM(
+    '<form><button id="label-message-custom">Toggle</button></form><input id="other">',
+    { runScripts: "outside-only" },
+  );
+  dom.window.eval(
+    await readFile(
+      new URL("../../internal/webui/assets/forms.js", import.meta.url),
+      "utf8",
+    ),
+  );
+  const { document, CustomEvent } = dom.window;
+  const form = document.querySelector("form");
+  document.querySelector("button").focus();
+  form.dispatchEvent(
+    new CustomEvent("htmx:beforeRequest", {
+      bubbles: true,
+      detail: { elt: form },
+    }),
+  );
+  form.outerHTML =
+    '<form><button id="label-message-custom">Updated</button></form>';
+  document.body.focus();
+  document.dispatchEvent(
+    new CustomEvent("htmx:afterRequest", { detail: { elt: form } }),
+  );
+  assert.equal(document.activeElement.id, "label-message-custom");
+  dom.window.close();
+});

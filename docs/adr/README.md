@@ -53,3 +53,8 @@ Accepted oznacza decyzję projektową, nie gotową implementację. Zmiany przez 
 - [0028 — Local detached signing foundation](0028.md)
 
 - [0029 — Spaces-only workflow, bounded dialogs and local archive](0029.md)
+
+- [0033 — Sidebar label filters and inline message statuses](0033.md)
+
+- [0032 — Memory-only browser crypto session](0032.md)
+- [0034 — Inert readable message presentation](0034.md)

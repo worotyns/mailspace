@@ -4,8 +4,8 @@ import { AttachmentViewer } from "./attachments.mjs";
 import { messageText, MailHTMLPreview } from "./mail-html.mjs";
 import { LocalDrafts } from "./drafts.mjs";
 import { extractSigned } from "./signed-mime.mjs";
-import { VaultStore } from "./store.mjs";
-import { LocalVault, VaultError } from "./vault.mjs";
+import { VaultError } from "./vault.mjs";
+import { createSessionVault } from "./session-vault.mjs";
 import {
   composeEntity,
   readAttachments,
@@ -33,6 +33,7 @@ let vault,
   epoch = 0,
   busy = false,
   lastActivity = Date.now(),
+  vaultLastTouch = 0,
   submitted = false,
   request;
 const attachmentViewer = reading
@@ -55,6 +56,7 @@ function draftButtons() {
 }
 function showRestoredFiles() {
   if (reading) return;
+  window.dispatchEvent?.(new Event("mailspace:compose-changed"));
   el("restored-attachments").textContent = restoredFiles.length
     ? "From draft: " + restoredFiles.map((file) => file.name).join(" · ")
     : "";
@@ -91,9 +93,13 @@ const notify = (text) => {
   status.textContent = text;
 };
 function lock() {
+  vault?.lock();
+  clearPrivate();
+}
+function clearPrivate() {
   selectionClassifier?.clear();
   epoch++;
-  vault?.lock();
+  if (vault?.sessionMode === "page") vault.lock();
   request?.abort();
   el("mail-passphrase").value = "";
   if (reading) {
@@ -170,6 +176,19 @@ const errors = {
 async function perform(operation) {
   if (busy || !available) return;
   busy = true;
+  const pendingButtons = [
+    "mail-unlock",
+    "mail-decrypt",
+    "secure-send",
+    "draft-save",
+    "draft-load",
+    "draft-delete",
+    "html-preview-open",
+  ]
+    .map(el)
+    .filter(Boolean)
+    .map((button) => [button, button.disabled]);
+  for (const [button] of pendingButtons) button.disabled = true;
   draftButtons();
   if (!reading) el("secure-compose-fields").disabled = true;
   const current = epoch;
@@ -184,7 +203,12 @@ async function perform(operation) {
       );
   } finally {
     busy = false;
+    for (const [button, disabled] of pendingButtons) button.disabled = disabled;
     draftButtons();
+    el("mail-unlock").disabled =
+      !el("mail-private-key").options.length ||
+      Date.now() >= Number(root.dataset.sessionExpires);
+    if (reading) el("mail-decrypt").disabled = !ordinary && vault?.locked;
     el("mail-passphrase").value = "";
     if (!reading)
       el("secure-compose-fields").disabled = vault?.locked || submitted;
@@ -212,8 +236,9 @@ try {
   if (!ordinary && (!isSecureContext || !crypto.subtle || !indexedDB))
     throw new Error("secure context required");
   session();
-  if (!ordinary) vault = new LocalVault(new VaultStore(root.dataset.userId));
-  const snapshot = ordinary ? { keys: [] } : await vault.list();
+  if (!ordinary) vault = createSessionVault(root.dataset.userId);
+  const snapshot = ordinary ? { keys: [], locked: true } : await vault.list();
+  vault?.addEventListener?.("lock", clearPrivate);
   const select = el("mail-private-key");
   for (const key of snapshot.keys.filter((key) => key.private)) {
     const option = document.createElement("option");
@@ -221,13 +246,16 @@ try {
     option.textContent = `${key.identities.join(" · ")} · ${key.fingerprint}`;
     select.append(option);
   }
+  if (snapshot.fingerprint) select.value = snapshot.fingerprint;
   el("mail-unlock").disabled = !select.options.length;
   notify(
     ordinary
       ? "Read as text; no local key is required. HTML preview is optional."
-      : select.options.length
-        ? "Local key vault is locked. Unlock a key to continue."
-        : "No private key in this browser. Open Local keys to generate or import one, export backups, and verify recipient fingerprints.",
+      : !snapshot.locked
+        ? "Key session is already unlocked locally."
+        : select.options.length
+          ? "Unlock a key for this browser session. It stays in memory for up to 5 minutes of inactivity."
+          : "No private key in this browser. Open Local keys to generate or import one, export backups, and verify recipient fingerprints.",
   );
   el("mail-unlock").addEventListener("click", () =>
     perform(async (current) => {
@@ -241,7 +269,7 @@ try {
   );
   el("mail-lock").addEventListener("click", lock);
   if (reading) {
-    el("mail-decrypt").disabled = !ordinary;
+    el("mail-decrypt").disabled = !ordinary && snapshot.locked;
     el("html-preview-open").addEventListener("click", () =>
       perform(async () => {
         if (currentHTML) htmlPreview.open(currentHTML);
@@ -252,6 +280,7 @@ try {
     );
   }
   if (!reading) {
+    el("secure-compose-fields").disabled = snapshot.locked || submitted;
     drafts = new LocalDrafts(root.dataset.userId);
     await draftList();
     draftButtons();
@@ -339,7 +368,7 @@ try {
         if (detached) {
           if (!isSecureContext || !crypto.subtle || !indexedDB)
             throw new VaultError("verification-unavailable");
-          vault ??= new LocalVault(new VaultStore(root.dataset.userId));
+          vault ??= createSessionVault(root.dataset.userId);
           const verified = await vault.verifyDetached(
             detached.data,
             detached.signature,
@@ -450,7 +479,12 @@ try {
         )
           throw new Error("invalid outcome");
         if (activeDraft) await drafts.remove(root.dataset.account, activeDraft);
-        lock();
+        clearPrivate();
+        window.dispatchEvent?.(
+          new CustomEvent("mailspace:compose-sent", {
+            detail: { state: result.state, location: result.location },
+          }),
+        );
         notify(
           result.state === "accepted"
             ? "Mail server accepted this message."
@@ -472,15 +506,31 @@ try {
       }),
     );
   window.addEventListener("mailspace:lock", lock);
-  window.addEventListener("pagehide", lock);
+  window.addEventListener("mailspace:clear-private", clearPrivate);
+  window.addEventListener("pagehide", () => {
+    clearPrivate();
+    void vault?.close();
+  });
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) lock();
+    if (document.hidden) clearPrivate();
+    else if (vault && !vault.locked) {
+      if (reading) el("mail-decrypt").disabled = false;
+      else el("secure-compose-fields").disabled = submitted;
+    }
   });
   for (const event of ["keydown", "pointerdown"])
     document.addEventListener(
       event,
       () => {
         lastActivity = Date.now();
+        if (
+          lastActivity - (vaultLastTouch || 0) > 15000 &&
+          vault &&
+          !vault.locked
+        ) {
+          vaultLastTouch = lastActivity;
+          void vault.touch?.().catch(() => {});
+        }
       },
       { passive: true },
     );

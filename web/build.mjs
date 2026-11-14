@@ -67,6 +67,7 @@ for (const pkg of [
   "idb",
   "postal-mime",
   "dompurify",
+  "marked",
 ]) {
   const files = await readdir(`node_modules/${pkg}`);
   const file = files.find((f) => /^licen[cs]e([.-]|$)/i.test(f));
@@ -114,3 +115,9 @@ for (const file of ["purify.es.mjs", "purify.es.mjs.map"])
   );
 
 await writeFile(`${out}/crypto/preview.css`, previewCSS);
+
+await mkdir(`${out}/vendor/marked`, { recursive: true });
+await writeFile(
+  `${out}/vendor/marked/marked.esm.js`,
+  await readFile("node_modules/marked/lib/marked.esm.js"),
+);

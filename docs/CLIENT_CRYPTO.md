@@ -31,3 +31,11 @@ See [ADR-0021](adr/0021.md) and [AUTOMATION.md](AUTOMATION.md). After local decr
 ## Detached signing foundation
 
 `LocalVault.signDetached` snapshots its input, revalidates the explicitly bound sender/signing key and rejects lock or binding changes. `signedEntity` preserves canonical seven-bit MIME bytes under multipart/signed with checked SHA-512 signatures. This is a local-only foundation (ADR-0028), not a signed-only sending feature. It grants no new decrypted-content export permission; plaintext submission and encrypted-parent downgrade remain unavailable through this helper.
+
+## Memory-only session and inline preview (ADR-0032)
+
+An available SharedWorker holds the unlocked key in memory across same-origin page views. It checks the authenticated session before and after private operations and locks after five minutes without real activity, session expiry or explicit Lock. No passphrase or unlocked key is persisted. Dedicated-worker and page-local fallbacks remain available; these may ask again after navigation. Browser worker lifetime is not guaranteed. Explicit Lock applies across connected views; closing or hiding a view clears its decrypted DOM and attachments without unnecessarily locking the shared session. This replaces the earlier controller-wide lock-on-every-navigation behavior.
+
+Encrypted timeline messages decrypt inline after explicit Preview locally. Optional autopreview is off by default and only scans visible encrypted messages with an already unlocked key. The preference is held in tab memory, resets on a full reload, and grants no classifier/export permission. Signing-only sending remains unavailable; the detached-signing helper is still a local foundation.
+
+Ordinary and decrypted text presentation follows ADR-0034: fixed DOM from bounded Markdown tokens, folded quotes, no generated HTML/resources/navigation. It does not change original MIME or signature bytes.

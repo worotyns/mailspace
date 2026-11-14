@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { VaultStore } from "./store.mjs";
 import { LocalVault, VaultError } from "./vault.mjs";
+import { createSessionVault } from "./session-vault.mjs";
 
 const root = document.getElementById("local-key-vault");
 const status = document.getElementById("vault-status");
 const controls = document.getElementById("vault-controls");
 const element = (id) => document.getElementById(id);
-let vault;
+let vault, sessionVault;
 let revocation = null;
 let busy = false;
 let uiEpoch = 0;
-let lastActivity = Date.now();
+let lastActivity = Date.now(),
+  sessionTouch = 0;
 const expiresAt = Number(root.dataset.sessionExpires);
 const messages = {
   "mixed-key-protection":
@@ -52,8 +54,16 @@ function clearSecrets() {
 function lock() {
   uiEpoch++;
   vault?.lock();
+  if (sessionVault?.sessionMode === "page") sessionVault.lock();
   clearSecrets();
   notify("Local vault locked.");
+}
+function lockSession() {
+  lock();
+  try {
+    sessionVault ??= createSessionVault(root.dataset.userId);
+    sessionVault.lock();
+  } catch {}
 }
 function checkSession() {
   if (!Number.isFinite(expiresAt) || Date.now() >= expiresAt) {
@@ -257,9 +267,10 @@ async function refresh() {
         "text-xs text-muted",
       ),
     );
-  element("vault-lock-state").textContent = snapshot.locked
-    ? "Locked"
-    : `Unlocked · ${snapshot.fingerprint}`;
+  const activeFingerprint = sessionVault?.fingerprint || snapshot.fingerprint;
+  element("vault-lock-state").textContent = activeFingerprint
+    ? `Unlocked in browser memory · ${activeFingerprint}`
+    : "Locked";
 }
 async function perform(action) {
   if (busy) return;
@@ -296,6 +307,19 @@ try {
   if (!window.isSecureContext || !crypto.subtle || !window.indexedDB)
     throw new Error("unsupported browser");
   vault = new LocalVault(new VaultStore(root.dataset.userId));
+  try {
+    sessionVault = createSessionVault(root.dataset.userId);
+    sessionVault.addEventListener?.("lock", () => {
+      lock();
+      void refresh().catch(() => {});
+    });
+    void sessionVault
+      .list()
+      .then(() => refresh())
+      .catch(() => {});
+  } catch {
+    /* Local encrypted import/export remains available without a worker. */
+  }
   await refresh();
   controls.disabled = false;
   notify("Local key vault ready. Keys stay protected in this browser.");
@@ -356,13 +380,20 @@ try {
   element("unlock-key").addEventListener("click", () =>
     perform(async () => {
       try {
-        await vault.unlock(
-          element("private-key").value,
-          element("unlock-passphrase").value,
-        );
+        const fingerprint = element("private-key").value,
+          passphrase = element("unlock-passphrase").value;
+        await vault.unlock(fingerprint, passphrase);
+        let shared = false;
+        try {
+          sessionVault ??= createSessionVault(root.dataset.userId);
+          await sessionVault.unlock(fingerprint, passphrase);
+          shared = sessionVault.shared;
+        } catch {}
         lastActivity = Date.now();
         notify(
-          "Key unlocked in memory. It locks on inactivity, leaving this page or hiding the tab.",
+          shared
+            ? "Key unlocked in shared browser memory for up to 5 minutes of inactivity. Mail preview and sending can reuse it while this session worker is alive. Lock and clear ends it explicitly."
+            : "Key unlocked on this page. A shared browser session is unavailable; another view may ask for the passphrase again.",
         );
       } finally {
         element("unlock-passphrase").value = "";
@@ -370,7 +401,7 @@ try {
     }),
   );
   element("lock-key").addEventListener("click", async () => {
-    lock();
+    lockSession();
     await refresh();
   });
   element("verify-key-close").addEventListener("click", () =>
@@ -398,10 +429,14 @@ try {
     }),
   );
   window.addEventListener("mailspace:lock", () => {
-    lock();
+    lockSession();
     refresh().catch(() => {});
   });
-  window.addEventListener("pagehide", lock);
+  window.addEventListener("mailspace:clear-private", lock);
+  window.addEventListener("pagehide", () => {
+    lock();
+    void sessionVault?.close();
+  });
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
       lock();
@@ -413,6 +448,14 @@ try {
       event,
       () => {
         lastActivity = Date.now();
+        if (
+          lastActivity - (sessionTouch || 0) > 15000 &&
+          sessionVault &&
+          !sessionVault.locked
+        ) {
+          sessionTouch = lastActivity;
+          void sessionVault.touch?.().catch(() => {});
+        }
       },
       { passive: true },
     );

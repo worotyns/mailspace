@@ -12,7 +12,9 @@
       ? [form]
       : [...form.querySelectorAll("button,input[type=submit]")];
     const buttons = controls.map((button) => [button, button.disabled]);
-    busy.set(form, buttons);
+    const active = document.activeElement;
+    const focusID = controls.includes(active) ? active.id : "";
+    busy.set(form, { buttons, focusID });
     form.setAttribute("aria-busy", "true");
     for (const [button] of buttons) {
       if (button.tagName === "A") button.setAttribute("aria-disabled", "true");
@@ -20,14 +22,22 @@
     }
   }
   function finish(form) {
-    const buttons = busy.get(form);
-    if (!buttons) return;
+    const state = busy.get(form);
+    if (!state) return;
+    const { buttons, focusID } = state;
     for (const [button, disabled] of buttons) {
       if (button.tagName === "A") button.removeAttribute("aria-disabled");
       else button.disabled = disabled;
     }
     form.removeAttribute("aria-busy");
     busy.delete(form);
+    // Disabling an active control can drop focus to body before an HTMX swap.
+    // Restore only the same scoped ID, without stealing focus from another UI.
+    if (focusID && document.activeElement === document.body) {
+      const replacement = document.getElementById(focusID);
+      if (replacement && !replacement.disabled)
+        replacement.focus({ preventScroll: true });
+    }
   }
   document.addEventListener("htmx:beforeRequest", (event) =>
     start(requestTarget(event)),

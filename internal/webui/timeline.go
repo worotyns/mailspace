@@ -45,9 +45,11 @@ type PersonView struct {
 	Count int
 }
 type TimelineMessage struct {
-	Classifier bool
-	Archived   bool
-	Decision   *DecisionView
+	Classifier    bool
+	LabelsOpen    bool
+	LabelsFocusID string
+	Archived      bool
+	Decision      *DecisionView
 	timeline.Record
 	Token       string
 	Day         string
@@ -235,6 +237,11 @@ func (d TimelineData) Link(key, value string) string {
 		}
 	}
 	return "/?" + q.Encode()
+}
+
+// SidebarLabelLink starts a quick label view while retaining the selected account.
+func (d TimelineData) SidebarLabelLink(id string) string {
+	return (TimelineData{AccountID: d.AccountID}).Link("label", id)
 }
 func (d TimelineData) CurrentURL() string { return d.Link("", "") }
 func (d TimelineData) NewURL() string {
@@ -615,4 +622,16 @@ func (d TimelineData) FilterRuleURL() string {
 
 func (m TimelineMessage) LabelsURL() string {
 	return "/labels/assign?" + url.Values{"scope": {"message"}, "reference": {m.Token}}.Encode()
+}
+
+// LabelsID scopes label updates to one message without replacing its decrypted body.
+func (m TimelineMessage) LabelsID() string { return "labels-" + m.DOMID() }
+
+type MessageLabelsData struct {
+	Message TimelineMessage
+	Sidebar TimelineData
+}
+
+func RenderMessageLabels(w http.ResponseWriter, dev bool, message TimelineMessage, sidebar TimelineData) error {
+	return renderTimelinePart(w, dev, "timeline-label-response", MessageLabelsData{Message: message, Sidebar: sidebar})
 }

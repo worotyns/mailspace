@@ -1,6 +1,6 @@
 {{ define "timeline-page" }}
   <!doctype html>
-  <html lang="en">
+  <html lang="en" class="h-full overflow-clip">
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -18,7 +18,7 @@
       <script src="/assets/htmx.min.js" defer></script>
       <script type="module" src="/assets/crypto/timeline-ui.mjs"></script>
     </head>
-    <body class="app-shell bg-canvas" hx-history="false">
+    <body class="app-shell fixed inset-0 bg-canvas" hx-history="false">
       <div hidden aria-hidden="true">{{ .Icons }}</div>
       <a
         href="#timeline-feed"
@@ -42,6 +42,16 @@
             {{ template "timeline-icon" "search" }}<kbd class="text-[10px]"
               >⌘K</kbd
             ></button
+          ><button
+            type="button"
+            data-inline-reader-controls
+            data-local-key-lock
+            hidden
+            class="icon-action"
+            title="Lock local keys and clear decrypted previews"
+            aria-label="Lock local keys"
+          >
+            {{ template "timeline-icon" "lock" }}</button
           ><a
             href="/settings"
             title="Settings"
@@ -163,6 +173,19 @@
             Create a Space for a project, your work or personal life.
           </p>
         {{ end }}
+      </nav>
+      <div class="mb-2 mt-7 flex items-center justify-between px-3">
+        <h2
+          class="text-[11px] font-semibold uppercase tracking-wider text-muted"
+        >
+          Labels
+        </h2>
+        <a href="/labels" aria-label="Manage labels" class="text-accent"
+          >{{ template "timeline-icon" "settings" }}</a
+        >
+      </div>
+      <nav id="sidebar-labels" aria-label="Labels" class="space-y-1">
+        {{ template "timeline-label-links" . }}
       </nav>
       <div class="mb-2 mt-7 flex items-center justify-between px-3">
         <h2
@@ -679,6 +702,31 @@
           class="block rounded-lg p-3 hover:bg-hover"
           >Settings</a
         >
+        <div
+          hidden
+          data-inline-reader-controls
+          data-command
+          class="rounded-lg border border-line p-3"
+        >
+          <label class="flex items-center gap-2 text-sm"
+            ><input type="checkbox" data-local-autopreview />Autopreview
+            encrypted mail in this tab</label
+          >
+          <p class="mt-2 text-xs text-muted">
+            Only visible messages, using an already unlocked local key. No AI,
+            indexing or plaintext upload. Off again after a full reload.
+          </p>
+          <p class="mt-2 text-xs text-muted" data-local-key-state role="status">
+            Local key locked
+          </p>
+          <button
+            type="button"
+            data-local-key-lock
+            class="mt-2 rounded-lg border border-line px-3 py-2 text-sm"
+          >
+            Lock local keys
+          </button>
+        </div>
         {{ if .Classifier }}
           <form
             action="/automation/recheck"
@@ -788,12 +836,12 @@
               {{ end }}
             </div>
             <div class="min-w-0 flex-1">
-              {{ if .StartsRun }}
-                <div
-                  class="mb-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-1 {{ if .Own }}
-                    justify-end
-                  {{ end }}"
-                >
+              <div
+                class="mb-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-1 {{ if .Own }}
+                  justify-end
+                {{ end }}"
+              >
+                {{ if .StartsRun }}
                   <a
                     title="{{ .Preview.Sender }}"
                     aria-label="{{ .Sender }} ({{ .Preview.Sender }})"
@@ -804,9 +852,11 @@
                   ><span class="text-[10px] text-muted"
                     >{{ .AccountName }}</span
                   >
-                </div>
-              {{ end }}
+                {{ end }}
+                {{ template "timeline-message-labels" . }}
+              </div>
               <div
+                {{ if not .Preview.Encrypted }}data-readable-message{{ end }}
                 class="rounded-2xl border px-4 py-3 text-[13px] leading-relaxed {{ if .Own }}
                   rounded-br-md border-accent/20 bg-accent/10 text-ink
                 {{ else }}
@@ -814,9 +864,18 @@
                 {{ end }} {{ if .Selected }}ring-2 ring-accent/40{{ end }}"
               >
                 {{ if .Preview.Encrypted }}
-                  <p class="flex items-center gap-2 text-accent">
-                    {{ template "timeline-icon" "lock" }}Encrypted message
-                  </p>
+                  <div data-inline-encrypted hx-disable>
+                    <p class="flex flex-wrap items-center gap-2 text-accent">
+                      {{ template "timeline-icon" "lock" }}Encrypted message
+                      <a
+                        href="{{ .ReadURL }}"
+                        data-inline-decrypt
+                        class="text-xs underline"
+                        >Preview locally</a
+                      >
+                    </p>
+                    <div data-local-preview hidden class="mt-3 text-body"></div>
+                  </div>
                 {{ else }}
                   {{ range .QuoteParts }}
                     {{ if .Quoted }}
@@ -827,12 +886,18 @@
                         >
                           <span aria-hidden="true">…</span>
                         </summary>
-                        <p class="whitespace-pre-wrap break-words">
+                        <p
+                          data-readable-part
+                          class="whitespace-pre-wrap break-words"
+                        >
                           {{- .Text -}}
                         </p>
                       </details>
                     {{ else }}
-                      <p class="whitespace-pre-wrap break-words">
+                      <p
+                        data-readable-part
+                        class="whitespace-pre-wrap break-words"
+                      >
                         {{- .Text -}}
                       </p>
                     {{ end }}
@@ -1020,19 +1085,6 @@
           {{ template "timeline-icon" "archive" }}
         </button>
       </form>
-      <a
-        href="{{ .LabelsURL }}"
-        class="icon-action"
-        title="Labels / statuses"
-        aria-label="Labels / statuses"
-        >{{ template "timeline-icon" "tag" }}</a
-      >{{ range .Memberships }}
-        {{ if eq .Kind "label" }}
-          <span class="space-chip {{ .Tone }}" title="Label: {{ .Name }}"
-            >{{ .Name }}</span
-          >
-        {{ end }}
-      {{ end }}
       <span class="h-4 shrink-0 border-l border-line" aria-hidden="true"></span>
       {{ $m:=. }}{{ range .Spaces }}
         <form
@@ -1466,8 +1518,115 @@
         >
         <h1 class="my-5 text-xl font-semibold">Organize this message</h1>
         <p class="mb-4 text-sm text-muted">{{ .Preview.Subject }}</p>
-        {{ template "timeline-membership" . }}
+        {{ template "timeline-message-labels" . }}{{ template "timeline-membership" . }}
       </main>
     </body>
   </html>
+{{ end }}
+
+{{ define "timeline-label-links" }}
+  {{ range .Labels }}
+    <a
+      href="{{ $.SidebarLabelLink .ID }}"
+      hx-get="{{ $.SidebarLabelLink .ID }}"
+      class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-hover {{ if .Active }}
+        bg-canvas font-semibold
+      {{ end }}"
+      {{ if .Active }}aria-current="page"{{ end }}
+    >
+      <span
+        class="flex size-6 shrink-0 items-center justify-center rounded-md {{ .Tone }}"
+        >{{ template "timeline-icon" "tag" }}</span
+      >
+      <span class="truncate">{{ .Name }}</span
+      ><span class="ml-auto text-[10px] text-muted">{{ .Count }}</span>
+    </a>
+  {{ else }}
+    <p class="px-3 text-xs text-muted">Create your own labels in Settings.</p>
+  {{ end }}
+{{ end }}
+
+{{ define "timeline-message-labels" }}
+  <details
+    id="{{ .LabelsID }}"
+    class="min-w-0 max-w-full text-[10px]"
+    {{ if .LabelsOpen }}open{{ end }}
+  >
+    <summary
+      class="flex min-h-6 cursor-pointer list-none flex-wrap items-center gap-1 rounded-md text-muted"
+      title="Edit message labels"
+    >
+      {{ template "timeline-icon" "tag" }}<span class="sr-only"
+        >Edit message labels</span
+      >
+      {{ range .Memberships }}
+        {{ if eq .Kind "label" }}
+          <span class="space-chip {{ .Tone }}">{{ .Name }}</span>
+        {{ end }}
+      {{ end }}
+      <span aria-hidden="true">+</span>
+    </summary>
+    <div
+      class="mt-1 flex max-w-sm flex-wrap gap-1 rounded-lg border border-line bg-panel p-2"
+      aria-label="Message labels"
+    >
+      {{ $m := . }}{{ range .Labels }}
+        <form
+          action="/collections/{{ .ID }}/membership"
+          method="post"
+          hx-post="/collections/{{ .ID }}/membership"
+          hx-target="#{{ $m.LabelsID }}"
+          hx-swap="outerHTML"
+          hx-push-url="false"
+        >
+          <input type="hidden" name="csrf" value="{{ $m.CSRF }}" /><input
+            type="hidden"
+            name="reference"
+            value="{{ $m.Token }}"
+          /><input
+            type="hidden"
+            name="return_to"
+            value="{{ $m.ReturnURL }}"
+          /><input type="hidden" name="kind" value="label" /><input
+            type="hidden"
+            name="selected"
+            value="{{ $m.NextSelection .ID }}"
+          />
+          <button
+            id="{{ $m.LabelsID }}-{{ .ID }}"
+            {{ if eq $m.LabelsFocusID .ID }}autofocus{{ end }}
+            class="min-h-11 rounded-md border border-line px-3 text-xs {{ if $m.Has .ID }}
+              {{ .Tone }}
+            {{ else }}
+              text-muted hover:bg-hover
+            {{ end }}"
+            aria-pressed="{{ $m.Has .ID }}"
+          >
+            {{ if $m.Has .ID }}
+              ✓
+            {{ else }}
+              +
+            {{ end }}{{ .Name }}
+          </button>
+        </form>
+      {{ end }}
+      <a
+        href="/labels"
+        class="flex min-h-11 items-center px-2 text-xs text-accent"
+        >Manage labels</a
+      >
+    </div>
+  </details>
+{{ end }}
+
+{{ define "timeline-label-response" }}
+  {{ template "timeline-message-labels" .Message }}
+  <nav
+    id="sidebar-labels"
+    aria-label="Labels"
+    class="space-y-1"
+    hx-swap-oob="outerHTML"
+  >
+    {{ template "timeline-label-links" .Sidebar }}
+  </nav>
 {{ end }}

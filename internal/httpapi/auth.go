@@ -150,6 +150,8 @@ func NewPersonal(sourceDir string, store *identity.Store, config AuthConfig) (ht
 		return true
 	}
 
+	cryptoSessionRoutes(mux, config, cookieName, protected)
+
 	connectionLimiter := &loginLimiter{entries: map[string]windowEntry{}}
 	connectionSlots := make(chan struct{}, 4)
 	withConnectionBudget := func(w http.ResponseWriter, r *http.Request, userID string) bool {
@@ -593,7 +595,7 @@ func NewPersonal(sourceDir string, store *identity.Store, config AuthConfig) (ht
 	hasTimeline := timelineRoutes(mux, config, store, protected, mutation, withConnectionBudget, func() { <-connectionSlots })
 	cryptoRoutes(mux, config, store, protected, mutation, withConnectionBudget, func() { <-connectionSlots })
 	mux.HandleFunc("GET /keys", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
-		w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; worker-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
 		render(w, "keys", webui.AuthPageData{Email: s.User.Email, UserID: s.User.ID, ProfileName: s.User.Name, SessionExpires: s.ExpiresAt.UnixMilli()})
 	}))
 

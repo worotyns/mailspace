@@ -48,3 +48,12 @@ Completed slices: container palette inclusion/build guard; specific Jev failure 
 Still required before claiming the requested full UX/1.0 scope: AND/OR rule expressions and shared filter semantics; memory-only worker vault with explicit lifecycle; inline decrypt and opt-in local autopreview; signed-only sending; broader provider/browser compatibility and deployment acceptance.
 
 Local AND/OR filters and rule drafts now share a bounded evaluator (ADR-0031/schema 12); remaining crypto work includes the memory-only worker, inline decrypt/autopreview and signed-only send.
+
+Labels now provide sidebar quick filters and message-header badges with an inline multi-label chooser (ADR-0033). Membership updates replace only label metadata, preserving inline decrypted previews and composer state.
+
+### Current interaction polish
+
+- Labels are user-defined private metadata: sidebar quick filters and per-message header toggles (ADR-0033). No built-in Todo/Done statuses or implicit exclusivity.
+- Memory-only worker sessions and inline local decryption, with explicit lock and optional per-tab autopreview (ADR-0032).
+- Bounded inert Markdown presentation and compact paragraph spacing; original MIME stays unchanged (ADR-0034).
+- Signing-only sending and full release acceptance remain outstanding; these changes do not declare 1.0 complete.
