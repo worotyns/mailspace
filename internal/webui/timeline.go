@@ -168,6 +168,7 @@ func DecisionSummary(run decision.Run, spaces []collections.Item) *DecisionView 
 }
 
 type TimelineData struct {
+	ViewsOpen           bool
 	FromDate, UntilDate string
 
 	Archived                  map[string]bool
@@ -241,8 +242,14 @@ func (d TimelineData) Link(key, value string) string {
 
 // SidebarLabelLink starts a quick label view while retaining the selected account.
 func (d TimelineData) SidebarLabelLink(id string) string {
-	return (TimelineData{AccountID: d.AccountID}).Link("label", id)
+	return d.ViewLink("label", id)
 }
+
+// ViewLink changes the primary view without retaining unrelated filters.
+func (d TimelineData) ViewLink(key, value string) string {
+	return (TimelineData{AccountID: d.AccountID}).Link(key, value)
+}
+func (d TimelineData) ViewsURL() string   { return "/views" + strings.TrimPrefix(d.CurrentURL(), "/") }
 func (d TimelineData) CurrentURL() string { return d.Link("", "") }
 func (d TimelineData) NewURL() string {
 	d.ThreadKey = ""

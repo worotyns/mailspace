@@ -261,6 +261,7 @@ func (c *timelineController) data(r *http.Request, s identity.Session) (webui.Ti
 			return data, timeline.ErrNotFound
 		}
 	}
+	data.ViewsOpen = r.URL.Path == "/views"
 	switch q.Get("notice") {
 	case "bulk-archived":
 		data.Notice = "Cached selection archived in Mailspace. Restore is available in Archived."
@@ -320,6 +321,7 @@ func timelineRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 	c := &timelineController{config: config, store: store, sources: source, collections: collections.New(store.Database(), source)}
 	c.bulkRoutes(mux, protected, mutation)
 	mux.HandleFunc("GET /{$}", protected(c.render))
+	mux.HandleFunc("GET /views", protected(c.render))
 	mux.HandleFunc("GET /people/suggestions", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
 		query := strings.TrimSpace(r.URL.Query().Get("q"))
 		if len(query) < 2 || len(query) > 254 {

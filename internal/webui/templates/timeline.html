@@ -229,7 +229,17 @@
           class="min-w-0 max-w-[14rem] truncate text-sm font-semibold"
           title="{{ .Description }}"
         >
-          {{ .Title }}
+          <span class="hidden md:inline">{{ .Title }}</span>
+          <a
+            href="{{ .ViewsURL }}"
+            data-open-dialog="view-switcher"
+            aria-haspopup="dialog"
+            aria-controls="view-switcher"
+            class="flex min-h-11 min-w-0 items-center gap-1 md:hidden"
+            aria-label="Change view: {{ .Title }}"
+            ><span class="truncate">{{ .Title }}</span
+            >{{ template "timeline-icon" "chevron-down" }}</a
+          >
         </h1>
         <form
           action="/"
@@ -338,6 +348,83 @@
         >
       </header>
       {{ if .Notice }}<p data-toast hidden>{{ .Notice }}</p>{{ end }}
+      <dialog
+        id="view-switcher"
+        {{ if .ViewsOpen }}open{{ end }}
+        aria-labelledby="view-switcher-title"
+        class="m-auto max-h-[80dvh] w-[94vw] max-w-md overflow-y-auto rounded-2xl border border-line bg-panel p-4 text-ink shadow-xl backdrop:bg-black/40"
+      >
+        <header class="mb-3 flex items-center justify-between gap-3">
+          <h2 id="view-switcher-title" class="font-semibold">Change view</h2>
+          <form method="dialog">
+            <button
+              type="submit"
+              aria-label="Close view switcher"
+              class="flex size-11 items-center justify-center rounded-lg hover:bg-hover"
+            >
+              {{ template "timeline-icon" "x" }}
+            </button>
+          </form>
+        </header>
+        <nav aria-label="Choose timeline view" class="space-y-4">
+          <section aria-label="Activity" class="grid grid-cols-2 gap-1">
+            <a
+              href="{{ .ViewLink "filter" "all" }}"
+              hx-get="{{ .ViewLink "filter" "all" }}"
+              class="flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm hover:bg-hover"
+              >{{ template "timeline-icon" "messages" }}All activity</a
+            >
+            <a
+              href="{{ .ViewLink "filter" "unsorted" }}"
+              hx-get="{{ .ViewLink "filter" "unsorted" }}"
+              class="flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm hover:bg-hover"
+              >Unsorted
+              <span class="ml-auto text-xs text-muted">{{ .Unsorted }}</span></a
+            >
+            <a
+              href="{{ .ViewLink "filter" "unread" }}"
+              hx-get="{{ .ViewLink "filter" "unread" }}"
+              class="flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm hover:bg-hover"
+              >Unread
+              <span class="ml-auto text-xs text-muted">{{ .Unread }}</span></a
+            >
+            <a
+              href="{{ .ViewLink "filter" "archived" }}"
+              hx-get="{{ .ViewLink "filter" "archived" }}"
+              class="flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm hover:bg-hover"
+              >{{ template "timeline-icon" "archive" }}Archived</a
+            >
+          </section>
+          <section aria-label="Spaces">
+            <h3 class="mb-1 px-3 text-xs font-semibold text-muted">Spaces</h3>
+            {{ range .Spaces }}
+              <a
+                href="{{ $.ViewLink "space" .ID }}"
+                hx-get="{{ $.ViewLink "space" .ID }}"
+                {{ if .Active }}aria-current="page"{{ end }}
+                class="flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm hover:bg-hover"
+                ><span
+                  class="flex size-6 items-center justify-center rounded-md {{ .Tone }}"
+                  >#</span
+                ><span class="truncate">{{ .Name }}</span
+                ><span class="ml-auto text-xs text-muted">{{ .Count }}</span></a
+              >
+            {{ else }}
+              <p class="px-3 text-sm text-muted">No Spaces yet.</p>
+            {{ end }}
+          </section>
+          <section aria-label="Labels">
+            <h3 class="mb-1 px-3 text-xs font-semibold text-muted">Labels</h3>
+            {{ template "timeline-label-links" . }}
+          </section>
+          <a
+            href="/people"
+            data-open-dialog="people-directory"
+            class="flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm hover:bg-hover"
+            >{{ template "timeline-icon" "users" }}People directory</a
+          >
+        </nav>
+      </dialog>
       <dialog
         id="label-filter"
         aria-labelledby="label-filter-title"

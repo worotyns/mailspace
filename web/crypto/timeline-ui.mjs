@@ -176,6 +176,8 @@ document.addEventListener("click", (event) => {
     if (dialog?.showModal) {
       event.preventDefault();
       if (dialog.id === "command-menu") prepareContextCommands();
+      if (dialog.id !== "view-switcher")
+        document.getElementById("view-switcher")?.close();
       dialog.showModal();
     }
   }

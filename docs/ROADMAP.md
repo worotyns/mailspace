@@ -57,3 +57,5 @@ Labels now provide sidebar quick filters and message-header badges with an inlin
 - Memory-only worker sessions and inline local decryption, with explicit lock and optional per-tab autopreview (ADR-0032).
 - Bounded inert Markdown presentation and compact paragraph spacing; original MIME stays unchanged (ADR-0034).
 - Signing-only sending and full release acceptance remain outstanding; these changes do not declare 1.0 complete.
+
+- Mobile: tap the current view title to switch Spaces, user-defined labels or activity filters; native dialog and authenticated full-page fallback under `/views`.
