@@ -63,3 +63,34 @@ func TestRuleDraftRoundTripsExactSearchMeaning(t *testing.T) {
 		}
 	}
 }
+
+func TestMaximumDepthSearchRoundTripsWithoutExtraRootGroup(t *testing.T) {
+	query := `subject:a OR (subject:b AND (subject:c OR (subject:d AND (subject:e OR subject:f))))`
+	expr, err := Compile(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft, err := Compile(expr.String())
+	if err != nil {
+		t.Fatal("valid search became an invalid draft", expr.String(), err)
+	}
+	for _, subject := range []string{"a", "b c", "b d e", "b d f", "unrelated"} {
+		message := Message{Subject: subject}
+		if expr.Match(message) != draft.Match(message) {
+			t.Fatal("draft changed grouping", subject)
+		}
+	}
+}
+func TestLongTextConditionIsBoundedByWholeExpression(t *testing.T) {
+	phrase := strings.Repeat("x", 500)
+	expr, err := Compile(`subject:"` + phrase + `"`)
+	if err != nil {
+		t.Fatal("valid bounded condition rejected", err)
+	}
+	if !expr.Match(Message{Subject: phrase}) {
+		t.Fatal("long phrase did not match")
+	}
+	if _, err := Compile(`subject:"` + strings.Repeat("x", 2048) + `"`); err == nil {
+		t.Fatal("overall query limit bypassed")
+	}
+}

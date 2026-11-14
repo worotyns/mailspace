@@ -75,19 +75,30 @@ func ruleRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store, pr
 		}
 
 		if data.Edit == nil && (r.URL.Query().Get("from_filter") != "" || r.URL.Query().Get("query_filter") != "") {
-			parts := []string{}
-			if person := r.URL.Query().Get("from_filter"); person != "" {
-				parts = append(parts, "(from:"+strconv.Quote(person)+" OR to:"+strconv.Quote(person)+")")
-			}
-			if query := r.URL.Query().Get("query_filter"); query != "" {
-				expr, err := mailfilter.Compile(query)
+			query := r.URL.Query().Get("query_filter")
+			expression := query
+			var parsed *mailfilter.Expr
+			if query != "" {
+				var err error
+				parsed, err = mailfilter.Compile(query)
 				if err != nil {
 					http.Error(w, mailfilter.ErrQuery.Error(), 400)
 					return
 				}
-				parts = append(parts, expr.String())
 			}
-			draft := rules.Rule{Kind: "subject", Expression: strings.Join(parts, " AND ")}
+			if person := r.URL.Query().Get("from_filter"); person != "" {
+				expression = "from:" + strconv.Quote(person) + " OR to:" + strconv.Quote(person)
+				if parsed != nil {
+					expression = "(" + expression + ") AND (" + parsed.String() + ")"
+				}
+				if _, err := mailfilter.Compile(expression); err != nil {
+					http.Error(w, "The combined person/search filter exceeds the supported expression limits. Shorten the search or reduce groups/conditions before creating this rule.", 400)
+					return
+				}
+			}
+			// Without a person scope, retain the validated original search exactly;
+			// canonical quoting can expand an otherwise valid 2 KiB expression.
+			draft := rules.Rule{Kind: "subject", Expression: expression}
 			if id := r.URL.Query().Get("space"); id != "" {
 				if space, err := groups.Get(r.Context(), s.User.ID, "space", id); err == nil {
 					draft.SpaceID = space.ID

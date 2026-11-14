@@ -186,7 +186,7 @@ func (p *parser) atom(depth int) (*Expr, error) {
 	} else if !known(field) {
 		return nil, ErrQuery
 	}
-	if value == "" || len(value) > 254 {
+	if value == "" || len(value) > 2048 {
 		return nil, ErrQuery
 	}
 	return &Expr{field: field, value: strings.ToLower(value)}, nil
@@ -242,17 +242,28 @@ func (e *Expr) Match(m Message) bool {
 	return false
 }
 
-// String returns a bounded-expression representation for the rule draft only.
-func (e *Expr) String() string {
+// String preserves operator precedence while avoiding redundant parentheses.
+// The root is not wrapped: a valid depth-four query must remain valid when
+// represented as a rule draft, rather than acquiring a fifth outer group.
+func (e *Expr) String() string { return e.format(0) }
+func (e *Expr) format(parent int) string {
 	if e == nil {
 		return ""
 	}
-	if e.op != "" {
-		parts := []string{}
-		for _, child := range e.children {
-			parts = append(parts, child.String())
-		}
-		return "(" + strings.Join(parts, " "+strings.ToUpper(e.op)+" ") + ")"
+	if e.op == "" {
+		return e.field + ":\"" + strings.NewReplacer("\\", "\\\\", "\"", "\\\"").Replace(e.value) + "\""
 	}
-	return e.field + ":\"" + strings.NewReplacer("\\", "\\\\", "\"", "\\\"").Replace(e.value) + "\""
+	precedence := 1
+	if e.op == "and" {
+		precedence = 2
+	}
+	parts := make([]string, 0, len(e.children))
+	for _, child := range e.children {
+		parts = append(parts, child.format(precedence))
+	}
+	result := strings.Join(parts, " "+strings.ToUpper(e.op)+" ")
+	if precedence < parent {
+		return "(" + result + ")"
+	}
+	return result
 }
