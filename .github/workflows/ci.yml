@@ -23,6 +23,8 @@ jobs:
       - run: go test -race ./...
       - run: docker compose config --quiet
       - run: docker compose build
+      - name: Read-only runtime and restart smoke
+        run: scripts/check-runtime.sh
       - name: Validate optional backup overlay
         run: docker compose -f compose.yaml -f compose.backup.yaml config --quiet
         env:
