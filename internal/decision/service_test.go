@@ -439,3 +439,63 @@ func TestSavedModeBatchSkipsManualUnassignedWithoutProviderCall(t *testing.T) {
 		t.Fatal("manual veto blocked batch or exported mail", n, err, f.provider.calls)
 	}
 }
+
+type changingSource struct {
+	Sources
+	after func()
+}
+
+func (s changingSource) Resolve(ctx context.Context, owner string, ref mail.SourceRef) (timeline.Resolved, error) {
+	result, err := s.Sources.Resolve(ctx, owner, ref)
+	if err == nil {
+		s.after()
+	}
+	return result, err
+}
+func TestStoredDecisionRejectsPhysicalSourceChangeBeforeTransaction(t *testing.T) {
+	for _, action := range []string{"apply", "replay"} {
+		for _, change := range []string{"namespace", "removed"} {
+			t.Run(action+"/"+change, func(t *testing.T) {
+				f := setup(t)
+				ctx := context.Background()
+				if err := f.engine.Save(ctx, f.owner, "review", "metadata"); err != nil {
+					t.Fatal(err)
+				}
+				run, err := f.engine.Evaluate(ctx, f.owner, f.ref, true)
+				if err != nil {
+					t.Fatal(err)
+				}
+				f.engine.sources = changingSource{Sources: f.engine.sources, after: func() {
+					var err error
+					if change == "namespace" {
+						_, err = f.db.Database().Exec("UPDATE mailboxes SET uid_validity=8 WHERE account_id=?", f.ref.AccountID)
+					} else {
+						_, err = f.db.Database().Exec("DELETE FROM mail_messages WHERE account_id=? AND mailbox=? AND uid=?", f.ref.AccountID, f.ref.Mailbox, f.ref.UID)
+					}
+					if err != nil {
+						t.Fatal(err)
+					}
+				}}
+				if action == "apply" {
+					err = f.engine.Apply(ctx, f.owner, run.ID, true)
+				} else {
+					err = f.engine.Replay(ctx, f.owner, run.ID)
+				}
+				if !errors.Is(err, ErrChanged) {
+					t.Fatal("stored decision accepted stale source", err)
+				}
+				if f.provider.calls != 1 {
+					t.Fatal("source rejection called provider")
+				}
+				var count int
+				if err = f.db.Database().QueryRow("SELECT count(*) FROM message_collection_memberships").Scan(&count); err != nil || count != 0 {
+					t.Fatal("stale decision assigned", count, err)
+				}
+				stored, err := f.engine.Get(ctx, f.owner, run.ID)
+				if err != nil || stored.State != "dry-run" {
+					t.Fatal("stale decision changed state", stored.State, err)
+				}
+			})
+		}
+	}
+}

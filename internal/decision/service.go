@@ -395,6 +395,9 @@ func (s *Service) gate(ctx context.Context, owner, id string, apply, approval bo
 	if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM accounts a JOIN mail_connections c ON c.account_id=a.id WHERE a.id=? AND a.owner_id=? AND c.revision=?", snap.Ref.AccountID, owner, snap.Ref.Revision).Scan(&accountValid); err != nil || accountValid != 1 {
 		return ErrChanged
 	}
+	if !sourceCurrent(ctx, tx, snap.Ref) {
+		return ErrChanged
+	}
 	// Definition changes invalidate the entire decision, including removed/new Spaces.
 	var count int
 	if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM message_collections WHERE owner_id=? AND kind='space'", owner).Scan(&count); err != nil || count != len(snap.Definitions) {
@@ -625,4 +628,20 @@ func (s *Service) checkUnassigned(ctx context.Context, owner string, preview boo
 		}
 	}
 	return count, nil
+}
+
+// sourceCurrent rechecks the physical source inside the same transaction as the
+// metadata write. Outside Resolve/Identity alone cannot protect UIDVALIDITY races.
+func sourceCurrent(ctx context.Context, tx *sql.Tx, ref mail.SourceRef) bool {
+	var count int
+	var err error
+	switch ref.Kind {
+	case "imap":
+		err = tx.QueryRowContext(ctx, `SELECT count(*) FROM mail_messages m JOIN mailboxes b ON b.account_id=m.account_id AND b.name=m.mailbox WHERE m.account_id=? AND m.mailbox=? AND m.uid=? AND b.uid_validity=?`, ref.AccountID, ref.Mailbox, ref.UID, ref.Validity).Scan(&count)
+	case "outbox":
+		err = tx.QueryRowContext(ctx, `SELECT count(*) FROM outbox WHERE account_id=? AND id=? AND revision=?`, ref.AccountID, ref.OutgoingID, ref.Revision).Scan(&count)
+	default:
+		return false
+	}
+	return err == nil && count == 1
 }

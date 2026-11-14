@@ -172,7 +172,7 @@ func (s *Service) Assign(ctx context.Context, owner, kind, id string, ref mail.S
 	if err != nil {
 		return err
 	}
-	if valid != 1 {
+	if valid != 1 || !sourceCurrent(ctx, tx, ref) {
 		return ErrChanged
 	}
 	var result sql.Result
@@ -235,4 +235,20 @@ func legacyColor(color string) string {
 		return color
 	}
 	return "lilac"
+}
+
+// sourceCurrent rechecks the physical source inside the same transaction as the
+// metadata write. Outside Resolve/Identity alone cannot protect UIDVALIDITY races.
+func sourceCurrent(ctx context.Context, tx *sql.Tx, ref mail.SourceRef) bool {
+	var count int
+	var err error
+	switch ref.Kind {
+	case "imap":
+		err = tx.QueryRowContext(ctx, `SELECT count(*) FROM mail_messages m JOIN mailboxes b ON b.account_id=m.account_id AND b.name=m.mailbox WHERE m.account_id=? AND m.mailbox=? AND m.uid=? AND b.uid_validity=?`, ref.AccountID, ref.Mailbox, ref.UID, ref.Validity).Scan(&count)
+	case "outbox":
+		err = tx.QueryRowContext(ctx, `SELECT count(*) FROM outbox WHERE account_id=? AND id=? AND revision=?`, ref.AccountID, ref.OutgoingID, ref.Revision).Scan(&count)
+	default:
+		return false
+	}
+	return err == nil && count == 1
 }

@@ -321,6 +321,9 @@ func (s *Service) apply(ctx context.Context, owner string, r Rule, m timeline.Re
 	if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM message_rules r JOIN message_collections c ON c.id=r.space_id JOIN accounts a ON a.id=? JOIN mail_connections mc ON mc.account_id=a.id WHERE r.id=? AND r.owner_id=? AND r.enabled=1 AND r.revision=? AND c.kind='space' AND c.owner_id=r.owner_id AND a.owner_id=r.owner_id AND mc.revision=?`, m.Ref.AccountID, r.ID, owner, r.Revision, m.Ref.Revision).Scan(&valid); err != nil || valid != 1 {
 		return false, ErrChanged
 	}
+	if !sourceCurrent(ctx, tx, m.Ref) {
+		return false, ErrChanged
+	}
 	var manual int64
 	if err = tx.QueryRowContext(ctx, "SELECT coalesce((SELECT revision FROM message_manual_revisions WHERE account_id=? AND account_revision=? AND message_key=?),0)", m.Ref.AccountID, m.Ref.Revision, m.Identity.Key).Scan(&manual); err != nil || manual != 0 {
 		return false, ErrChanged
@@ -352,4 +355,20 @@ func (s *Service) apply(ctx context.Context, owner string, r Rule, m timeline.Re
 		return false, err
 	}
 	return true, tx.Commit()
+}
+
+// sourceCurrent rechecks the physical source inside the same transaction as the
+// metadata write. Outside Resolve/Identity alone cannot protect UIDVALIDITY races.
+func sourceCurrent(ctx context.Context, tx *sql.Tx, ref mail.SourceRef) bool {
+	var count int
+	var err error
+	switch ref.Kind {
+	case "imap":
+		err = tx.QueryRowContext(ctx, `SELECT count(*) FROM mail_messages m JOIN mailboxes b ON b.account_id=m.account_id AND b.name=m.mailbox WHERE m.account_id=? AND m.mailbox=? AND m.uid=? AND b.uid_validity=?`, ref.AccountID, ref.Mailbox, ref.UID, ref.Validity).Scan(&count)
+	case "outbox":
+		err = tx.QueryRowContext(ctx, `SELECT count(*) FROM outbox WHERE account_id=? AND id=? AND revision=?`, ref.AccountID, ref.OutgoingID, ref.Revision).Scan(&count)
+	default:
+		return false
+	}
+	return err == nil && count == 1
 }

@@ -43,7 +43,7 @@ func (s *Service) Archive(ctx context.Context, owner string, ref mail.SourceRef,
 	if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM accounts a JOIN mail_connections c ON c.account_id=a.id WHERE a.id=? AND a.owner_id=? AND c.revision=?`, ref.AccountID, owner, ref.Revision).Scan(&valid); err != nil {
 		return err
 	}
-	if valid != 1 {
+	if valid != 1 || !sourceCurrent(ctx, tx, ref) {
 		return ErrChanged
 	}
 	var result interface{ RowsAffected() (int64, error) }

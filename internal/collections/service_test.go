@@ -254,3 +254,119 @@ func TestArchiveRestoreOwnershipAndPalettePreserveAssignments(t *testing.T) {
 		t.Fatal("archive removed original")
 	}
 }
+
+type changingResolver struct {
+	Resolver
+	after func()
+}
+
+func (r changingResolver) Identity(ctx context.Context, owner string, ref mail.SourceRef) (mail.MessageIdentity, error) {
+	id, err := r.Resolver.Identity(ctx, owner, ref)
+	if err == nil {
+		r.after()
+	}
+	return id, err
+}
+func TestSingleMetadataChangesRejectSourceRaceBeforeTransaction(t *testing.T) {
+	for _, action := range []string{"assign", "unassign", "archive", "restore"} {
+		for _, change := range []string{"namespace", "removed"} {
+			t.Run(action+"/"+change, func(t *testing.T) {
+				s, db, _, owner, _, _, ref, _ := setup(t)
+				ctx := context.Background()
+				space := create(t, s, owner, "Source guard")
+				if action == "unassign" {
+					if err := s.Assign(ctx, owner, "space", space.ID, ref, true); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if action == "restore" {
+					if err := s.Archive(ctx, owner, ref, true); err != nil {
+						t.Fatal(err)
+					}
+				}
+				snapshot := func() []int {
+					values := []int{}
+					for _, query := range []string{"SELECT count(*) FROM message_collection_memberships", "SELECT count(*) FROM message_archives", "SELECT coalesce(sum(revision),0) FROM message_manual_revisions"} {
+						var n int
+						if err := db.Database().QueryRow(query).Scan(&n); err != nil {
+							t.Fatal(err)
+						}
+						values = append(values, n)
+					}
+					return values
+				}
+				before := snapshot()
+				s.resolver = changingResolver{Resolver: s.resolver, after: func() {
+					var err error
+					if change == "namespace" {
+						_, err = db.Database().Exec("UPDATE mailboxes SET uid_validity=8 WHERE account_id=?", ref.AccountID)
+					} else {
+						_, err = db.Database().Exec("DELETE FROM mail_messages WHERE account_id=? AND mailbox=? AND uid=?", ref.AccountID, ref.Mailbox, ref.UID)
+					}
+					if err != nil {
+						t.Fatal(err)
+					}
+				}}
+				var err error
+				if action == "assign" || action == "unassign" {
+					err = s.Assign(ctx, owner, "space", space.ID, ref, action == "assign")
+				} else {
+					err = s.Archive(ctx, owner, ref, action == "archive")
+				}
+				if !errors.Is(err, ErrChanged) {
+					t.Fatal("stale source metadata write accepted", err)
+				}
+				after := snapshot()
+				for i := range before {
+					if before[i] != after[i] {
+						t.Fatal("stale operation partially wrote metadata", before, after)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestOutboxMetadataWriteRejectsSourceRowChangeBeforeTransaction(t *testing.T) {
+	for _, action := range []string{"assign", "archive"} {
+		for _, change := range []string{"revision", "removed"} {
+			t.Run(action+"/"+change, func(t *testing.T) {
+				s, db, _, owner, _, account, _, _ := setup(t)
+				ctx := context.Background()
+				space := create(t, s, owner, "Outgoing source guard")
+				id := "SYNTHETIC_OUTBOX_SOURCE_123456"
+				raw := []byte("From: owner@example.test\r\nTo: recipient@example.test\r\nMessage-ID: <outbox-source@example.test>\r\nSubject: Synthetic outbox source\r\nContent-Type: text/plain\r\n\r\nSynthetic outgoing body")
+				if _, err := db.Database().Exec(`INSERT INTO outbox(id,account_id,nonce,input_hash,revision,recipients,raw,subject,state,copy_state,created_at,updated_at) VALUES(?,?,?,zeroblob(32),?,'[]',?,'Synthetic outbox source','pending','not-attempted',0,0)`, id, account.ID, "SYNTHETIC_OUTBOX_NONCE_123456", account.Revision, raw); err != nil {
+					t.Fatal(err)
+				}
+				ref := mail.SourceRef{Kind: "outbox", AccountID: account.ID, Revision: account.Revision, OutgoingID: id}
+				s.resolver = changingResolver{Resolver: s.resolver, after: func() {
+					var err error
+					if change == "revision" {
+						_, err = db.Database().Exec("UPDATE outbox SET revision=revision+1 WHERE id=?", id)
+					} else {
+						_, err = db.Database().Exec("DELETE FROM outbox WHERE id=?", id)
+					}
+					if err != nil {
+						t.Fatal(err)
+					}
+				}}
+				var err error
+				if action == "assign" {
+					err = s.Assign(ctx, owner, "space", space.ID, ref, true)
+				} else {
+					err = s.Archive(ctx, owner, ref, true)
+				}
+				if !errors.Is(err, ErrChanged) {
+					t.Fatal("stale outgoing source accepted", err)
+				}
+				for _, query := range []string{"SELECT count(*) FROM message_collection_memberships", "SELECT count(*) FROM message_archives", "SELECT count(*) FROM message_manual_revisions"} {
+					var count int
+					if err := db.Database().QueryRow(query).Scan(&count); err != nil || count != 0 {
+						t.Fatal("stale outgoing mutation partially committed", count, err)
+					}
+				}
+			})
+		}
+	}
+}

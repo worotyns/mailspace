@@ -263,3 +263,51 @@ func TestExpressionRulesKeepOwnershipConsentAndEncryptedExclusion(t *testing.T) 
 		t.Fatal("invalid expression stored")
 	}
 }
+
+type changingSource struct {
+	Sources
+	after func()
+}
+
+func (s changingSource) Resolve(ctx context.Context, owner string, ref mail.SourceRef) (timeline.Resolved, error) {
+	result, err := s.Sources.Resolve(ctx, owner, ref)
+	if err == nil {
+		s.after()
+	}
+	return result, err
+}
+func TestRuleRejectsPhysicalSourceChangeBeforeMetadataTransaction(t *testing.T) {
+	for _, change := range []string{"namespace", "removed"} {
+		t.Run(change, func(t *testing.T) {
+			f := setup(t)
+			ctx := context.Background()
+			rule, err := f.engine.SaveExpression(ctx, f.owner, "", `subject:invoice`, f.space, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = f.engine.Enable(ctx, f.owner, rule.ID, rule.Revision, true); err != nil {
+				t.Fatal(err)
+			}
+			f.engine.sources = changingSource{Sources: f.engine.sources, after: func() {
+				var err error
+				if change == "namespace" {
+					_, err = f.db.Database().Exec("UPDATE mailboxes SET uid_validity=8 WHERE account_id=?", f.ref.AccountID)
+				} else {
+					_, err = f.db.Database().Exec("DELETE FROM mail_messages WHERE account_id=? AND mailbox=? AND uid=?", f.ref.AccountID, f.ref.Mailbox, f.ref.UID)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+			}}
+			if n, err := f.engine.Process(ctx, f.owner, ""); err != nil || n != 0 {
+				t.Fatal("rule accepted stale source", n, err)
+			}
+			for _, query := range []string{"SELECT count(*) FROM message_collection_memberships", "SELECT count(*) FROM message_rule_runs"} {
+				var count int
+				if err := f.db.Database().QueryRow(query).Scan(&count); err != nil || count != 0 {
+					t.Fatal("rule wrote partial stale metadata", count, err)
+				}
+			}
+		})
+	}
+}
