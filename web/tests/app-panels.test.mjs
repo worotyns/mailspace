@@ -197,6 +197,10 @@ test("child guards metadata, restored drafts and attachments without messaging c
       assert.equal(target, origin);
       messages.push(data);
     };
+    let competingNavigation = 0;
+    child.document.addEventListener("click", (event) => {
+      if (event.target.closest("a[href]")) competingNavigation++;
+    });
     new child.Function(childSource)();
     const input = (id, value) => {
       const element = child.document.getElementById(id);
@@ -237,6 +241,11 @@ test("child guards metadata, restored drafts and attachments without messaging c
       child.document.getElementById(id).dispatchEvent(click);
       assert.equal(click.defaultPrevented, true);
       assert.equal(messages.at(-1).type, "mailspace:panel-navigate");
+      assert.equal(
+        competingNavigation,
+        0,
+        "HTMX must not navigate inside the child frame",
+      );
     }
     child.dispatchEvent(new child.Event("mailspace:compose-sent"));
     assert.equal(messages.at(-1).dirty, false);
@@ -244,5 +253,45 @@ test("child guards metadata, restored drafts and attachments without messaging c
     assert.equal(JSON.stringify(messages).includes("PRIVATE_"), false);
   } finally {
     dom.window.close();
+  }
+});
+
+test("panel navigation shows pending state, deduplicates pending URL and ignores stale frame load", () => {
+  const h = harness();
+  try {
+    h.click("#compose");
+    const first = h.getFrame();
+    const content = h.window.document.querySelector(".app-panel-content");
+    assert.equal(content.getAttribute("aria-busy"), "true");
+    assert.equal(
+      content.querySelector('[role="status"]').textContent,
+      "Loading…",
+    );
+    assert.equal(first.classList.contains("invisible"), true);
+    h.click("#compose");
+    assert.equal(
+      h.getFrame(),
+      first,
+      "same pending navigation must not restart",
+    );
+    h.click("#keys");
+    const second = h.getFrame();
+    assert.notEqual(
+      second,
+      first,
+      "new navigation must have a fresh browsing context",
+    );
+    first.dispatchEvent(new h.window.Event("load"));
+    assert.equal(content.getAttribute("aria-busy"), "true");
+    assert.equal(second.classList.contains("invisible"), true);
+    second.dispatchEvent(new h.window.Event("load"));
+    assert.equal(content.hasAttribute("aria-busy"), false);
+    assert.equal(content.querySelector('[role="status"]'), null);
+    assert.equal(second.classList.contains("invisible"), false);
+    h.click("#app-panel-dialog > header button");
+    assert.equal(h.getFrame(), null);
+    assert.equal(content.hasAttribute("aria-busy"), false);
+  } finally {
+    h.dom.window.close();
   }
 });

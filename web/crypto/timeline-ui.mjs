@@ -460,6 +460,7 @@ window.addEventListener("mailspace:panel-closed", () => {
   if (url && window.htmx)
     window.htmx.ajax("GET", url, {
       target,
+      ...(drawer?.open ? {} : { select: "#timeline-shell" }),
       swap: drawer?.open ? "innerHTML" : "outerHTML",
     });
 });
@@ -488,6 +489,7 @@ window.addEventListener("mailspace:sent", (event) => {
   url.hash = "";
   window.htmx.ajax("GET", url.pathname + url.search, {
     target: drawer?.open ? "#thread-content" : "#timeline-shell",
+    ...(drawer?.open ? {} : { select: "#timeline-shell" }),
     swap: drawer?.open ? "innerHTML" : "outerHTML",
   });
 });

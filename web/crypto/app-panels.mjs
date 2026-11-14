@@ -14,6 +14,8 @@ let dialog,
   content,
   title,
   frame,
+  loading,
+  pendingURL,
   pendingAction,
   dirty = false,
   ending = false;
@@ -29,6 +31,10 @@ function setDirty(value) {
   else window.removeEventListener("beforeunload", preventUnload);
 }
 function clearFrame() {
+  pendingURL = null;
+  loading?.remove();
+  loading = null;
+  content?.removeAttribute("aria-busy");
   const previous = frame;
   frame = null;
   if (!previous) return;
@@ -71,7 +77,7 @@ function setup() {
   close.addEventListener("click", requestClose);
   header.append(title, close);
   content = document.createElement("div");
-  content.className = "app-panel-content";
+  content.className = "app-panel-content relative";
   dialog.append(header, content);
   confirmation = document.createElement("dialog");
   confirmation.id = "app-panel-discard";
@@ -133,17 +139,31 @@ function setup() {
   });
 }
 function replacePanel(url) {
+  if (pendingURL === url.href) return;
   clearFrame();
   setDirty(false);
   ending = false;
+  pendingURL = url.href;
+  content.setAttribute("aria-busy", "true");
+  loading = document.createElement("p");
+  loading.setAttribute("role", "status");
+  loading.className =
+    "absolute inset-0 flex items-center justify-center p-6 text-sm text-muted";
+  loading.textContent = "Loading…";
+  content.append(loading);
   const openedFrame = document.createElement("iframe");
   frame = openedFrame;
   openedFrame.title = "Mailspace application panel";
-  openedFrame.className = "app-panel-frame";
+  openedFrame.className = "app-panel-frame invisible";
   openedFrame.src = url.href;
   openedFrame.referrerPolicy = "same-origin";
   openedFrame.addEventListener("load", () => {
     if (frame !== openedFrame) return;
+    pendingURL = null;
+    loading?.remove();
+    loading = null;
+    content.removeAttribute("aria-busy");
+    openedFrame.classList.remove("invisible");
     try {
       const current = new URL(openedFrame.contentWindow.location.href);
       if (ending || current.pathname === "/login") {

@@ -45,30 +45,35 @@
     // Only a boolean crosses documents; never fields, file names or plaintext.
     send({ type: "mailspace:panel-dirty", dirty });
   }
-  document.addEventListener("click", (event) => {
-    const link = event.target.closest("a[href]");
-    if (
-      !link ||
-      event.defaultPrevented ||
-      event.button !== 0 ||
-      event.metaKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.altKey ||
-      link.hasAttribute("download") ||
-      (link.target && link.target !== "_self")
-    )
-      return;
-    const url = new URL(link.href, location.href);
-    if (
-      url.origin === location.origin &&
-      (url.pathname === "/" || appPath.test(url.pathname))
-    ) {
-      event.preventDefault();
-      reportDirty();
-      send({ type: "mailspace:panel-navigate", href: url.href });
-    }
-  });
+  document.addEventListener(
+    "click",
+    (event) => {
+      const link = event.target.closest("a[href]");
+      if (
+        !link ||
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey ||
+        link.hasAttribute("download") ||
+        (link.target && link.target !== "_self")
+      )
+        return;
+      const url = new URL(link.href, location.href);
+      if (
+        url.origin === location.origin &&
+        (url.pathname === "/" || appPath.test(url.pathname))
+      ) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        reportDirty();
+        send({ type: "mailspace:panel-navigate", href: url.href });
+      }
+    },
+    true,
+  );
   document.addEventListener("keydown", (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
       event.preventDefault();
