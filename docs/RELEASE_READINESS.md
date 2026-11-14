@@ -29,4 +29,12 @@ The testing branch also implements explicit cached-message Jev previews and an i
 
 Local detached signing and multipart/signed composition now have an application → GnuPG interoperability test (ADR-0028). They are not yet connected to a signed-only send action or submission endpoint; the remaining sending gate is unchanged. Owner-directed work continues directly on main.
 
-ADR-0029 adds the Spaces-only workflow, thread drawer, bounded People/commands, local archive and explicit attachment viewing. Schema 10 preserves old labels/colors without exposing labels in the UI. See WORKFLOW.md for limits and local-versus-provider behavior. These changes do not close the team-sharing or broader 1.0 gates.
+ADR-0029 adds the Spaces-only workflow, thread drawer, bounded People/commands, local archive and explicit attachment viewing. ADR-0030/0033 restore user-defined labels in Settings, sidebar filters and inline message headers; schema 10 preserved their existing records/colors. See WORKFLOW.md for limits and local-versus-provider behavior. These changes do not close the team-sharing or broader 1.0 gates.
+
+## Current testing snapshot: 45bd0f1
+
+The tested personal workflow now includes shared AND/OR filter/rule semantics (ADR-0031), memory-only worker vault sessions and inline local decryption/autopreview (ADR-0032), user-defined sidebar/header labels (ADR-0033), inert Markdown display (ADR-0034), and a mobile title-triggered view switcher. These are implemented slices, not remaining implementation tasks. Label names and colors come from the user's records; no fixed status set is created.
+
+Both fdb5a52 and 45bd0f1 passed GitHub CI, including Docker build and ongoing SQLite backup/restore. Local make check passed 59 client tests, Go vet/race suites and asset/format checks. A fresh production-image smoke verified health, login, bundled Markdown/parser notices, non-root read-only startup and user persistence after restart using disposable synthetic data. Browser acceptance verified inline decrypt/signature/attachment display and SharedWorker reuse after reload; phone 390×844 view switching and independent feed scrolling were checked. Native Safari and real Thunderbird acceptance are still unperformed. See VALIDATION.md for the distinction between these checks and full release acceptance.
+
+Next implementation gate: explicit signed-only sending (not merely the existing local signing helper). Team source/sharing/send-as ACLs, wider compatibility/soak and reviewed prerelease acceptance remain open. No stable tag/release is authorized by passing these slices alone.

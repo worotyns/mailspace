@@ -45,9 +45,9 @@ ADR-0019 supersedes old UI/default-demo descriptions above: one authenticated Sp
 
 Completed slices: container palette inclusion/build guard; specific Jev failure categories; native quote folding. In the compact-controls slice: guided sender/recipient key setup, contact prefill and bounded suggestions, date/range filter, trusted settings/compose panels, local archive/label bulk previews, saved-decision acceptance and metadata indexes. See ADR-0030 for exact limits.
 
-Still required before claiming the requested full UX/1.0 scope: AND/OR rule expressions and shared filter semantics; memory-only worker vault with explicit lifecycle; inline decrypt and opt-in local autopreview; signed-only sending; broader provider/browser compatibility and deployment acceptance.
+Delivered: shared AND/OR filters/rules, memory-only worker lifecycle and inline decrypt/autopreview. Still required before claiming the requested full UX/1.0 scope: signed-only sending, team-source/send-as ACLs, broader provider/browser compatibility and deployment acceptance.
 
-Local AND/OR filters and rule drafts now share a bounded evaluator (ADR-0031/schema 12); remaining crypto work includes the memory-only worker, inline decrypt/autopreview and signed-only send.
+Local AND/OR filters and rule drafts now share a bounded evaluator (ADR-0031/schema 12); worker sessions and inline decrypt/autopreview are implemented in ADR-0032; signed-only sending and the external-client compatibility matrix remain open.
 
 Labels now provide sidebar quick filters and message-header badges with an inline multi-label chooser (ADR-0033). Membership updates replace only label metadata, preserving inline decrypted previews and composer state.
 

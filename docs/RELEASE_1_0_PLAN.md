@@ -39,3 +39,9 @@ ADR-0028 implements local detached signing and exact-byte multipart/signed compo
 ### Spaces workflow slice (ADR-0029)
 
 Thread drawer/original-target replies, immediate Space chips, latest overall Jev score, bounded explicit preview or saved-mode command, 50/page People, retired label UI, 16-color swatches, local archive/restore and attachment downloads/text/PNG previews are implemented. Schema 10 is additive; upgrade requires the usual pre-upgrade SQLite/keyring backup. No remote archive move, general document preview, team ACL or stable 1.0 claim follows.
+
+### Completed personal workflow and next gate (45bd0f1)
+
+AND/OR filters and rule drafts, worker-backed memory sessions, inline local decrypt, optional per-tab autopreview, user-defined sidebar/header labels, inert Markdown text and the mobile view switcher are implemented and pushed. Both recent feature commits passed GitHub CI. A fresh read-only non-root container smoke also passed after restart. Detailed evidence and remaining browser/external-client limits are recorded in VALIDATION.md and RELEASE_READINESS.md.
+
+The next implementation slice is an explicit signed-only send contract and action, preserving original reply references, single-attempt SMTP outcomes, explicit plaintext consent and the encrypted-parent downgrade block. Do not close MS-006 merely because local detached signing or GnuPG tests already pass. Team ACL and operational/compatibility gates remain separate.
