@@ -40,6 +40,7 @@ class SessionVault extends EventTarget {
   #closed = false;
   #epoch = 0;
   #locking = false;
+  #unavailable = false;
   #state = { locked: true, fingerprint: null, expiresAt: 0 };
   constructor(userID) {
     super();
@@ -89,7 +90,10 @@ class SessionVault extends EventTarget {
       if (message.error) pending.reject(new VaultError(message.error));
       else pending.resolve(message.result);
     });
-    this.#worker.addEventListener("error", () => this.#fail());
+    this.#worker.addEventListener("error", () => {
+      this.#unavailable = true;
+      this.#fail("worker-unavailable");
+    });
     this.#port.addEventListener("messageerror", () => this.#fail());
     this.#port.start?.();
   }
@@ -104,12 +108,12 @@ class SessionVault extends EventTarget {
     this.dispatchEvent(new Event("statechange"));
     if (!wasLocked && this.#state.locked) this.dispatchEvent(new Event("lock"));
   }
-  #fail() {
+  #fail(code = "locked") {
     this.#epoch++;
     this.#update({ locked: true });
     for (const pending of this.#pending.values()) {
       clearTimeout(pending.timer);
-      pending.reject(new VaultError("locked"));
+      pending.reject(new VaultError(code));
     }
     this.#pending.clear();
   }
@@ -125,15 +129,20 @@ class SessionVault extends EventTarget {
     return () => this.removeEventListener("statechange", listener);
   }
   #call(op, args = []) {
+    if (this.#unavailable)
+      return Promise.reject(new VaultError("worker-unavailable"));
     if (this.#closed || (this.#locking && op !== "lock"))
       return Promise.reject(new VaultError("locked"));
     const id = ++this.#id;
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.#pending.delete(id);
-        this.lock();
-        reject(new VaultError("locked"));
-      }, 60000);
+      const timer = setTimeout(
+        () => {
+          this.#pending.delete(id);
+          this.lock();
+          reject(new VaultError("locked"));
+        },
+        ["list", "touch"].includes(op) ? 8000 : 60000,
+      );
       this.#pending.set(id, { resolve, reject, timer, epoch: this.#epoch });
       try {
         this.#port.postMessage({ id, userID: this.userID, op, args });

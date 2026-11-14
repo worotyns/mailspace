@@ -172,3 +172,46 @@ test("document keeper is passive and closes only on pagehide", async () => {
     globalThis.window = previous.window;
   }
 });
+
+test("asynchronous worker loading errors fail immediately without silently changing vault mode", async () => {
+  const saved = {
+    SharedWorker: globalThis.SharedWorker,
+    Worker: globalThis.Worker,
+  };
+  let worker;
+  class Port extends EventTarget {
+    postMessage() {}
+    start() {}
+    close() {}
+  }
+  class Shared extends EventTarget {
+    constructor() {
+      super();
+      this.port = new Port();
+      worker = this;
+    }
+  }
+  try {
+    globalThis.SharedWorker = Shared;
+    globalThis.Worker = class {
+      constructor() {
+        throw new Error("must not silently fall back");
+      }
+    };
+    const vault = createSessionVault("SYNTHETIC_ASYNC_WORKER_USER");
+    const pending = vault.list();
+    const rejected = assert.rejects(
+      pending,
+      (e) => e.code === "worker-unavailable",
+    );
+    worker.dispatchEvent(new Event("error"));
+    await rejected;
+    await assert.rejects(vault.list(), (e) => e.code === "worker-unavailable");
+    assert.equal(vault.sessionMode, "shared");
+    assert.equal(vault.locked, true);
+    await vault.close();
+  } finally {
+    globalThis.SharedWorker = saved.SharedWorker;
+    globalThis.Worker = saved.Worker;
+  }
+});

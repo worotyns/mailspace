@@ -4,12 +4,14 @@ import { createSessionVault } from "./session-vault.mjs";
 import { composeEntity, encryptedEntity } from "./mime.mjs";
 import { addressParser } from "../vendor/postal-mime/postal-mime.js";
 export class InlineEncryption {
-  constructor(shell, form) {
+  constructor(shell, form, config = {}) {
     if (!isSecureContext || !crypto.subtle || !indexedDB)
       throw new Error("secure context required");
     this.shell = shell;
     this.form = form;
-    this.vault = createSessionVault(shell.dataset.userId);
+    this.vault = (config.vaultFactory || createSessionVault)(
+      shell.dataset.userId,
+    );
     this.dialog = shell.querySelector("#inline-key-dialog");
     this.select = this.dialog.querySelector("select");
     this.pass = this.dialog.querySelector("input");
@@ -26,6 +28,8 @@ export class InlineEncryption {
       "close",
       () => {
         this.pass.value = "";
+        this.openOperation = (this.openOperation || 0) + 1;
+        this.opening = false;
       },
       options,
     );
@@ -73,30 +77,60 @@ export class InlineEncryption {
   }
   async open() {
     this.check();
+    this.opening = true;
+    const operation = (this.openOperation = (this.openOperation || 0) + 1);
     const epoch = this.epoch;
-    const snapshot = await this.vault.list();
-    if (epoch !== this.epoch || this.disposed) return;
+    const unlock = this.dialog.querySelector("#inline-key-unlock");
+    unlock.disabled = true;
+    this.select.disabled = this.pass.disabled = true;
     this.select.replaceChildren();
-    for (const key of snapshot.keys.filter((key) => key.private)) {
-      const option = document.createElement("option");
-      option.value = key.fingerprint;
-      option.textContent = `${key.identities.join(" · ")} · ${key.fingerprint}`;
-      this.select.append(option);
+    this.keyStatus.textContent = "Loading local keys…";
+    // Show feedback before worker startup/IndexedDB, including browser load
+    // failures. Do not hide the whole unlock UI behind an async RPC.
+    if (!this.dialog.open) this.dialog.showModal();
+    try {
+      const snapshot = await this.vault.list();
+      if (
+        epoch !== this.epoch ||
+        operation !== this.openOperation ||
+        this.disposed ||
+        !this.dialog.open
+      )
+        return;
+      this.select.replaceChildren();
+      for (const key of snapshot.keys.filter((key) => key.private)) {
+        const option = document.createElement("option");
+        option.value = key.fingerprint;
+        option.textContent = `${key.identities.join(" · ")} · ${key.fingerprint}`;
+        this.select.append(option);
+      }
+      if (!snapshot.locked) {
+        this.status.textContent =
+          "Key session is unlocked locally. Ready to encrypt & sign.";
+        this.dialog.close();
+        return;
+      }
+      this.select.disabled = this.pass.disabled = false;
+      unlock.disabled = !this.select.options.length;
+      this.keyStatus.textContent = this.select.options.length
+        ? "Unlock your key. Sending stays a separate action."
+        : "No local private key. Generate or import one in Local keys, then verify recipient fingerprints.";
+      if (this.select.options.length) this.pass.focus();
+    } catch (error) {
+      if (
+        epoch === this.epoch &&
+        operation === this.openOperation &&
+        !this.disposed
+      )
+        this.keyStatus.textContent =
+          "Local key session unavailable. Check your login, then reload this page and try again. No message was sent.";
+      throw error;
+    } finally {
+      if (operation === this.openOperation) this.opening = false;
     }
-    if (!snapshot.locked) {
-      this.status.textContent =
-        "Key session is unlocked locally. Ready to encrypt & sign.";
-      return;
-    }
-    this.keyStatus.textContent = this.select.options.length
-      ? "Unlock your key. Sending stays a separate action."
-      : "No local private key. Generate or import one in Local keys, then verify recipient fingerprints.";
-    this.dialog.querySelector("#inline-key-unlock").disabled =
-      !this.select.options.length;
-    this.dialog.showModal();
   }
   async unlock() {
-    if (this.busy) return;
+    if (this.busy || this.opening) return;
     this.busy = true;
     const unlockButton = this.dialog.querySelector("#inline-key-unlock");
     unlockButton.disabled = true;

@@ -39,3 +39,6 @@ An available SharedWorker holds the unlocked key in memory across same-origin pa
 Encrypted timeline messages decrypt inline after explicit Preview locally. Optional autopreview is off by default and only scans visible encrypted messages with an already unlocked key. The preference is held in tab memory, resets on a full reload, and grants no classifier/export permission. Signing-only sending remains unavailable; the detached-signing helper is still a local foundation.
 
 Ordinary and decrypted text presentation follows ADR-0034: fixed DOM from bounded Markdown tokens, folded quotes, no generated HTML/resources/navigation. It does not change original MIME or signature bytes.
+
+
+Unlock feedback is visible before asynchronous worker/key metadata loading. A failed worker load reports an unavailable session immediately; subsequent calls do not wait on a dead worker. Metadata RPCs time out after eight seconds while cryptographic operations retain their separate longer limit. Failed authentication or transport never silently changes vault mode, sends plaintext, or retries a send. Closing the dialog invalidates a pending display update.
