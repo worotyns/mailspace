@@ -151,3 +151,11 @@ Follow-up: main 6b7bec5 passed GitHub CI including Docker and the ongoing SQLite
 ### Reply source freshness
 
 Outbox preparation now rechecks the resolved original inside the transaction that records the send intent. Deterministic regression tests cover current originals, UIDVALIDITY reset, deleted cached UID, changed outgoing revision and deleted outgoing original between resolution and transaction. Stale sources return a conflict with no child row or SMTP/Sent-copy attempt. Existing foreign-owner and uncertain-outcome behavior remains covered. No signed-only endpoint or new plaintext-export permission is added by this fix.
+
+## Feedback: settings, panel return, thread replies and headers
+
+Full local `make GOTOOLCHAIN=go1.27.4 fmt check` passed (65 client tests, formatting/assets/notices, vet, race suites and actionlint). Native Settings navigation renders a common width/padding/current section; the isolated browser measured the same content x/width across Accounts and Profile at desktop and 390px. The wordmark emphasizes mail only. A thread footer click opened a writable, correctly addressed composer; Encrypt opened the local-key dialog. A synthetic encrypted new message was accepted by the loopback SMTP provider and saved in Sent. Opening/closing its Outbox result left one timeline shell and zero remaining panel frames. No real mailbox or key was used.
+
+The unlock dialog is no longer hidden behind asynchronous key listing; pending/failure/closed-dialog behavior and failed worker loading are regression-tested. This does not yet certify the reported Safari failure as fixed: native Safari reproduction still requires the requested empty test window/version details. Previous automatic review refused reading an unrelated private Safari document; no attempt was made to bypass that restriction.
+
+Header-complete cached threading, explicit missing-ancestor grouping and guarded legacy metadata repair are covered by the focused and full Go suites (ADR-0035). Subject labels normalize Re:/Odp: for presentation; subject similarity alone still does not join messages.

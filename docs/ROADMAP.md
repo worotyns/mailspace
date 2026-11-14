@@ -59,3 +59,8 @@ Labels now provide sidebar quick filters and message-header badges with an inlin
 - Signing-only sending and full release acceptance remain outstanding; these changes do not declare 1.0 complete.
 
 - Mobile: tap the current view title to switch Spaces, user-defined labels or activity filters; native dialog and authenticated full-page fallback under `/views`.
+
+Settings share one content width, first-position section navigation, and native current-section links across Accounts, Keys, Rules, Labels, Jev, Profile and Organizations. The compact navigation scrolls horizontally on narrow screens rather than changing page height; full-page fallbacks keep the same structure.
+
+
+Feedback follow-up: thread footer opens a scoped reply composer for the selected original; panel navigation is captured before HTMX and close/sent refresh selects only the root fragment. Panels display a bounded loading state with stable dimensions. Reply subject prefixes Re:/Odp: are normalized for display only. Encryption unlock opens before asynchronous key listing and reports worker errors visibly; native Safari acceptance remains a separate check.
