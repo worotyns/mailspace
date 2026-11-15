@@ -881,7 +881,11 @@
       {{ range .Messages }}
         {{ if .ShowDay }}
           <div
-            class="sticky top-0 z-10 my-5 flex items-center gap-3 bg-canvas/95 py-2 text-[11px] text-muted"
+            class="sticky top-0 z-10 my-5 flex items-center gap-3 {{ if $.ThreadKey }}
+              bg-panel
+            {{ else }}
+              bg-canvas
+            {{ end }} py-2 text-[11px] text-muted"
           >
             <span class="h-px flex-1 bg-line"></span><time>{{ .Day }}</time
             ><span class="h-px flex-1 bg-line"></span>
@@ -906,7 +910,7 @@
             mt-4
           {{ else }}
             mt-1.5
-          {{ end }} {{ if .Own }}ml-auto{{ end }} max-w-[94%] sm:max-w-[85%]"
+          {{ end }} {{ if .Own }}ml-auto{{ end }} max-w-full sm:max-w-[85%]"
           aria-label="Message from {{ .Sender }} at {{ .Time }}"
         >
           <div
@@ -914,7 +918,10 @@
               flex-row-reverse
             {{ end }}"
           >
-            <div class="w-8 shrink-0 self-start" title="{{ .Preview.Sender }}">
+            <div
+              class="hidden w-8 shrink-0 self-start sm:block"
+              title="{{ .Preview.Sender }}"
+            >
               {{ if .StartsRun }}
                 <span
                   class="flex size-8 items-center justify-center rounded-xl bg-violet-100 text-[10px] font-semibold text-violet-800"
@@ -940,7 +947,9 @@
                     >{{ .AccountName }}</span
                   >
                 {{ end }}
-                {{ template "timeline-message-labels" . }}
+                {{ if not $.ThreadKey }}
+                  {{ template "timeline-message-labels" . }}
+                {{ end }}
               </div>
               <div
                 {{ if not .Preview.Encrypted }}data-readable-message{{ end }}
@@ -991,7 +1000,23 @@
                   {{ end }}
                 {{ end }}
               </div>
-              {{ template "timeline-membership" . }}
+              {{ if $.ThreadKey }}
+                <div
+                  class="flex items-center gap-2 py-1 text-[10px] text-muted"
+                >
+                  <time>{{ .Time }}</time>
+                  <a
+                    href="{{ .ReplyURL }}"
+                    hx-get="{{ .ReplyURL }}"
+                    class="underline"
+                    aria-label="Reply to {{ .Sender }} at {{ .Time }}"
+                    >Reply</a
+                  >
+                  {{ if .State }}<span>SMTP: {{ .State }}</span>{{ end }}
+                </div>
+              {{ else }}
+                {{ template "timeline-membership" . }}
+              {{ end }}
             </div>
           </div>
         </article>
@@ -1291,6 +1316,10 @@
               ><a
                 href="{{ .CurrentURL }}"
                 hx-get="{{ .CurrentURL }}"
+                hx-target="{{ .ComposerTarget }}"
+                hx-select="{{ .ComposerSelect }}"
+                hx-swap="{{ .ComposerSwap }}"
+                hx-push-url="false"
                 aria-label="Cancel reply"
                 class="ml-auto shrink-0"
                 >×</a
@@ -1454,6 +1483,8 @@
   {{ else }}
     <div
       data-outgoing="{{ .Record.ID }}"
+      data-send-state="{{ .Record.State }}"
+      data-outbox-url="{{ .OutboxURL }}"
       class="rounded-lg border p-3 {{ .Tone }}"
     >
       <p class="font-medium">{{ .Title }}</p>

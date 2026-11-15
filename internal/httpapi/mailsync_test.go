@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/json"
+	"html"
 	"mailspace.local/mailspace/internal/accounts"
 	"mailspace.local/mailspace/internal/collections"
 	"mailspace.local/mailspace/internal/devmail"
@@ -260,7 +261,8 @@ func TestReadOnlyMailboxEndToEndAndAuthorization(t *testing.T) {
 		t.Fatal("header-label response replaced private message content or omitted sidebar", res.Code, res.Body.String())
 	}
 	threadURL := "/?thread=" + sourceIdentity.Key + "&space=" + space.ID
-	if response = request("GET", threadURL, token, "", false); response.Code != 200 || !strings.Contains(response.Body.String(), "Original email thread") || !strings.Contains(response.Body.String(), "Show thread") {
+	replyURL := "/?" + url.Values{"thread": {sourceIdentity.Key}, "space": {space.ID}, "reply": {sourceIdentity.Key}}.Encode() + "#thread-composer"
+	if response = request("GET", threadURL, token, "", false); response.Code != 200 || !strings.Contains(response.Body.String(), "Original email thread") || !strings.Contains(response.Body.String(), `href="`+html.EscapeString(replyURL)+`"`) {
 		t.Fatal("original thread unavailable", response.Code, response.Body.String())
 	}
 	if request("GET", "/?thread="+sourceIdentity.Key, other, "", false).Code == 200 {

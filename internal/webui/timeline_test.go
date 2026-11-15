@@ -157,3 +157,39 @@ func TestContactComposeAndInclusiveDateRange(t *testing.T) {
 		t.Fatal("single day failed")
 	}
 }
+
+func TestThreadPresentationAndCancelKeepFragmentScope(t *testing.T) {
+	for _, thread := range []string{"", "original"} {
+		data := TimelineData{ThreadKey: thread, Timezone: "UTC", Filter: "all"}
+		FormatTimeline([]timeline.Record{{Identity: mail.MessageIdentity{Key: "original"}, Preview: mailsync.Preview{Sender: "sender@example.test", Text: "hello"}, At: time.Unix(1000, 0)}}, nil, nil, nil, &data)
+		data.Reply = &data.Messages[0]
+		request := httptest.NewRequest("GET", "/", nil)
+		request.Header.Set("HX-Request", "true")
+		target, swap, selection := "#timeline-shell", "outerHTML", "#timeline-shell"
+		if thread != "" {
+			request.Header.Set("HX-Target", "thread-content")
+			target, swap, selection = "#thread-content", "innerHTML", "unset"
+		}
+		response := httptest.NewRecorder()
+		if err := RenderTimeline(response, request, false, data); err != nil {
+			t.Fatal(err)
+		}
+		html := response.Body.String()
+		cancel := regexp.MustCompile(`(?s)<a\s+href="[^<]+?aria-label="Cancel reply"[^>]*>`).FindString(html)
+		for _, attribute := range []string{`hx-target="` + target + `"`, `hx-swap="` + swap + `"`, `hx-select="` + selection + `"`} {
+			if !strings.Contains(cancel, attribute) {
+				t.Fatalf("cancel lost %s: %s", attribute, cancel)
+			}
+		}
+		if thread != "" {
+			for _, unwanted := range []string{`class="message-toolbar"`, `id="labels-`, `bg-canvas/95`} {
+				if strings.Contains(html, unwanted) {
+					t.Fatalf("thread includes %s", unwanted)
+				}
+			}
+			if !strings.Contains(html, `Reply to sender@example.test at 00:16`) {
+				t.Fatal("selected message reply unavailable")
+			}
+		}
+	}
+}

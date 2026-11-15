@@ -659,3 +659,23 @@ type MessageLabelsData struct {
 func RenderMessageLabels(w http.ResponseWriter, dev bool, message TimelineMessage, sidebar TimelineData) error {
 	return renderTimelinePart(w, dev, "timeline-label-response", MessageLabelsData{Message: message, Sidebar: sidebar})
 }
+
+// Composer links override the reply form's status-only HTMX target.
+func (d TimelineData) ComposerTarget() string {
+	if d.ThreadKey != "" {
+		return "#thread-content"
+	}
+	return "#timeline-shell"
+}
+func (d TimelineData) ComposerSwap() string {
+	if d.ThreadKey != "" {
+		return "innerHTML"
+	}
+	return "outerHTML"
+}
+func (d TimelineData) ComposerSelect() string {
+	if d.ThreadKey != "" {
+		return "unset"
+	}
+	return "#timeline-shell"
+}

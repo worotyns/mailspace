@@ -7,6 +7,7 @@ import "./app-panels.mjs";
 let cleanup = () => {};
 let readerCleanup = () => {};
 let readerGeneration = 0;
+let threadSent = false;
 function initializeReader(shell) {
   readerCleanup();
   readerCleanup = () => {};
@@ -253,6 +254,17 @@ document.addEventListener("htmx:afterSettle", (event) => {
         },
         true,
       );
+      const result = event.detail.target.querySelector("[data-outgoing]");
+      if (result.dataset.refreshed) return;
+      result.dataset.refreshed = "true";
+      window.dispatchEvent(
+        new CustomEvent("mailspace:sent", {
+          detail: {
+            state: result.dataset.sendState,
+            location: result.dataset.outboxUrl,
+          },
+        }),
+      );
     }
   }
 });
@@ -303,6 +315,10 @@ document.addEventListener(
       cleanup();
       document.getElementById("thread-content")?.replaceChildren();
       initialize();
+      if (threadSent) {
+        threadSent = false;
+        window.dispatchEvent(new Event("mailspace:panel-closed"));
+      }
     }
   },
   true,
@@ -479,6 +495,7 @@ window.addEventListener("mailspace:sent", (event) => {
   );
   const shell = document.getElementById("timeline-shell");
   const drawer = document.getElementById("thread-drawer");
+  if (drawer?.open) threadSent = true;
   const source = drawer?.open
     ? document.querySelector("[data-thread-url]")?.dataset.threadUrl
     : shell?.dataset.feedUrl;
