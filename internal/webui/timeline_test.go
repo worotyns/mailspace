@@ -158,6 +158,29 @@ func TestContactComposeAndInclusiveDateRange(t *testing.T) {
 	}
 }
 
+func TestMessageHeaderShowsOneIdentityAndBareAccountAddress(t *testing.T) {
+	received := TimelineMessage{StartsRun: true, Record: timeline.Record{Identity: mail.MessageIdentity{Key: "in"}, AccountName: "Mateusz Worotynski (i@worotyns.ovh)", AccountAddress: "i@worotyns.ovh", Preview: mailsync.Preview{Name: "Mateusz Worotynski", Sender: "worotyns@hotmail.com"}}}
+	sent := TimelineMessage{StartsRun: true, Record: timeline.Record{Identity: mail.MessageIdentity{Key: "out"}, Own: true, AccountName: "Mateusz Worotynski (i@worotyns.ovh)", AccountAddress: "i@worotyns.ovh", Preview: mailsync.Preview{Sender: "i@worotyns.ovh", Name: "Mateusz Worotynski", To: []string{"worotyns@hotmail.com", "second@example.test", "i@worotyns.ovh"}}}}
+	if got := sent.RecipientSummary(); got != "worotyns@hotmail.com +1" {
+		t.Fatalf("unexpected recipient summary %q", got)
+	}
+	data := TimelineData{Timezone: "UTC", Messages: []TimelineMessage{received, sent}}
+	response := httptest.NewRecorder()
+	if err := RenderTimeline(response, httptest.NewRequest("GET", "/", nil), false, data); err != nil {
+		t.Fatal(err)
+	}
+	html := response.Body.String()
+	// html/template escapes the recipient count plus sign in both attributes and text.
+	for _, want := range []string{"Mateusz Worotynski", "worotyns@hotmail.com &#43;1", ">You</span", `aria-hidden="true"`, "→", "i@worotyns.ovh"} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("missing %q", want)
+		}
+	}
+	if strings.Count(html, `title="Mateusz Worotynski (i@worotyns.ovh)"`) != 2 {
+		t.Fatal("account display name must stay available only as the account tooltip")
+	}
+}
+
 func TestSpacePickerShowsAssignedBadgesAndKeepsAllExplicitToggles(t *testing.T) {
 	record := timeline.Record{Identity: mail.MessageIdentity{Key: "one"}, Preview: mailsync.Preview{Sender: "sender@example.test", Status: "ready"}}
 	spaces := []collections.Item{

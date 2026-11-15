@@ -75,3 +75,8 @@ ADR-0041 implements the latest 20 matching cached messages, upward 20-message lo
 ### MS-022 compact Space picker and visible badges
 
 ADR-0042 replaces the horizontal list of every Space with the shared compact native popover already used for labels. Assigned Space badges stay visible in All activity/Unread/Unsorted; inside one Space only the other assigned Spaces are badged, while every authorized Space remains an independent toggle with current owner/source checks and explicit human overrides. The membership POST now replaces only the picker and refreshes sidebar counts out of band, so mounted bodies, local decrypted content and drafts survive. Next in MS-022: automatic-after-open plus manual provider read/unread with an explicit flag-write capability/ADR, and complete To/Cc/Bcc metadata with reliable People suggestions.
+
+
+### MS-022 message header identity line
+
+Each started run shows one identity line across the timeline, Spaces, filters and the original-thread drawer: received mail keeps the sender name with the sender address beneath it, sent mail shows `You → recipient` with the recipient summary, and the owning account appears once as its bare address (display name only in the tooltip). Cache previews keep `To` addresses, so recipient display names are not invented and hidden Bcc recipients stay absent. Remaining in MS-022: automatic-after-open plus manual provider read/unread with an explicit flag-write capability/ADR, complete To/Cc/Bcc metadata and reliable People suggestions.

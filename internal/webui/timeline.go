@@ -114,6 +114,48 @@ func (m TimelineMessage) Recipient() string {
 	}
 	return ""
 }
+
+// SentHint is the tooltip and accessible name of the sent identity link. It
+// never invents a recipient display name.
+func (m TimelineMessage) SentHint() string {
+	if summary := m.RecipientSummary(); summary != "" {
+		return "Sent to " + summary
+	}
+	return "Sent message"
+}
+
+// HeaderLabel is the accessible name of one message row.
+func (m TimelineMessage) HeaderLabel() string {
+	suffix := " at " + m.Time
+	if m.Own {
+		if summary := m.RecipientSummary(); summary != "" {
+			return "You sent this to " + summary + suffix
+		}
+		return "You sent this" + suffix
+	}
+	return "Message from " + m.Sender() + suffix
+}
+
+// RecipientSummary names the outgoing counterpart without inventing a display
+// name: the first non-account recipient plus a count when more were addressed.
+func (m TimelineMessage) RecipientSummary() string {
+	recipients := []string{}
+	seen := map[string]bool{}
+	for _, to := range m.Preview.To {
+		if to == "" || strings.EqualFold(to, m.AccountAddress) || seen[strings.ToLower(to)] {
+			continue
+		}
+		seen[strings.ToLower(to)] = true
+		recipients = append(recipients, to)
+	}
+	if len(recipients) == 0 {
+		return ""
+	}
+	if len(recipients) == 1 {
+		return recipients[0]
+	}
+	return recipients[0] + " +" + strconv.Itoa(len(recipients)-1)
+}
 func (m TimelineMessage) Subject() string {
 	subject := m.Preview.Subject
 	if !strings.HasPrefix(strings.ToLower(subject), "re:") {

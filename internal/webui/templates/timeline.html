@@ -1805,7 +1805,7 @@
         {{ else }}
           mt-1.5
         {{ end }} {{ if .Own }}ml-auto{{ end }} max-w-full sm:max-w-[85%]"
-        aria-label="Message from {{ .Sender }} at {{ .Time }}"
+        aria-label="{{ .HeaderLabel }}"
       >
         <div
           class="flex items-end gap-2.5 {{ if .Own }}
@@ -1830,20 +1830,43 @@
               {{ end }}"
             >
               {{ if .StartsRun }}
-                <a
-                  title="{{ .Preview.Sender }}"
-                  aria-label="{{ .Sender }} ({{ .Preview.Sender }})"
-                  href="/?person={{ .Preview.Sender }}"
-                  hx-get="/?person={{ .Preview.Sender }}"
-                  class="min-w-0 text-xs font-semibold"
-                  ><span class="block truncate">{{ .Sender }}</span
-                  >{{ if and .Preview.Name (not .Own) }}
-                    <small
-                      class="block truncate text-[10px] font-normal text-muted"
-                      >{{ .Preview.Sender }}</small
-                    >
-                  {{ end }}</a
-                ><span class="text-[10px] text-muted">{{ .AccountName }}</span>
+                {{ if .Own }}
+                  <a
+                    title="{{ .SentHint }}"
+                    aria-label="{{ .SentHint }}"
+                    href="/?person={{ .Recipient }}"
+                    hx-get="/?person={{ .Recipient }}"
+                    class="flex min-w-0 items-center gap-1 text-xs font-semibold"
+                    ><span class="shrink-0">You</span>{{ if .RecipientSummary }}
+                      <span class="shrink-0 text-muted" aria-hidden="true"
+                        >→</span
+                      ><span class="truncate">{{ .RecipientSummary }}</span>
+                    {{ end }}</a
+                  ><span
+                    class="text-[10px] text-muted"
+                    title="{{ .AccountName }}"
+                    >{{ .AccountAddress }}</span
+                  >
+                {{ else }}
+                  <a
+                    title="{{ .Preview.Sender }}"
+                    aria-label="{{ .Sender }} ({{ .Preview.Sender }})"
+                    href="/?person={{ .Preview.Sender }}"
+                    hx-get="/?person={{ .Preview.Sender }}"
+                    class="min-w-0 text-xs font-semibold"
+                    ><span class="block truncate">{{ .Sender }}</span
+                    >{{ if .Preview.Name }}
+                      <small
+                        class="block truncate text-[10px] font-normal text-muted"
+                        >{{ .Preview.Sender }}</small
+                      >
+                    {{ end }}</a
+                  ><span
+                    class="text-[10px] text-muted"
+                    title="{{ .AccountName }}"
+                    >{{ .AccountAddress }}</span
+                  >
+                {{ end }}
               {{ end }}
               {{ if not $.ThreadKey }}
                 {{ template "timeline-message-labels" . }}
