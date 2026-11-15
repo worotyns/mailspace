@@ -22,6 +22,8 @@ type Draft struct {
 	SourceRevision int64
 	ReplyOutgoing  string
 	EncryptedMIME  string
+	SignedMIME     string `json:",omitempty"`
+	Provenance     string `json:",omitempty"`
 	To             string
 	CC             string
 	BCC            string
@@ -66,6 +68,12 @@ func addresses(value string) ([]string, []string, error) {
 // Build constructs CRLF MIME with no Bcc header. Hidden recipients belong only
 // to the SMTP envelope and the owner's private outbox metadata.
 func Build(from string, d Draft, parent *mailsync.Preview) ([]byte, []string, error) {
+	if d.SignedMIME != "" {
+		return buildSigned(from, d, parent)
+	}
+	if d.Provenance != "" {
+		return nil, nil, ErrInput
+	}
 	if d.EncryptedMIME != "" {
 		return buildEncrypted(from, d, parent)
 	}

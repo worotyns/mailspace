@@ -1,0 +1,38 @@
+MIME-Version: 1.0
+Content-Type: multipart/signed; protocol="application/pgp-signature"; micalg=pgp-sha512;
+ boundary="mailspace-signed-d8c27ecf697801e926aa351d7bd02716"
+
+--mailspace-signed-d8c27ecf697801e926aa351d7bd02716
+Content-Type: multipart/mixed; boundary="mailspace-inner-8f9723d8e8b78340410d80b3029eb602"
+
+--mailspace-inner-8f9723d8e8b78340410d80b3029eb602
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: base64
+
+WmHFvMOzxYLEhyBnxJnFm2zEhSBqYcW6xYQg4oCUIHNpZ25lZCB0cmFuc3BvcnQgZml4dHVyZQ0K
+U2Vjb25kIGxpbmUu
+
+--mailspace-inner-8f9723d8e8b78340410d80b3029eb602
+Content-Type: application/octet-stream
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment;
+ filename*=utf-8''za%C5%82%C4%85cznik.bin
+
+AAECf4D/DQo=
+
+--mailspace-inner-8f9723d8e8b78340410d80b3029eb602--
+
+--mailspace-signed-d8c27ecf697801e926aa351d7bd02716
+Content-Type: application/pgp-signature
+Content-Disposition: attachment; filename="signature.asc"
+
+-----BEGIN PGP SIGNATURE-----
+
+wrsEABYKAG0Fgmr5QOoJEBjLf77xjUMiRRQAAAAAABwAIHNhbHRAbm90YXRp
+b25zLm9wZW5wZ3Bqcy5vcmfYQuCm3GSU/S5tjErGY8Mg8OGxzAgPphcCc1mI
+C9nHWhYhBACOPx1lInwWLyzaqRjLf77xjUMiAAAviAEA9XeYqQn0RV/G6q6m
+GKq70xfxrMch09EOc3T13DX3wuQBAKEc1VTgIIFX9AkYADLTjI71UggZuaZC
+H/n8DsYqBIsI
+=bYw0
+-----END PGP SIGNATURE-----
+--mailspace-signed-d8c27ecf697801e926aa351d7bd02716--

@@ -42,6 +42,7 @@ func renderSecurePage(w http.ResponseWriter, config AuthConfig, data webui.AuthP
 	}
 }
 func cryptoRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store, protected protectedRoute, mutation func(http.ResponseWriter, *http.Request, identity.Session) bool, budget func(http.ResponseWriter, *http.Request, string) bool, release func()) {
+	signedRoutes(mux, config, protected, mutation, budget, release)
 	render := func(w http.ResponseWriter, data webui.AuthPageData) { renderSecurePage(w, config, data) }
 	raw := func(r *http.Request, s identity.Session) ([]byte, error) {
 		if config.Sync == nil {

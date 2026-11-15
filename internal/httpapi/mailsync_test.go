@@ -22,6 +22,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -497,4 +498,177 @@ func TestReadOnlyMailboxEndToEndAndAuthorization(t *testing.T) {
 		}
 	}
 
+	t.Run("authored signed transport", func(t *testing.T) {
+		// A fresh application limiter isolates this boundary's request budget
+		// from the preceding ordinary/encrypted transport acceptance scenarios.
+		handler, err := NewPersonal(dir, db, AuthConfig{Outbox: outgoing, Origin: "https://mail.example.test", Accounts: a, Sync: syncer, MailEndpointsEnabled: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		fixture, err := os.ReadFile("../outbox/testdata/signed.eml")
+		if err != nil {
+			t.Fatal(err)
+		}
+		input := map[string]any{"account": account.ID, "requestId": "SYNTHETIC_HTTP_SIGNED_SEND_12345", "to": "recipient@example.test", "bcc": "hidden@example.test", "subject": "Signed SMTP fixture", "signedMime": string(fixture), "provenance": "authored", "allowPlaintext": true}
+		send := func(cookie, csrf string, payload map[string]any) *httptest.ResponseRecorder {
+			encoded, _ := json.Marshal(payload)
+			req := httptest.NewRequest("POST", "/api/outbox/signed", bytes.NewReader(encoded))
+			req.Header.Set("Origin", "https://mail.example.test")
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("X-CSRF-Token", csrf)
+			req.AddCookie(&http.Cookie{Name: "__Host-mailspace", Value: cookie})
+			res := httptest.NewRecorder()
+			handler.ServeHTTP(res, req)
+			return res
+		}
+		if send(token, "", input).Code != 403 {
+			t.Fatal("signed CSRF bypass")
+		}
+		if send(other, otherSession.CSRF, input).Code == 200 {
+			t.Fatal("foreign signed account accepted")
+		}
+		for _, provenance := range []string{"", "client-decrypted", "unknown"} {
+			input["provenance"] = provenance
+			if send(token, session.CSRF, input).Code != 400 {
+				t.Fatal("forbidden signed provenance accepted")
+			}
+		}
+		input["provenance"] = "authored"
+		input["allowPlaintext"] = false
+		if send(token, session.CSRF, input).Code != 400 {
+			t.Fatal("implicit signed plaintext consent")
+		}
+		input["allowPlaintext"] = true
+		for _, field := range []string{"body", "encryptedMime", "privateKey", "passphrase", "decryptedMime", "headers"} {
+			input[field] = "FORBIDDEN_SIGNED_FIELD"
+			if send(token, session.CSRF, input).Code != 400 {
+				t.Fatal("unknown signed field accepted", field)
+			}
+			delete(input, field)
+		}
+		stale := typedRef
+		stale.Revision++
+		input["reference"] = webui.EncodeSource(stale)
+		if send(token, session.CSRF, input).Code == 200 {
+			t.Fatal("stale signed reply accepted")
+		}
+		for _, message := range allSent {
+			if message.Preview.Encrypted {
+				input["reference"] = webui.EncodeSource(mail.SourceRef{Kind: "imap", AccountID: account.ID, Revision: account.Revision, Mailbox: "Sent", Validity: message.Validity, UID: message.UID})
+				if send(token, session.CSRF, input).Code == 200 {
+					t.Fatal("encrypted original downgraded by signed HTTP")
+				}
+			}
+		}
+		delete(input, "reference")
+		var signedID string
+		for i := 0; i < 2; i++ {
+			response := send(token, session.CSRF, input)
+			if response.Code != 200 {
+				t.Fatal("signed SMTP failed", response.Code, response.Body.String())
+			}
+			var result map[string]string
+			if json.Unmarshal(response.Body.Bytes(), &result) != nil || result["state"] != "accepted" || result["copyState"] != "saved" {
+				t.Fatal("signed outcome incorrect", response.Body.String())
+			}
+			if signedID != "" && signedID != result["id"] {
+				t.Fatal("signed replay duplicated outbox")
+			}
+			signedID = result["id"]
+		}
+		input["reference"] = webui.EncodeSource(typedRef)
+		input["requestId"] = "SYNTHETIC_HTTP_SIGNED_REPLY_12345"
+		if response := send(token, session.CSRF, input); response.Code != 200 {
+			t.Fatal("current original signed reply refused", response.Code, response.Body.String())
+		}
+		if err = syncer.Sync(ctx, alice.ID, account.ID); err != nil {
+			t.Fatal(err)
+		}
+		sent, err := syncer.Messages(ctx, alice.ID, account.ID, "Sent")
+		if err != nil || len(sent) != 6 {
+			t.Fatal("signed Sent missing or replay duplicated", len(sent), err)
+		}
+		count := 0
+		for _, message := range sent {
+			if message.Preview.Subject == "Signed SMTP fixture" {
+				count++
+				raw, err := syncer.Raw(ctx, alice.ID, account.ID, "Sent", message.Validity, message.UID)
+				if err != nil || !bytes.HasSuffix(raw, fixture) || bytes.Contains(raw, []byte("hidden@example.test")) {
+					t.Fatal("SMTP/Sent signed octets or Bcc boundary changed", err)
+				}
+				if _, err = syncer.Raw(ctx, bob.ID, account.ID, "Sent", message.Validity, message.UID); err == nil {
+					t.Fatal("foreign signed Sent disclosed")
+				}
+				verifyTransportSignature(t, fixture)
+			}
+		}
+		if count != 2 {
+			t.Fatal("signed messages not found", count)
+		}
+	})
+}
+
+func verifyTransportSignature(t *testing.T, entity []byte) {
+	t.Helper()
+	if _, err := exec.LookPath("gpg"); err != nil {
+		if os.Getenv("CI") != "" {
+			t.Fatal("GnuPG is required in CI")
+		}
+		t.Skip("GnuPG unavailable: transport verification remains pending")
+	}
+	// The HTTP→SMTP→Sent test already proved byte identity with this entity.
+	// Split its exact signed octets; do not decode or reconstruct MIME headers.
+	_, body, ok := bytes.Cut(entity, []byte("\r\n\r\n"))
+	if !ok {
+		t.Fatal("fixture headers missing")
+	}
+	line, rest, ok := bytes.Cut(body, []byte("\r\n"))
+	if !ok {
+		t.Fatal("fixture delimiter missing")
+	}
+	data, signaturePart, ok := bytes.Cut(rest, append(append([]byte("\r\n"), line...), []byte("\r\n")...))
+	if !ok {
+		t.Fatal("signature part missing")
+	}
+	_, signature, ok := bytes.Cut(signaturePart, []byte("\r\n\r\n"))
+	if !ok {
+		t.Fatal("signature headers missing")
+	}
+	signature, _, ok = bytes.Cut(signature, append(append([]byte("\r\n"), line...), []byte("--\r\n")...))
+	if !ok {
+		t.Fatal("signature terminator missing")
+	}
+	// Unix-domain agent sockets need a short path (not the long subtest name).
+	home, err := os.MkdirTemp("", "ms-gpg-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = exec.Command("gpgconf", "--homedir", home, "--kill", "all").Run()
+		_ = os.RemoveAll(home)
+	})
+	pub, err := os.ReadFile("../outbox/testdata/signed-public.asc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyPath, dataPath, sigPath := filepath.Join(home, "public.asc"), filepath.Join(home, "entity"), filepath.Join(home, "signature.asc")
+	for path, content := range map[string][]byte{keyPath: pub, dataPath: data, sigPath: signature} {
+		if err = os.WriteFile(path, content, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if output, err := exec.Command("gpg", "--homedir", home, "--batch", "--import", keyPath).CombinedOutput(); err != nil {
+		t.Fatalf("synthetic public key import failed: %v %s", err, output)
+	}
+	if output, err := exec.Command("gpg", "--homedir", home, "--batch", "--verify", sigPath, dataPath).CombinedOutput(); err != nil {
+		t.Fatalf("transport signature failed: %v %s", err, output)
+	}
+	data = bytes.Clone(data)
+	data[len(data)-4] ^= 1
+	if err = os.WriteFile(dataPath, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if exec.Command("gpg", "--homedir", home, "--batch", "--verify", sigPath, dataPath).Run() == nil {
+		t.Fatal("GnuPG accepted mutated transport bytes")
+	}
 }

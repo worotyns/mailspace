@@ -27,7 +27,7 @@ Optional JEV (ADR-0020), consented selected-excerpt classification (ADR-0021) an
 
 The testing branch also implements explicit cached-message Jev previews and an incoming Unsorted queue with an inbox-zero state (ADR-0025), fresh new connections with explicit bounded recent import (ADR-0026), and reviewed local header rules (ADR-0027). HTML-only readers automatically show inert text; formatted preview is optional. Two synthetic live Jev Decisions requests passed under explicit user authorization; this is not a production-mail accuracy or general provider availability claim.
 
-Local detached signing and multipart/signed composition now have an application → GnuPG interoperability test (ADR-0028). They are not yet connected to a signed-only send action or submission endpoint; the remaining sending gate is unchanged. Owner-directed work continues directly on main.
+Local detached signing and multipart/signed composition now have an application → GnuPG interoperability test (ADR-0028). The authored-only submission endpoint is implemented in ADR-0037, with exact-octet HTTP/SMTP/Sent/GnuPG verification. The visible signed-only send action remains the next slice, so the user-facing sending gate is still open. Owner-directed work continues directly on main.
 
 ADR-0029 adds the Spaces-only workflow, thread drawer, bounded People/commands, local archive and explicit attachment viewing. ADR-0030/0033 restore user-defined labels in Settings, sidebar filters and inline message headers; schema 10 preserved their existing records/colors. See WORKFLOW.md for limits and local-versus-provider behavior. These changes do not close the team-sharing or broader 1.0 gates.
 

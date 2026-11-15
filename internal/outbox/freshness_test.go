@@ -11,6 +11,12 @@ import (
 )
 
 func TestReplySourceChangedAfterResolutionCannotQueue(t *testing.T) {
+	for _, mode := range []string{"plain", "signed"} {
+		t.Run(mode, func(t *testing.T) { testReplySourceFreshness(t, mode) })
+	}
+}
+
+func testReplySourceFreshness(t *testing.T, mode string) {
 	for _, change := range []string{"imap-current", "imap-validity", "imap-deleted", "outbox-current", "outbox-revision", "outbox-deleted"} {
 		t.Run(change, func(t *testing.T) {
 			s, a, db, sender, owner, _, account := setup(t)
@@ -20,6 +26,9 @@ func TestReplySourceChangedAfterResolutionCannotQueue(t *testing.T) {
 				t.Fatal(err)
 			}
 			d := draft()
+			if mode == "signed" {
+				d = signedDraft(t)
+			}
 			d.SourceRevision = config.Revision
 			var parent *mailsync.Preview
 			var mutation string

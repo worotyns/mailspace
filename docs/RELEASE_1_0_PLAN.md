@@ -45,3 +45,8 @@ Thread drawer/original-target replies, immediate Space chips, latest overall Jev
 AND/OR filters and rule drafts, worker-backed memory sessions, inline local decrypt, optional per-tab autopreview, user-defined sidebar/header labels, inert Markdown text and the mobile view switcher are implemented and pushed. Both recent feature commits passed GitHub CI. A fresh read-only non-root container smoke also passed after restart. Detailed evidence and remaining browser/external-client limits are recorded in VALIDATION.md and RELEASE_READINESS.md.
 
 The next implementation slice is an explicit signed-only send contract and action, preserving original reply references, single-attempt SMTP outcomes, explicit plaintext consent and the encrypted-parent downgrade block. Do not close MS-006 merely because local detached signing or GnuPG tests already pass. Team ACL and operational/compatibility gates remain separate.
+
+
+### MS-006 authored signed transport foundation
+
+ADR-0037 connects a dedicated authored-only signed MIME endpoint to durable single-attempt SMTP/Sent transport. Application-generated Unicode and binary attachment octets are preserved and verified with GnuPG after delivery through the synthetic provider. Consent/provenance, structural MIME, ownership/CSRF, encrypted-original refusal, stale source and unchanged legacy nonce hashes are covered. Next is the visible full-composer action and client egress acceptance; Thunderbird and secure quoting remain open.

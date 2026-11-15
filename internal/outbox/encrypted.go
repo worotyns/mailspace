@@ -106,9 +106,12 @@ func buildEncrypted(from string, d Draft, parent *mailsync.Preview) ([]byte, []s
 	return append(raw[:marker], safe.Bytes()...), to, nil
 }
 func validMessageArmor(raw []byte) bool {
+	return validArmor(raw, "MESSAGE")
+}
+func validArmor(raw []byte, kind string) bool {
 	text := strings.TrimSpace(strings.ReplaceAll(string(raw), "\r\n", "\n"))
-	const begin = "-----BEGIN PGP MESSAGE-----\n\n"
-	const end = "\n-----END PGP MESSAGE-----"
+	begin := "-----BEGIN PGP " + kind + "-----\n\n"
+	end := "\n-----END PGP " + kind + "-----"
 	if !strings.HasPrefix(text, begin) || !strings.HasSuffix(text, end) {
 		return false
 	}
@@ -127,6 +130,15 @@ func validMessageArmor(raw []byte) bool {
 		}
 	}
 	data, err := base64.StdEncoding.Strict().DecodeString(strings.Join(lines, ""))
+	if err == nil && len(data) > 32 && kind == "SIGNATURE" {
+		tag := data[0] & 0x3f
+		if data[0]&0x40 == 0 {
+			tag = (data[0] >> 2) & 15
+		}
+		if tag != 2 {
+			return false
+		}
+	}
 	// Structural armor validation only. This is not a proof of recipient trust,
 	// packet integrity or decryptability; the client owns those checks.
 	return err == nil && len(data) > 32 && data[0]&0x80 != 0
