@@ -85,6 +85,7 @@ test("actual composer event submits only ciphertext, never key/passphrase/plaint
     globalThis.document = {
       getElementById: element,
       createElement: () => element(`dynamic-${elements.size}`),
+      createElementNS: () => element(`dynamic-${elements.size}`),
       body: element("mock-body"),
       addEventListener() {},
     };

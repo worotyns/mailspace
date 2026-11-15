@@ -193,3 +193,22 @@ func TestThreadPresentationAndCancelKeepFragmentScope(t *testing.T) {
 		}
 	}
 }
+
+func TestOutgoingStateRemainsVisibleOutsideScrollingSpaceControls(t *testing.T) {
+	for _, state := range []string{"accepted", "pending", "unknown", "rejected"} {
+		data := TimelineData{Filter: "all", Timezone: "UTC"}
+		FormatTimeline([]timeline.Record{{Identity: mail.MessageIdentity{Key: "sent"}, Own: true, State: state, Preview: mailsync.Preview{Sender: "me@example.test", Text: "Synthetic outgoing"}, At: time.Unix(1000, 0)}}, nil, nil, nil, &data)
+		response := httptest.NewRecorder()
+		if err := RenderTimeline(response, httptest.NewRequest("GET", "/", nil), false, data); err != nil {
+			t.Fatal(err)
+		}
+		html := response.Body.String()
+		badge, toolbar := strings.Index(html, `data-message-send-state="`+state+`"`), strings.Index(html, `class="message-toolbar"`)
+		if badge < 0 || toolbar < 0 || badge > toolbar || strings.Count(html, `data-message-send-state=`) != 1 {
+			t.Fatal("send state is hidden in or duplicated after toolbar", state)
+		}
+		if !strings.Contains(html[badge:toolbar], "Server acceptance is not delivery confirmation") {
+			t.Fatal("misleading delivery certainty")
+		}
+	}
+}

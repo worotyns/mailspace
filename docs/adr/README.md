@@ -62,3 +62,4 @@ Accepted oznacza decyzję projektową, nie gotową implementację. Zmiany przez 
 - [0036 — Safari worker module CSP compatibility](0036.md)
 - [0037 — Explicit authored signed-only transport](0037.md)
 - [0038 — Explicit local original-message quotes](0038.md)
+- [0039 — Compact local image previews and attachment controls](0039.md)

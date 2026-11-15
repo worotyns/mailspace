@@ -72,3 +72,6 @@ MS-006 signed-only transport foundation (ADR-0037): authored-only, explicit-cons
 
 
 MS-006 secure quoting is implemented in the full browser composer (ADR-0038): explicit exact-source local fetch/decrypt, bounded inert text, signature-state feedback and mandatory encryption for decrypted quotes. Authenticated local draft payload v2 carries that requirement across save/load and reads v1 conservatively. Manual responsive/Thunderbird acceptance is deferred to the owner on request; it is not counted as passed. The next active usability slices are compact preview controls, local attachment/CID images on demand, recipient/contact controls, visible send state and Decision Model naming.
+
+
+Usability feedback: compact eye/download/close controls, explicit inline local PNG/JPEG/CID image previews, visible upper-right send certainty and Decision Model settings naming are implemented in ADR-0039. Remaining active feedback: inline To/Cc/Bcc and multiple recipients, displayed recipient metadata, reliable People-directory datalists. Authenticator App 2FA is newly required as MS-021 (not implemented yet); it needs its own ADR, migration, recovery and integrated authorization tests. The owner will perform manual UI checks later.

@@ -827,7 +827,9 @@
               name="provider"
               value="{{ .Provider }}"
             />
-            <p class="text-sm font-medium">Jev: check unassigned mail</p>
+            <p class="text-sm font-medium">
+              Decision Model: check unassigned mail
+            </p>
             <p class="my-2 text-xs text-muted">
               Check at most 3 eligible cached messages using your saved
               provider/payload consent. May incur charges. Preview never
@@ -950,6 +952,7 @@
                 {{ if not $.ThreadKey }}
                   {{ template "timeline-message-labels" . }}
                 {{ end }}
+                {{ template "timeline-send-state" . }}
               </div>
               <div
                 {{ if not .Preview.Encrypted }}data-readable-message{{ end }}
@@ -1012,7 +1015,6 @@
                     aria-label="Reply to {{ .Sender }} at {{ .Time }}"
                     >Reply</a
                   >
-                  {{ if .State }}<span>SMTP: {{ .State }}</span>{{ end }}
                 </div>
               {{ else }}
                 {{ template "timeline-membership" . }}
@@ -1161,8 +1163,8 @@
         <a
           href="/automation#run-{{ .Decision.ID }}"
           class="icon-action"
-          title="Review saved Jev result"
-          aria-label="Review saved Jev result"
+          title="Review saved model result"
+          aria-label="Review saved model result"
           >{{ template "timeline-icon" "star" }}<span class="text-[10px]"
             >{{ .Decision.Confidence }}%</span
           ></a
@@ -1222,7 +1224,7 @@
           /><button
             aria-pressed="{{ $m.Has .ID }}"
             title="{{ .Name }}{{ if $m.Suggested .ID }}
-              · suggested by Jev
+              · suggested by Decision Model
             {{ end }}"
             class="space-chip {{ if $m.Has .ID }}
               border-accent text-accent
@@ -1246,18 +1248,6 @@
           >{{ template "timeline-icon" "pencil" }}</a
         >
       {{ end }}
-      {{ if .State }}
-        <span
-          class="icon-action {{ if eq .State "accepted" }}
-            text-success
-          {{ else }}
-            text-warning
-          {{ end }}"
-          title="SMTP outcome: {{ .State }}; see Outbox"
-          aria-label="SMTP outcome: {{ .State }}"
-          >{{ template "timeline-icon" "check" }}</span
-        >
-      {{ end }}
     </div>
     {{ if not .Preview.Encrypted }}
       <div
@@ -1267,6 +1257,29 @@
       ></div>
     {{ end }}
   </div>
+{{ end }}
+{{ define "timeline-send-state" }}
+  {{ if .State }}
+    <span
+      data-message-send-state="{{ .State }}"
+      class="ml-auto inline-flex shrink-0 items-center gap-1 text-[10px] {{ if eq .State "accepted" }}
+        text-success
+      {{ else }}
+        text-warning
+      {{ end }}"
+      title="SMTP outcome: {{ .State }}. Server acceptance is not delivery confirmation; see Outbox."
+      aria-label="SMTP outcome: {{ .State }}"
+    >
+      {{ if eq .State "accepted" }}
+        {{ template "timeline-icon" "check" }}
+      {{ else if or (eq .State "pending") (eq .State "sending") }}
+        {{ template "timeline-icon" "clock" }}
+      {{ else }}
+        {{ template "timeline-icon" "alert-triangle" }}
+      {{ end }}
+      {{ .State }}
+    </span>
+  {{ end }}
 {{ end }}
 {{ define "inline-composer" }}
   <footer

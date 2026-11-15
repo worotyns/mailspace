@@ -40,6 +40,11 @@ const names = [
   "users",
   "circle",
   "download",
+  "eye",
+  "eye-off",
+  "x",
+  "clock",
+  "alert-triangle",
 ];
 const symbols = [];
 for (const name of names) {

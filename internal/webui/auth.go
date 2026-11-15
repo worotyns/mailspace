@@ -3,6 +3,7 @@ package webui
 
 import (
 	"bytes"
+	"html/template"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -30,6 +31,7 @@ type AccountForm struct {
 	SameCredentials bool
 }
 type AuthPageData struct {
+	Icons                 template.HTML
 	ClassifyReference     string
 	ClassifyProvider      string
 	OrdinaryRead          bool
@@ -58,6 +60,12 @@ type AuthPageData struct {
 }
 
 func RenderAuth(w http.ResponseWriter, dev bool, name string, data AuthPageData) error {
+	icons, err := bundled.ReadFile("assets/icons.svg")
+	if err != nil {
+		return err
+	}
+	// Only the fixed application icon asset is trusted HTML, never mail content.
+	data.Icons = template.HTML(icons)
 	templates, err := Templates(dev)
 	if err != nil {
 		return err

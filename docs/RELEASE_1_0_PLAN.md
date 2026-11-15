@@ -60,3 +60,8 @@ The full composer now exposes Sign only (unencrypted) with separate explicit con
 ### MS-006 explicit local quote implementation
 
 ADR-0038 implements exact-source bounded quotes in the full browser composer, without generic decrypted export. Decrypted quotes enforce encryption across local draft v2 save/load; v1 is read conservatively. Tests cover signature states, inert HTML-only conversion, no attachment copying, stale/missing sources, pending-lock cleanup, ciphertext-only egress/persistence and foreign-signed draft injection refusal. The owner requested coding to continue and will perform the manual responsive/external-client acceptance later; those checks remain open, not passed.
+
+
+### Added owner requirements before 1.0
+
+Complete the remaining recipient/People suggestion UI feedback and Authenticator App 2FA (MS-021). TOTP must gate session creation, with secure enrollment, recovery, replay/rate guards, encrypted seeds and ownership/migration tests. A spec is not an implementation; MFA remains unavailable until that slice is actually delivered.
