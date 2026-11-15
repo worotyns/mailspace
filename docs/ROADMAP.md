@@ -10,8 +10,8 @@ Bez obietnic terminów przed pierwszym rzeczywistym pionowym wycinkiem. Kolejno�
 | M3 Team | Workspace/users/roles, shared mailboxes, thread shares, private/team tags, assignments | ACL również attachments/jobs/live events; revoke i audit; encrypted share nie przekazuje private keys; send-as osobno; migration test |
 | M4 Drive + FTS | Wirtualny widok załączników IMAP, opcjonalny cache; opt-in full-text zwykłej poczty; local decrypted search | Bez duplikowania storage domyślnie; provenance/ACL; purge po wyłączeniu; off nie indeksuje; metadata search bez modelu |
 | M5 Deterministic decisions | Wersjonowane reguły, dry-run, trace, replay, kontrolowane actions | Powtarzalność tych samych input/rules/context; brak efektów dry-run/replay; idempotency i jawne apply; encrypted content rules tylko w kliencie |
-| M6 Intelligence | Semantic search i AI compose/summarize, provider lokalny i opcjonalny zewnętrzny | Każdy moduł osobno off; zwykła poczta bez modelu; widoczny payload/provider; brak cichego decrypt upload; prompt injection nie steruje wysyłką |
-| M7 Packaging | PostgreSQL adapter, upgrade tooling, YunoHost package, tłumaczenia i accessibility hardening | SQLite/PostgreSQL kontrakty + migracje; instalacja/upgrade/backup/restore/uninstall YunoHost w VM; clean install bez AI |
+| M6 Search | Lokalny full-text/semantic search bez modelu | Moduł osobno off; zwykła poczta bez indeksu; brak cichego decrypt upload; szyfrogram poza indeksem |
+| M7 Packaging | Upgrade tooling, YunoHost package, tłumaczenia i accessibility hardening | SQLite-only migracje; instalacja/upgrade/backup/restore/uninstall YunoHost w VM; clean install bez AI |
 
 ## Polityka zakresu
 

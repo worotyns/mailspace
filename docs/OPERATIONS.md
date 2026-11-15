@@ -20,4 +20,4 @@ Own code AGPL-3.0-only. `/source.tar.gz` must correspond to the deployed build a
 
 Migrations are forward-only and transactional. Older binaries refuse newer schemas; rollback requires the matching complete pre-upgrade DB/keyring snapshot and old image/source. Test restore before relying on a backup. Never restore over a live database or retain stale WAL files from a different generation.
 
-YunoHost packaging, PostgreSQL and online backup tooling remain future work; no catalog availability or SSO integration is implied.
+YunoHost packaging and online backup tooling remain future work; no catalog availability or SSO integration is implied. SQLite is the only supported storage.

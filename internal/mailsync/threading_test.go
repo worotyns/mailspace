@@ -162,3 +162,25 @@ func TestLegacyConversationsScopeReferencesByAccountFolderAndValidity(t *testing
 		t.Fatal("explicit shared missing reference not grouped")
 	}
 }
+
+func TestHeaderRepairFillsRecipientNamesWithoutReadingBodies(t *testing.T) {
+	raw := []byte("From: alice@example.test\r\nTo: demo@example.test\r\nCc: Third Person <third@example.test>\r\nSubject: Names\r\n\r\nSYNTHETIC-BODY-MUST-NOT-LEAK")
+	prefix := raw[:bytes.Index(raw, []byte("\r\n\r\n"))+4]
+	legacy := Preview{ThreadingVersion: threadingVersion, ContentHash: "hash", Status: "ready", Subject: "Names", To: []string{"demo@example.test"}}
+	repaired, encoded, ok := repairedPreview(legacy, prefix)
+	if !ok || repaired.RecipientsVersion != recipientsVersion || len(repaired.ToRecipients) != 1 || repaired.ToRecipients[0].Address != "demo@example.test" {
+		t.Fatalf("recipient repair failed: %#v", repaired)
+	}
+	if len(repaired.CcRecipients) != 1 || repaired.CcRecipients[0].Name != "Third Person" {
+		t.Fatalf("cc repair failed: %#v", repaired.CcRecipients)
+	}
+	if strings.Contains(encoded, "SYNTHETIC-BODY-MUST-NOT-LEAK") || strings.Contains(encoded, "hidden") {
+		t.Fatal("header repair read a body or invented a recipient")
+	}
+	if _, _, ok = repairedPreview(repaired, prefix); ok {
+		t.Fatal("repair is not idempotent")
+	}
+	if _, _, ok = repairedPreview(legacy, []byte("Subject: no terminator")); ok {
+		t.Fatal("repair accepted an incomplete header prefix")
+	}
+}

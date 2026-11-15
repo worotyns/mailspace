@@ -3,6 +3,7 @@ package mailsync
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"mailspace.local/mailspace/internal/accounts"
@@ -244,5 +245,50 @@ func TestWorkerCancellationAndBoundedOnboardingQueue(t *testing.T) {
 	case <-done:
 	case <-time.After(time.Second):
 		t.Fatal("worker did not cancel network before storage shutdown")
+	}
+}
+
+func TestMessagesRepairsLegacyRecipientNamesFromHeadersOnly(t *testing.T) {
+	s, _, db, owner, _, id, _ := setup(t)
+	ctx := context.Background()
+	if err := s.Sync(ctx, owner, id); err != nil {
+		t.Fatal(err)
+	}
+	// A pre-recipients-version cache row keeps addresses but no display names.
+	var original string
+	if err := db.Database().QueryRow("SELECT preview FROM mail_messages WHERE account_id=? AND mailbox='INBOX' AND uid=1", id).Scan(&original); err != nil {
+		t.Fatal(err)
+	}
+	var preview Preview
+	if json.Unmarshal([]byte(original), &preview) != nil {
+		t.Fatal("preview unreadable")
+	}
+	preview.RecipientsVersion = 0
+	preview.ToRecipients = nil
+	preview.CcRecipients = nil
+	stale, _ := json.Marshal(preview)
+	if _, err := db.Database().Exec("UPDATE mail_messages SET preview=? WHERE account_id=? AND mailbox='INBOX' AND uid=1", string(stale), id); err != nil {
+		t.Fatal(err)
+	}
+	messages, err := s.Messages(ctx, owner, id, "INBOX")
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, m := range messages {
+		if m.UID == 1 {
+			found = m.Preview.RecipientsVersion == recipientsVersion && len(m.Preview.ToRecipients) == 1 && m.Preview.ToRecipients[0].Address == "demo@example.test"
+		}
+	}
+	if !found {
+		t.Fatal("legacy recipient names were not repaired from the cached headers")
+	}
+	var updated string
+	if err := db.Database().QueryRow("SELECT preview FROM mail_messages WHERE account_id=? AND mailbox='INBOX' AND uid=1", id).Scan(&updated); err != nil {
+		t.Fatal(err)
+	}
+	var reloaded Preview
+	if json.Unmarshal([]byte(updated), &reloaded) != nil || reloaded.RecipientsVersion != recipientsVersion || len(reloaded.ToRecipients) != 1 {
+		t.Fatal("repair was not persisted")
 	}
 }

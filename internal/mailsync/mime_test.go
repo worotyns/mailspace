@@ -55,3 +55,22 @@ func TestThreadingDuplicatesMissingReferencesAndCycles(t *testing.T) {
 		t.Fatal("cycle not bounded")
 	}
 }
+
+func TestPreviewRetainsRecipientNamesAndCc(t *testing.T) {
+	raw := []byte("From: alice@example.test\r\nTo: Mateusz Worotynski <worotyns@hotmail.com>, \"Second, Name\" <second@example.test>\r\nCc: Third Person <third@example.test>\r\nBcc: hidden@example.test\r\nSubject: Names\r\n\r\nbody")
+	p := Parse(raw)
+	if p.RecipientsVersion != recipientsVersion || len(p.ToRecipients) != 2 || p.ToRecipients[0].Name != "Mateusz Worotynski" || p.ToRecipients[0].Address != "worotyns@hotmail.com" || p.ToRecipients[1].Name != "Second, Name" {
+		t.Fatalf("to names lost: %#v", p.ToRecipients)
+	}
+	if len(p.CcRecipients) != 1 || p.CcRecipients[0].Name != "Third Person" || p.CcRecipients[0].Address != "third@example.test" {
+		t.Fatalf("cc names lost: %#v", p.CcRecipients)
+	}
+	if strings.Join(p.To, ",") != "worotyns@hotmail.com,second@example.test" {
+		t.Fatal("address compatibility broken", p.To)
+	}
+	for _, recipient := range append(append([]Recipient{}, p.ToRecipients...), p.CcRecipients...) {
+		if strings.Contains(recipient.Address+recipient.Name, "hidden") {
+			t.Fatal("hidden Bcc recipient invented from a received header")
+		}
+	}
+}

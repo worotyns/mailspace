@@ -306,7 +306,7 @@ func (s *Service) Messages(ctx context.Context, owner, id, folder string) ([]Cac
 	if err := s.authorized(ctx, owner, id); err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT m.mailbox,b.uid_validity,m.uid,m.flags,m.received_at,m.preview,CASE WHEN json_extract(m.preview,'$.ContentHash') IS NULL THEN m.raw ELSE NULL END,c.revision,CASE WHEN coalesce(json_extract(m.preview,'$.ThreadingVersion'),0)<1 AND json_extract(m.preview,'$.ContentHash') IS NOT NULL THEN `+threadingPrefixSQL+` ELSE NULL END FROM mail_messages m JOIN mailboxes b ON b.account_id=m.account_id AND b.name=m.mailbox JOIN mail_connections c ON c.account_id=m.account_id JOIN accounts a ON a.id=m.account_id WHERE m.account_id=? AND m.mailbox=? AND a.owner_id=? ORDER BY m.received_at,m.uid LIMIT 500`, id, folder, owner)
+	rows, err := s.db.QueryContext(ctx, `SELECT m.mailbox,b.uid_validity,m.uid,m.flags,m.received_at,m.preview,CASE WHEN json_extract(m.preview,'$.ContentHash') IS NULL THEN m.raw ELSE NULL END,c.revision,CASE WHEN json_extract(m.preview,'$.ContentHash') IS NOT NULL AND (coalesce(json_extract(m.preview,'$.ThreadingVersion'),0)<1 OR coalesce(json_extract(m.preview,'$.RecipientsVersion'),0)<1) THEN `+threadingPrefixSQL+` ELSE NULL END FROM mail_messages m JOIN mailboxes b ON b.account_id=m.account_id AND b.name=m.mailbox JOIN mail_connections c ON c.account_id=m.account_id JOIN accounts a ON a.id=m.account_id WHERE m.account_id=? AND m.mailbox=? AND a.owner_id=? ORDER BY m.received_at,m.uid LIMIT 500`, id, folder, owner)
 	if err != nil {
 		return nil, err
 	}
@@ -328,7 +328,7 @@ func (s *Service) Messages(ctx context.Context, owner, id, folder string) ([]Cac
 		if legacyRaw != nil {
 			m.Preview = Parse(legacyRaw)
 		}
-		if len(threadHeaders) > 0 && m.Preview.ThreadingVersion < threadingVersion {
+		if len(threadHeaders) > 0 && (m.Preview.ThreadingVersion < threadingVersion || m.Preview.RecipientsVersion < recipientsVersion) {
 			if repaired, encoded, ok := repairedPreview(m.Preview, threadHeaders); ok {
 				m.Preview = repaired
 				repairs = append(repairs, threadingRepair{uid: m.UID, validity: m.Validity, revision: revision, original: p, updated: encoded, prefix: threadHeaders})

@@ -125,7 +125,7 @@ Repeat session revocation for every provisioned user: an old backup may contain 
 3. Start `docker compose up -d`. Migrations run transactionally at startup. Check health, login, Spaces and mailbox settings; perform a controlled send.
 4. If rollback is needed, restore the complete pre-upgrade snapshot into a new empty volume with its matching old image. Merely starting an older binary against the upgraded DB is not a rollback.
 
-No published registry image or GitHub release is assumed by this guide. Local build/source distribution works without a Git remote. Optional AI, decision models, team sharing, indexing, PostgreSQL and YunoHost are not secretly installed.
+No published registry image or GitHub release is assumed by this guide. Local build/source distribution works without a Git remote. Optional decision models, team sharing, indexing and YunoHost are not secretly installed. SQLite is the only supported storage.
 
 ## 9. Login recovery and session revocation
 

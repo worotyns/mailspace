@@ -70,3 +70,5 @@ Accepted oznacza decyzję projektową, nie gotową implementację. Zmiany przez 
 - [0042 — Compact Space picker and visible membership badges](0042.md)
 
 - [0043 — Provider-synchronized read state](0043.md)
+
+- [0044 — Cached recipient display names and honest To/Cc](0044.md)

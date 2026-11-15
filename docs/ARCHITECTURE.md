@@ -14,7 +14,7 @@ flowchart LR
   Identity --> Keys[Installation credential keyring outside SQLite]
 ```
 
-These are implemented boundaries. PostgreSQL, team source ACLs, Drive and content/semantic indexing remain separate roadmap modules, not runtime dependencies.
+These are implemented boundaries. Team source ACLs, Drive and content/semantic indexing remain separate roadmap modules, not runtime dependencies. SQLite is the only supported storage.
 
 ## Modules
 

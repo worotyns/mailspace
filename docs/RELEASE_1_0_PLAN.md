@@ -10,7 +10,7 @@ This is an implementation checklist, not a release declaration. RELEASE_READINES
 4. **Release security and accessibility:** review authorization/session/SSRF/MIME/export boundaries, keyboard/focus/mobile tests and dependency/license/vulnerability checks. Record findings and fixes; do not call an internal review an independent audit.
 5. **Operations and packaging:** upgrade/rollback, database plus installation keyring restore, browser export recovery, executed release/multiarch smoke and a clearly labelled prerelease before stable 1.0.
 
-Optional Drive, full-text/semantic indexing, AI compose, PostgreSQL and YunoHost are follow-up modules, not mandatory dependencies or pretend-complete features. JEV/OpenRouter and Litestream remain opt-in, independently tested boundaries. Live paid-provider availability and real external-client acceptance must be recorded honestly, never inferred from mocks.
+Optional Drive, full-text/semantic indexing and YunoHost are follow-up modules, not mandatory dependencies or pretend-complete features. PostgreSQL and AI compose are removed from the plan by owner direction. JEV/OpenRouter and Litestream remain opt-in, independently tested boundaries. Live paid-provider availability and real external-client acceptance must be recorded honestly, never inferred from mocks.
 
 ## Historical evidence (current resume order: NEXT_SESSION.md)
 
@@ -85,3 +85,8 @@ Each started run shows one identity line across the timeline, Spaces, filters an
 ### MS-022 provider-synchronized read state
 
 ADR-0043 adds the only provider write outside sending: a bounded `\Seen` capability with current owner/account revision and UIDVALIDITY checks, server-confirmed flags and a local cache update only after confirmation. Opening the full reader (ordinary on load, encrypted after local decrypt) or an inline decrypted preview marks the message read; the row also has a manual read/unread toggle. Fetching a timeline never writes, outbox rows are excluded, and writes use a dedicated rate/concurrency bound instead of the send budget. `MAILSPACE_IMAP_FLAG_WRITES=0` disables the capability. Remaining MS-022 scope: complete To/Cc/Bcc metadata and reliable People suggestions.
+
+
+### MS-022 cached recipient names, To/Cc and two-way People
+
+ADR-0044 adds display names and Cc to the bounded cached preview (additive, `RecipientsVersion`), upgraded lazily by the existing header-only, condition-checked repair with no body read, remote request or decryption. Sent mail shows a cached recipient name with the address beneath; received mail shows cached Cc; the full reader shows a To/Cc block. A hidden Bcc is never invented and outgoing Bcc remains envelope-only. The People directory and datalist now cover cached senders plus cached To/Cc recipients, with the client sending only the typed fragment and discarding stale responses. PostgreSQL and AI compose are removed from the plan; SQLite is the only supported storage.

@@ -82,6 +82,29 @@
             inactivity; use Lock and clear to end it. No draft autosave.
           {{ end }}
         </p>
+        {{ if .SecureRead }}
+          {{ if or .ToLabel .CcLabel }}
+            <dl class="space-y-1 text-xs text-muted">
+              {{ if .ToLabel }}
+                <div class="flex gap-2">
+                  <dt class="shrink-0 font-medium text-body">To</dt>
+                  <dd class="min-w-0 break-words">{{ .ToLabel }}</dd>
+                </div>
+              {{ end }}
+              {{ if .CcLabel }}
+                <div class="flex gap-2">
+                  <dt class="shrink-0 font-medium text-body">Cc</dt>
+                  <dd class="min-w-0 break-words">{{ .CcLabel }}</dd>
+                </div>
+              {{ end }}
+            </dl>
+          {{ end }}
+          <p class="text-[11px] text-muted">
+            Recipients are read from the cached headers. A hidden Bcc recipient
+            is not present in received mail and is never invented; outgoing
+            envelope recipients remain owner-scoped.
+          </p>
+        {{ end }}
         <p
           id="secure-status"
           role="status"

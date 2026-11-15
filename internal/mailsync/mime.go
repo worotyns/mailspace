@@ -26,20 +26,33 @@ type Attachment struct {
 
 const threadingVersion = 1
 
+// recipientsVersion gates cached To/Cc display names. Absent or lower values are
+// repaired from a bounded header prefix, never by reading a MIME body.
+const recipientsVersion = 1
+
+// Recipient is one cached address with its optional display name.
+type Recipient struct {
+	Name    string
+	Address string
+}
+
 type Preview struct {
-	ThreadingVersion int
-	Attachments      []Attachment
-	ContentHash      string
-	Subject          string
-	Sender           string
-	ReplyTo          string
-	To               []string
-	Name             string
-	MessageID        string
-	References       []string
-	Text             string
-	Encrypted        bool
-	Status           string
+	ThreadingVersion  int
+	RecipientsVersion int
+	Attachments       []Attachment
+	ContentHash       string
+	Subject           string
+	Sender            string
+	ReplyTo           string
+	To                []string
+	ToRecipients      []Recipient
+	CcRecipients      []Recipient
+	Name              string
+	MessageID         string
+	References        []string
+	Text              string
+	Encrypted         bool
+	Status            string
 }
 
 func ids(value string) []string {
@@ -67,7 +80,7 @@ func text(value string, limit int) string {
 func Parse(raw []byte) Preview {
 	digest := sha256.Sum256(raw)
 	contentHash := hex.EncodeToString(digest[:])
-	result := Preview{ThreadingVersion: threadingVersion, ContentHash: contentHash, Subject: "(No subject)", Name: "Unknown sender", Status: "ready"}
+	result := Preview{ThreadingVersion: threadingVersion, RecipientsVersion: recipientsVersion, ContentHash: contentHash, Subject: "(No subject)", Name: "Unknown sender", Status: "ready"}
 	root, err := message.ReadWithOptions(bytes.NewReader(raw), &message.ReadOptions{MaxHeaderBytes: 64 << 10})
 	if err != nil {
 		result.Status = "unsupported"
@@ -88,7 +101,17 @@ func Parse(raw []byte) Preview {
 			if i >= 100 {
 				break
 			}
-			result.To = append(result.To, text(a.Address, 254))
+			address := text(a.Address, 254)
+			result.To = append(result.To, address)
+			result.ToRecipients = append(result.ToRecipients, Recipient{Name: text(a.Name, 200), Address: address})
+		}
+	}
+	if cc, err := mail.ParseAddressList(root.Header.Get("Cc")); err == nil {
+		for i, a := range cc {
+			if i >= 100 {
+				break
+			}
+			result.CcRecipients = append(result.CcRecipients, Recipient{Name: text(a.Name, 200), Address: text(a.Address, 254)})
 		}
 	}
 	if reply, err := mail.ParseAddress(root.Header.Get("Reply-To")); err == nil {

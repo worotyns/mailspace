@@ -12,6 +12,7 @@ import (
 	"mailspace.local/mailspace/internal/decision"
 	"mailspace.local/mailspace/internal/mail"
 	"mailspace.local/mailspace/internal/mailfilter"
+	"mailspace.local/mailspace/internal/mailsync"
 	"mailspace.local/mailspace/internal/timeline"
 	"net/http"
 	netmail "net/mail"
@@ -145,25 +146,87 @@ func (m TimelineMessage) HeaderLabel() string {
 	return "Message from " + m.ReceivedHint() + suffix
 }
 
-// RecipientSummary names the outgoing counterpart without inventing a display
-// name: the first non-account recipient plus a count when more were addressed.
-func (m TimelineMessage) RecipientSummary() string {
-	recipients := []string{}
+// recipientLabel prefers a cached display name and falls back to the address.
+func recipientLabel(recipient mailsync.Recipient) string {
+	if recipient.Name != "" {
+		return recipient.Name
+	}
+	return recipient.Address
+}
+
+// recipients lists the non-account To recipients, deduplicated, using names when
+// the cached preview has them and addresses otherwise.
+func (m TimelineMessage) recipients() []mailsync.Recipient {
+	result := []mailsync.Recipient{}
 	seen := map[string]bool{}
-	for _, to := range m.Preview.To {
-		if to == "" || strings.EqualFold(to, m.AccountAddress) || seen[strings.ToLower(to)] {
+	for _, recipient := range m.Preview.ToRecipients {
+		if recipient.Address == "" || strings.EqualFold(recipient.Address, m.AccountAddress) || seen[strings.ToLower(recipient.Address)] {
 			continue
 		}
-		seen[strings.ToLower(to)] = true
-		recipients = append(recipients, to)
+		seen[strings.ToLower(recipient.Address)] = true
+		result = append(result, recipient)
 	}
+	if len(result) == 0 {
+		// Older cached previews carry addresses only.
+		for _, to := range m.Preview.To {
+			if to == "" || strings.EqualFold(to, m.AccountAddress) || seen[strings.ToLower(to)] {
+				continue
+			}
+			seen[strings.ToLower(to)] = true
+			result = append(result, mailsync.Recipient{Address: to})
+		}
+	}
+	return result
+}
+
+// RecipientSummary names the outgoing counterpart: the first recipient plus a
+// count when more were addressed. A cached display name is used when present.
+func (m TimelineMessage) RecipientSummary() string {
+	recipients := m.recipients()
 	if len(recipients) == 0 {
 		return ""
 	}
+	label := recipientLabel(recipients[0])
 	if len(recipients) == 1 {
-		return recipients[0]
+		return label
 	}
-	return recipients[0] + " +" + strconv.Itoa(len(recipients)-1)
+	return label + " +" + strconv.Itoa(len(recipients)-1)
+}
+
+// summaryList renders a bounded, comma-separated recipient label list.
+func summaryList(recipients []mailsync.Recipient) string {
+	if len(recipients) == 0 {
+		return ""
+	}
+	limit := 4
+	labels := make([]string, 0, limit)
+	for i, recipient := range recipients {
+		if i >= limit {
+			break
+		}
+		if label := recipientLabel(recipient); label != "" {
+			labels = append(labels, label)
+		}
+	}
+	if len(labels) == 0 {
+		return ""
+	}
+	result := strings.Join(labels, ", ")
+	if len(recipients) > limit {
+		result += " +" + strconv.Itoa(len(recipients)-limit)
+	}
+	return result
+}
+
+// ToSummary names the cached To recipients, including this account. Hidden Bcc
+// recipients are never present in a received message and are never invented.
+func (m TimelineMessage) ToSummary() string {
+	return summaryList(m.Preview.ToRecipients)
+}
+
+// CcSummary names the cached Cc recipients of a received or sent message.
+func (m TimelineMessage) CcSummary() string {
+	return summaryList(m.Preview.CcRecipients)
 }
 func (m TimelineMessage) Subject() string {
 	subject := m.Preview.Subject
@@ -414,6 +477,23 @@ func FormatTimeline(records []timeline.Record, spaces, labels []collections.Item
 			person.Name = record.Preview.Name
 			person.Count++
 			people[person.Email] = person
+		}
+		// The directory covers both directions: cached senders plus the To/Cc of
+		// sent mail, so composing suggests people this user has written to as well.
+		// The account's own address and the sender are never listed as contacts.
+		if !data.Archived[record.Identity.Key] {
+			for _, recipient := range append(append([]mailsync.Recipient{}, record.Preview.ToRecipients...), record.Preview.CcRecipients...) {
+				if recipient.Address == "" || strings.EqualFold(recipient.Address, record.AccountAddress) || strings.EqualFold(recipient.Address, record.Preview.Sender) {
+					continue
+				}
+				person := people[recipient.Address]
+				person.Email = recipient.Address
+				if person.Name == "" {
+					person.Name = recipient.Name
+				}
+				person.Count++
+				people[person.Email] = person
+			}
 		}
 		if data.ThreadKey == "" && ((data.Filter == "archived") != data.Archived[record.Identity.Key]) && data.Filter != "all" {
 			continue

@@ -48,6 +48,8 @@ type AuthPageData struct {
 	OrdinaryRead          bool
 	SecureRead            bool
 	RawURL                string
+	ToLabel               string
+	CcLabel               string
 	SeenReference         string
 	SeenWrites            bool
 	SeenUnread            bool

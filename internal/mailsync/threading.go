@@ -89,13 +89,73 @@ func (s *Service) repairThreading(ctx context.Context, owner, account, folder st
 	return tx.Commit()
 }
 
+// repairedRecipients extracts To/Cc display names from the same bounded header
+// prefix. It never reads or decodes a body and never invents a Bcc header.
+func repairedRecipients(prefix []byte) ([]Recipient, []Recipient, bool) {
+	if len(prefix) > maxThreadHeaders {
+		prefix = prefix[:maxThreadHeaders]
+	}
+	end, width := bytes.Index(prefix, []byte("\r\n\r\n")), 4
+	if lf := bytes.Index(prefix, []byte("\n\n")); lf >= 0 && (end < 0 || lf < end) {
+		end, width = lf, 2
+	}
+	if end < 0 {
+		return nil, nil, false
+	}
+	message, err := mail.ReadMessage(bytes.NewReader(prefix[:end+width]))
+	if err != nil {
+		return nil, nil, false
+	}
+	parse := func(header string) []Recipient {
+		list, err := mail.ParseAddressList(message.Header.Get(header))
+		if err != nil {
+			return nil
+		}
+		result := make([]Recipient, 0, len(list))
+		for i, a := range list {
+			if i >= 100 {
+				break
+			}
+			result = append(result, Recipient{Name: text(a.Name, 200), Address: text(a.Address, 254)})
+		}
+		return result
+	}
+	return parse("To"), parse("Cc"), true
+}
+
+// repairedPreview upgrades one cached metadata preview from stored headers. It
+// returns false when neither threading nor recipient names need repair.
 func repairedPreview(preview Preview, prefix []byte) (Preview, string, bool) {
-	refs, ok := repairedReferences(prefix)
-	if !ok {
+	repaired := false
+	if preview.ThreadingVersion < threadingVersion {
+		refs, ok := repairedReferences(prefix)
+		if !ok {
+			return preview, "", false
+		}
+		preview.References = refs
+		preview.ThreadingVersion = threadingVersion
+		repaired = true
+	}
+	if preview.RecipientsVersion < recipientsVersion {
+		to, cc, ok := repairedRecipients(prefix)
+		if !ok {
+			return preview, "", false
+		}
+		if len(preview.To) == 0 {
+			addresses := make([]string, 0, len(to))
+			for _, recipient := range to {
+				addresses = append(addresses, recipient.Address)
+			}
+			preview.To = addresses
+		}
+		preview.ToRecipients = to
+		preview.CcRecipients = cc
+		preview.RecipientsVersion = recipientsVersion
+		repaired = true
+	}
+	if !repaired {
 		return preview, "", false
 	}
-	preview.References = refs
-	preview.ThreadingVersion = threadingVersion
 	encoded, err := json.Marshal(preview)
 	if err != nil {
 		return preview, "", false

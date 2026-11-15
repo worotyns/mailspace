@@ -410,3 +410,65 @@ func TestNamedContactsShowSecondaryEmailInPeopleAndSenderHeaders(t *testing.T) {
 		}
 	}
 }
+
+func TestRecipientNamesAndCcRenderWithoutInventingBcc(t *testing.T) {
+	sent := TimelineMessage{StartsRun: true, Record: timeline.Record{Identity: mail.MessageIdentity{Key: "out"}, Own: true, AccountName: "Mailbox", AccountAddress: "i@worotyns.ovh", Preview: mailsync.Preview{Sender: "i@worotyns.ovh", To: []string{"worotyns@hotmail.com", "i@worotyns.ovh"}, ToRecipients: []mailsync.Recipient{{Name: "Mateusz Worotynski", Address: "worotyns@hotmail.com"}, {Address: "i@worotyns.ovh"}}}}}
+	if got := sent.RecipientSummary(); got != "Mateusz Worotynski" {
+		t.Fatalf("cached recipient name not used: %q", got)
+	}
+	received := TimelineMessage{StartsRun: true, Record: timeline.Record{Identity: mail.MessageIdentity{Key: "in"}, AccountName: "Mailbox", AccountAddress: "i@worotyns.ovh", Preview: mailsync.Preview{Name: "Sender Name", Sender: "sender@example.test", ToRecipients: []mailsync.Recipient{{Address: "i@worotyns.ovh"}}, CcRecipients: []mailsync.Recipient{{Name: "Third Person", Address: "third@example.test"}}}}}
+	if got := received.CcSummary(); got != "Third Person" {
+		t.Fatalf("cc summary %q", got)
+	}
+	if got := received.ToSummary(); got != "i@worotyns.ovh" {
+		t.Fatalf("to summary %q", got)
+	}
+	data := TimelineData{Timezone: "UTC", Messages: []TimelineMessage{sent, received}}
+	response := httptest.NewRecorder()
+	if err := RenderTimeline(response, httptest.NewRequest("GET", "/", nil), false, data); err != nil {
+		t.Fatal(err)
+	}
+	html := response.Body.String()
+	if !strings.Contains(html, "Mateusz Worotynski") || !strings.Contains(html, "cc: Third Person") {
+		t.Fatal("cached recipient names or cc missing from the row")
+	}
+	if strings.Contains(html, "Bcc") || strings.Contains(html, "bcc:") {
+		t.Fatal("a hidden Bcc recipient was invented")
+	}
+}
+
+func TestPeopleDirectoryCoversSendersAndSentRecipients(t *testing.T) {
+	records := []timeline.Record{
+		{Identity: mail.MessageIdentity{Key: "in"}, AccountAddress: "me@example.test", At: time.Unix(2000, 0), Preview: mailsync.Preview{Sender: "writer@example.test", Name: "Writer", ToRecipients: []mailsync.Recipient{{Address: "me@example.test"}}}},
+		{Identity: mail.MessageIdentity{Key: "out"}, Own: true, AccountAddress: "me@example.test", At: time.Unix(1000, 0), Preview: mailsync.Preview{Sender: "me@example.test", To: []string{"reader@example.test"}, ToRecipients: []mailsync.Recipient{{Name: "Reader", Address: "reader@example.test"}}, CcRecipients: []mailsync.Recipient{{Address: "cc@example.test"}}}},
+	}
+	data := TimelineData{Filter: "all", Timezone: "UTC"}
+	FormatTimeline(records, nil, nil, nil, &data)
+	people := map[string]PersonView{}
+	for _, person := range data.People {
+		people[person.Email] = person
+	}
+	if people["writer@example.test"].Name != "Writer" || people["reader@example.test"].Name != "Reader" || people["cc@example.test"].Email == "" {
+		t.Fatalf("directory did not cover both directions: %#v", data.People)
+	}
+	if _, ok := people["me@example.test"]; ok {
+		t.Fatal("own account listed as a contact")
+	}
+}
+
+func TestReaderShowsCachedToAndCcButNeverBcc(t *testing.T) {
+	response := httptest.NewRecorder()
+	data := AuthPageData{Email: "me@example.test", CSRF: "csrf", SecureRead: true, OrdinaryRead: true, ToLabel: "Mateusz Worotynski <worotyns@hotmail.com>", CcLabel: "Third Person"}
+	if err := RenderAuth(response, false, "secure-mail", data); err != nil {
+		t.Fatal(err)
+	}
+	html := response.Body.String()
+	for _, want := range []string{">To</dt>", "Mateusz Worotynski &lt;worotyns@hotmail.com&gt;", ">Cc</dt>", "Third Person", "never invented"} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("reader missing %q", want)
+		}
+	}
+	if strings.Contains(html, ">Bcc</dt>") {
+		t.Fatal("reader invented a Bcc line for received mail")
+	}
+}

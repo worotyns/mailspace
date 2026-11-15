@@ -528,7 +528,8 @@ func timelineRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 			classifyReference = webui.EncodeSource(ref)
 			classifyProvider = config.Decisions.ProviderName()
 		}
-		renderSecurePage(w, config, webui.AuthPageData{UserID: s.User.ID, SessionExpires: s.ExpiresAt.UnixMilli(), Email: s.User.Email, ClassifyReference: classifyReference, ClassifyProvider: classifyProvider, CSRF: s.CSRF, SecureRead: true, OrdinaryRead: !resolved.Record.Preview.Encrypted, RawURL: "/api/messages/raw?" + url.Values{"reference": {webui.EncodeSource(ref)}}.Encode(), SeenReference: webui.EncodeSource(ref), SeenWrites: config.Sync.FlagWritesEnabled(), SeenUnread: resolved.Record.Unread, ClaimedSender: resolved.Record.Preview.Sender, AccountID: ref.AccountID})
+		reader := webui.TimelineMessage{Record: resolved.Record}
+		renderSecurePage(w, config, webui.AuthPageData{UserID: s.User.ID, SessionExpires: s.ExpiresAt.UnixMilli(), Email: s.User.Email, ClassifyReference: classifyReference, ClassifyProvider: classifyProvider, CSRF: s.CSRF, SecureRead: true, OrdinaryRead: !resolved.Record.Preview.Encrypted, RawURL: "/api/messages/raw?" + url.Values{"reference": {webui.EncodeSource(ref)}}.Encode(), ToLabel: reader.ToSummary(), CcLabel: reader.CcSummary(), SeenReference: webui.EncodeSource(ref), SeenWrites: config.Sync.FlagWritesEnabled(), SeenUnread: resolved.Record.Unread, ClaimedSender: resolved.Record.Preview.Sender, AccountID: ref.AccountID})
 	}))
 	mux.HandleFunc("POST /timeline/sync", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
 		if !mutation(w, r, s) {

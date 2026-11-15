@@ -17,10 +17,12 @@ Status: specyfikacje lokalne, nie zgłoszenia utworzone na GitHub. MS-001–MS-0
 | MS-011 | M4 | P2 | [Attachment Drive](issues/MS-011.md) | 008,010 |
 | MS-012 | M4 | P2 | [Full-text bez modeli](issues/MS-012.md) | 003,006 |
 | MS-013 | M5 | P2 | [Deterministyczny decision engine](issues/MS-013.md) | 003 |
-| MS-014 | M6 | P2 | [AI compose/summarize i semantic search](issues/MS-014.md) | 006,012 |
-| MS-015 | M7 | P2 | [PostgreSQL adapter](issues/MS-015.md) | 001 |
+| MS-014 | M6 | P2 | [Full-text/semantic search without a model](issues/MS-014.md) | 006,012 |
 | MS-016 | M7 | P2 | [Pakiet YunoHost](issues/MS-016.md) | M2 |
+
 | MS-017 | M0 | P0 | [Reproducible release pipeline i smoke](issues/MS-017.md) | M0 |
+
+PostgreSQL (MS-015) is removed from the plan by owner direction (2026-11-15). AI compose/summarize is removed too; MS-014 keeps only full-text/semantic search without a model. Neither is a hidden runtime dependency.
 
 Szacunki dopiero po M1 spike. P0: bramka bezpieczeństwa/core; P1: UX/team; P2: moduły i dystrybucja. Kolejność etapów w ROADMAP.
 
