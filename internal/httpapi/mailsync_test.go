@@ -16,6 +16,7 @@ import (
 	"mailspace.local/mailspace/internal/mailnet"
 	"mailspace.local/mailspace/internal/mailsync"
 	"mailspace.local/mailspace/internal/outbox"
+	"mailspace.local/mailspace/internal/sharing"
 	"mailspace.local/mailspace/internal/timeline"
 	"mailspace.local/mailspace/internal/webui"
 	"net"
@@ -409,6 +410,90 @@ func TestReadOnlyMailboxEndToEndAndAuthorization(t *testing.T) {
 		t.Fatal("thread reply composer unavailable")
 	}
 
+	t.Run("team grant read-only", func(t *testing.T) {
+		workspace, err := db.CreateWorkspace(ctx, alice.ID, "Shared org")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = db.AddMember(ctx, alice.ID, workspace.ID, bob.Email); err != nil {
+			t.Fatal(err)
+		}
+		grants := sharing.New(db, a)
+		grant, err := grants.Grant(ctx, alice.ID, workspace.ID, account.ID, "", bob.Email, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sharedView := request("GET", "/", other, "", false)
+		if sharedView.Code != 200 || !strings.Contains(sharedView.Body.String(), `id="message-`+sourceIdentity.Key+`"`) || !strings.Contains(sharedView.Body.String(), "shared by alice@example.test") {
+			t.Fatalf("grantee did not see the shared message: %d %s", sharedView.Code, sharedView.Body.String())
+		}
+		page := sharedView.Body.String()
+		for _, forbidden := range []string{`action="/messages/archive"`, `hx-post="/messages/seen"`, "Edit message Spaces"} {
+			if strings.Contains(page, forbidden) {
+				t.Fatalf("read-only shared row exposed %s", forbidden)
+			}
+		}
+		reader := request("GET", "/messages/read?"+url.Values{"reference": {webui.EncodeSource(ref)}}.Encode(), other, "", false)
+		if reader.Code != 200 || !strings.Contains(reader.Body.String(), "Shared read-only") || !strings.Contains(reader.Body.String(), "does not permit downloading") {
+			t.Fatal("shared reader boundary missing", reader.Code)
+		}
+		encodedRef := webui.EncodeSource(ref)
+		if raw := request("GET", "/api/messages/raw?"+url.Values{"reference": {encodedRef}}.Encode(), other, "", false); raw.Code != 403 {
+			t.Fatal("grant without download fetched original bytes", raw.Code)
+		}
+		post := func(path string, values url.Values) *httptest.ResponseRecorder {
+			values.Set("csrf", otherSession.CSRF)
+			values.Set("reference", encodedRef)
+			values.Set("return_to", "/")
+			req := httptest.NewRequest("POST", path, strings.NewReader(values.Encode()))
+			req.Header.Set("Origin", "https://mail.example.test")
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req.AddCookie(&http.Cookie{Name: "__Host-mailspace", Value: other})
+			res := httptest.NewRecorder()
+			handler.ServeHTTP(res, req)
+			return res
+		}
+		if res := post("/messages/seen", url.Values{"seen": {"1"}}); res.Code != 404 {
+			t.Fatal("grantee marked shared mail read", res.Code)
+		}
+		if res := post("/messages/archive", url.Values{"archived": {"1"}}); res.Code != 404 {
+			t.Fatal("grantee archived shared mail", res.Code)
+		}
+		if res := post("/collections/"+space.ID+"/membership", url.Values{"kind": {"space"}, "selected": {"1"}}); res.Code != 404 {
+			t.Fatal("grantee assigned shared mail to a Space", res.Code)
+		}
+		if res := post("/timeline/replies/plain", url.Values{"body": {"hello"}, "subject": {"Re: " + messages[0].Preview.Subject}}); res.Code != 404 {
+			t.Fatal("grantee replied from a shared account", res.Code)
+		}
+		if res := request("GET", "/messages/collections?"+url.Values{"reference": {encodedRef}}.Encode(), other, "", false); res.Code != 404 {
+			t.Fatal("grantee opened shared assignment controls", res.Code)
+		}
+		// A download-enabled grant exposes original bytes again.
+		if _, err = grants.Grant(ctx, alice.ID, workspace.ID, account.ID, "", bob.Email, true); err != nil {
+			t.Fatal(err)
+		}
+		if raw := request("GET", "/api/messages/raw?"+url.Values{"reference": {encodedRef}}.Encode(), other, "", false); raw.Code != 200 || len(raw.Body.Bytes()) == 0 {
+			t.Fatal("download-enabled grant did not serve original bytes", raw.Code)
+		}
+		// Revocation removes the shared view immediately.
+		if err = grants.Revoke(ctx, alice.ID, grant.ID); err != nil {
+			t.Fatal(err)
+		}
+		list, err := grants.List(ctx, alice.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, item := range list {
+			if item.GranteeEmail == bob.Email {
+				if err = grants.Revoke(ctx, alice.ID, item.ID); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		if revoked := request("GET", "/", other, "", false); revoked.Code != 200 || strings.Contains(revoked.Body.String(), "shared by alice@example.test") {
+			t.Fatal("revoked grant still listed shared mail", revoked.Code)
+		}
+	})
 	t.Run("drawer and archive boundaries", func(t *testing.T) {
 		req := httptest.NewRequest("GET", threadURL+"&reply="+sourceIdentity.Key, nil)
 		req.Header.Set("HX-Request", "true")

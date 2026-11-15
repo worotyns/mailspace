@@ -472,3 +472,33 @@ func TestReaderShowsCachedToAndCcButNeverBcc(t *testing.T) {
 		t.Fatal("reader invented a Bcc line for received mail")
 	}
 }
+
+func TestSharedMessageRendersReadOnlyWithoutMutationControls(t *testing.T) {
+	shared := TimelineMessage{StartsRun: true, SeenWrites: true, Record: timeline.Record{Identity: mail.MessageIdentity{Key: "shared"}, Ref: mail.SourceRef{Kind: "imap"}, Shared: true, SharedBy: "alice@example.test", CanDownload: false, Preview: mailsync.Preview{Name: "Sender", Sender: "sender@example.test", ToRecipients: []mailsync.Recipient{{Address: "alice@example.test"}}}}}
+	data := TimelineData{Timezone: "UTC", SeenWrites: true, Filter: "all", Messages: []TimelineMessage{shared}}
+	response := httptest.NewRecorder()
+	if err := RenderTimeline(response, httptest.NewRequest("GET", "/", nil), false, data); err != nil {
+		t.Fatal(err)
+	}
+	html := response.Body.String()
+	if !strings.Contains(html, "shared by alice@example.test") || !strings.Contains(html, `id="message-shared"`) {
+		t.Fatal("shared badge missing", html)
+	}
+	for _, forbidden := range []string{`action="/messages/archive"`, `hx-post="/messages/seen"`, "Edit message Spaces", `href="/messages/read?`, "data-load-attachments"} {
+		if strings.Contains(html, forbidden) {
+			t.Fatalf("read-only shared row exposed %s", forbidden)
+		}
+	}
+	// A download-enabled grant restores the original-message and attachment controls.
+	downloadable := shared
+	downloadable.CanDownload = true
+	data = TimelineData{Timezone: "UTC", SeenWrites: true, Filter: "all", Messages: []TimelineMessage{downloadable}}
+	response = httptest.NewRecorder()
+	if err := RenderTimeline(response, httptest.NewRequest("GET", "/", nil), false, data); err != nil {
+		t.Fatal(err)
+	}
+	html = response.Body.String()
+	if !strings.Contains(html, `href="/messages/read?`) || !strings.Contains(html, "data-load-attachments") || strings.Contains(html, `action="/messages/archive"`) {
+		t.Fatal("download-enabled shared row lost the read controls or gained write controls", html)
+	}
+}

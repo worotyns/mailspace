@@ -11,6 +11,7 @@ import (
 	"mailspace.local/mailspace/internal/mailnet"
 	"mailspace.local/mailspace/internal/mailsync"
 	"mailspace.local/mailspace/internal/outbox"
+	"mailspace.local/mailspace/internal/sharing"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -190,3 +191,79 @@ func TestLogicalIdentitySeparatesAccountsAndConfiguration(t *testing.T) {
 	}
 }
 func fmtRecord(record Record) string { return record.String() }
+
+func TestSharedGrantIsReadOnlyFolderScopedAndRevocable(t *testing.T) {
+	service, store, a, _, owner, other, account := setup(t)
+	ctx := context.Background()
+	put(t, store, account.ID, "INBOX", 1, fixture("shared@example.test", "Shared body", ""), false, false)
+	put(t, store, account.ID, "Archive", 1, fixture("archived@example.test", "Archived body", ""), true, false)
+	workspace, err := store.CreateWorkspace(ctx, owner, "Team")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = store.AddMember(ctx, owner, workspace.ID, "other@example.test"); err != nil {
+		t.Fatal(err)
+	}
+	grants := sharing.New(store, a)
+	service.SetSharing(grants)
+	if _, err = service.ListForViewer(ctx, other, account.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatal("ungranted account listed")
+	}
+	if _, err = grants.Grant(ctx, owner, workspace.ID, account.ID, "INBOX", "other@example.test", false); err != nil {
+		t.Fatal(err)
+	}
+	records, err := service.ListForViewer(ctx, other, "")
+	if err != nil || len(records) != 1 || !records[0].Shared || records[0].SharedBy != "owner@example.test" || records[0].CanDownload {
+		t.Fatalf("shared list incorrect: %#v (%v)", records, err)
+	}
+	if records[0].Ref.Mailbox != "INBOX" {
+		t.Fatal("folder-scoped grant widened to another folder")
+	}
+	resolved, err := service.ResolveForViewer(ctx, other, records[0].Ref)
+	if err != nil || !resolved.Record.Shared || resolved.Record.CanDownload {
+		t.Fatal("shared resolve incorrect", err)
+	}
+	// The owner-scoped path used by mutations never resolves another owner's source.
+	if _, err = service.Resolve(ctx, other, records[0].Ref); !errors.Is(err, ErrNotFound) {
+		t.Fatal("owner-scoped resolve leaked a shared source")
+	}
+	// The owner's own list is unchanged and never marked shared.
+	owned, err := service.List(ctx, owner, "")
+	if err != nil || len(owned) != 2 {
+		t.Fatal("owner list changed", len(owned), err)
+	}
+	for _, record := range owned {
+		if record.Shared {
+			t.Fatal("owned record marked shared")
+		}
+	}
+	// A local outbox source is never shared, even with a whole-account grant.
+	outboxRef := mail.SourceRef{Kind: "outbox", AccountID: account.ID, Revision: records[0].Ref.Revision, OutgoingID: "0123456789abcdef0123456789abcdef"}
+	if _, err = service.ResolveForViewer(ctx, other, outboxRef); !errors.Is(err, ErrNotFound) {
+		t.Fatal("shared outbox exposed")
+	}
+	if _, err = grants.Grant(ctx, owner, workspace.ID, account.ID, "", "other@example.test", true); err != nil {
+		t.Fatal(err)
+	}
+	if resolved, err = service.ResolveForViewer(ctx, other, records[0].Ref); err != nil || !resolved.Record.CanDownload {
+		t.Fatal("download grant not reflected", err)
+	}
+	if list, err := service.ListForViewer(ctx, other, ""); err != nil || len(list) != 2 {
+		t.Fatal("whole-account grant did not cover every folder", len(list), err)
+	}
+	if err = grants.Revoke(ctx, owner, records[0].Ref.AccountID); !errors.Is(err, sharing.ErrNotFound) {
+		t.Fatal("revoke by account id accepted")
+	}
+	grantsList, err := grants.List(ctx, owner)
+	if err != nil || len(grantsList) != 2 {
+		t.Fatal("owner grant list incorrect", len(grantsList), err)
+	}
+	for _, item := range grantsList {
+		if err = grants.Revoke(ctx, owner, item.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err = service.ResolveForViewer(ctx, other, records[0].Ref); !errors.Is(err, ErrNotFound) {
+		t.Fatal("revoked grant still resolved")
+	}
+}

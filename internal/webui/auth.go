@@ -50,6 +50,9 @@ type AuthPageData struct {
 	RawURL                string
 	ToLabel               string
 	CcLabel               string
+	ReadOnly              bool
+	SharedBy              string
+	DownloadAllowed       bool
 	SeenReference         string
 	SeenWrites            bool
 	SeenUnread            bool

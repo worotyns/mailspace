@@ -14,6 +14,7 @@ import (
 	"mailspace.local/mailspace/internal/mail"
 	"mailspace.local/mailspace/internal/mailsync"
 	"mailspace.local/mailspace/internal/outbox"
+	"mailspace.local/mailspace/internal/sharing"
 	"sort"
 	"strings"
 	"time"
@@ -34,6 +35,12 @@ type Record struct {
 	Own            bool
 	State          string
 	CopyState      string
+	// Shared marks a record read from another owner's account through a grant.
+	// Shared records are read-only and omit the owner's local outbox.
+	// CanDownload gates the original MIME/attachment bytes separately.
+	Shared      bool
+	SharedBy    string
+	CanDownload bool
 }
 
 func (Record) String() string   { return "<redacted timeline message>" }
@@ -52,11 +59,16 @@ type Service struct {
 	accounts *accounts.Service
 	sync     *mailsync.Service
 	outbox   *outbox.Service
+	sharing  *sharing.Service
 }
 
 func New(users *identity.Store, a *accounts.Service, s *mailsync.Service, o *outbox.Service) *Service {
 	return &Service{users: users, accounts: a, sync: s, outbox: o}
 }
+
+// SetSharing enables read-only access to accounts shared with the viewer. The
+// owner-only List/Resolve used by rules, decisions and mutations stay unchanged.
+func (s *Service) SetSharing(v *sharing.Service) { s.sharing = v }
 func identityFor(account string, revision int64, p mailsync.Preview, ref mail.SourceRef) mail.MessageIdentity {
 	messageID := p.MessageID
 	if messageID == "" {
@@ -128,6 +140,30 @@ func (s *Service) Identity(ctx context.Context, owner string, ref mail.SourceRef
 	return r.Record.Identity, err
 }
 
+// ResolveForViewer resolves an owned source, or a read-only source shared with
+// the viewer through a currently valid grant. Shared outbox and non-IMAP
+// sources are never exposed, and a missing or revoked grant fails closed.
+func (s *Service) ResolveForViewer(ctx context.Context, viewer string, ref mail.SourceRef) (Resolved, error) {
+	if resolved, err := s.Resolve(ctx, viewer, ref); err == nil {
+		return resolved, nil
+	}
+	if s.sharing == nil || ref.Kind != "imap" {
+		return Resolved{}, ErrNotFound
+	}
+	grant, ok, err := s.sharing.Authorize(ctx, viewer, ref.AccountID, ref.Mailbox)
+	if err != nil || !ok {
+		return Resolved{}, ErrNotFound
+	}
+	resolved, err := s.Resolve(ctx, grant.GrantorID, ref)
+	if err != nil {
+		return Resolved{}, ErrNotFound
+	}
+	resolved.Record.Shared = true
+	resolved.Record.SharedBy = grant.GrantorEmail
+	resolved.Record.CanDownload = grant.CanDownload
+	return resolved, nil
+}
+
 // List is a bounded recent-message view, not a full mailbox-history claim.
 // Identical Message-ID+raw-hash copies collapse only inside the same account and
 // connection revision; conflicting IDs remain separate messages.
@@ -143,65 +179,146 @@ func (s *Service) List(ctx context.Context, owner, accountFilter string) ([]Reco
 			continue
 		}
 		found = true
-		account, err := s.accounts.Get(ctx, owner, item.ID)
-		if err != nil {
+		if err = s.collect(ctx, sourceScope{owner: owner, account: item.ID}, records); err != nil {
 			return nil, err
-		}
-		folders, err := s.sync.Folders(ctx, owner, item.ID)
-		if err != nil {
-			return nil, err
-		}
-		for _, folder := range folders {
-			messages, err := s.sync.Messages(ctx, owner, item.ID, folder.Name)
-			if err != nil {
-				return nil, err
-			}
-			for _, message := range messages {
-				if message.Preview.ContentHash == "" {
-					continue
-				}
-				ref := mail.SourceRef{Revision: account.Revision, Kind: "imap", AccountID: account.ID, Mailbox: message.Mailbox, UID: message.UID, Validity: message.Validity}
-				p := message.Preview
-				p.Text = summary(p.Text)
-				r := Record{Identity: identityFor(account.ID, account.Revision, p, ref), Ref: ref, AccountName: account.Name, AccountAddress: account.Address, Preview: p, At: message.Received, Own: strings.EqualFold(account.Address, p.Sender)}
-				seen := false
-				for _, flag := range message.Flags {
-					if flag == `\Seen` {
-						seen = true
-					}
-				}
-				r.Unread = !seen
-				if old, ok := records[r.Identity.Key]; ok {
-					r.Unread = r.Unread || old.Unread
-					if old.Ref.Mailbox == "INBOX" && r.Ref.Mailbox != "INBOX" {
-						old.Unread = r.Unread
-						records[r.Identity.Key] = old
-						continue
-					}
-				}
-				records[r.Identity.Key] = r
-			}
-		}
-		if s.outbox != nil {
-			outgoing, err := s.outbox.Sources(ctx, owner, item.ID)
-			if err != nil {
-				return nil, err
-			}
-			for _, source := range outgoing {
-				p := mailsync.Parse(source.Raw)
-				p.Text = summary(p.Text)
-				ref := mail.SourceRef{Revision: account.Revision, Kind: "outbox", AccountID: account.ID, OutgoingID: source.Record.ID}
-				key := identityFor(account.ID, account.Revision, p, ref)
-				if existing, ok := records[key.Key]; ok {
-					existing.State = source.Record.State
-					existing.CopyState = source.Record.CopyState
-					records[key.Key] = existing
-					continue
-				}
-				records[key.Key] = Record{Identity: key, Ref: ref, AccountName: account.Name, AccountAddress: account.Address, Preview: p, At: source.Record.CreatedAt, Own: true, State: source.Record.State, CopyState: source.Record.CopyState}
-			}
 		}
 	}
+	return finishRecords(records, found)
+}
+
+// sourceScope is one account readable by a viewer. A shared scope names the
+// grantor and either the whole account or one granted folder.
+type sourceScope struct {
+	owner       string
+	account     string
+	shared      bool
+	sharedBy    string
+	mailbox     string
+	canDownload bool
+}
+
+// ListForViewer returns the viewer's owned accounts plus accounts shared with
+// them through currently valid grants. Shared scopes are read-only and never
+// include the owner's local outbox. It stays a bounded cached view.
+func (s *Service) ListForViewer(ctx context.Context, viewer, accountFilter string) ([]Record, error) {
+	configured, err := s.users.Accounts(ctx, viewer)
+	if err != nil {
+		return nil, err
+	}
+	owned := map[string]bool{}
+	scopes := []sourceScope{}
+	found := accountFilter == ""
+	for _, item := range configured {
+		owned[item.ID] = true
+		if accountFilter == "" || accountFilter == item.ID {
+			scopes = append(scopes, sourceScope{owner: viewer, account: item.ID})
+			found = true
+		}
+	}
+	if s.sharing != nil {
+		grants, err := s.sharing.GrantedAccounts(ctx, viewer)
+		if err != nil {
+			return nil, err
+		}
+		for _, grant := range grants {
+			if owned[grant.AccountID] || accountFilter != "" && accountFilter != grant.AccountID {
+				continue
+			}
+			scopes = append(scopes, sourceScope{owner: grant.GrantorID, account: grant.AccountID, shared: true, sharedBy: grant.GrantorEmail, mailbox: grant.Mailbox, canDownload: grant.CanDownload})
+			found = true
+		}
+	}
+	if !found {
+		return nil, ErrNotFound
+	}
+	records := map[string]Record{}
+	seen := map[string]bool{}
+	for _, scope := range scopes {
+		key := scope.account + "\x00" + scope.owner + "\x00" + scope.mailbox
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		if err = s.collect(ctx, scope, records); err != nil {
+			return nil, err
+		}
+	}
+	return finishRecords(records, found)
+}
+
+// collect merges one account's cached IMAP messages into records. A shared
+// scope never reads the owner's outbox, and a stale account is skipped instead
+// of disclosing an error.
+func (s *Service) collect(ctx context.Context, scope sourceScope, records map[string]Record) error {
+	account, err := s.accounts.Get(ctx, scope.owner, scope.account)
+	if errors.Is(err, accounts.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	folders, err := s.sync.Folders(ctx, scope.owner, scope.account)
+	if err != nil {
+		return err
+	}
+	for _, folder := range folders {
+		if scope.mailbox != "" && folder.Name != scope.mailbox {
+			continue
+		}
+		messages, err := s.sync.Messages(ctx, scope.owner, scope.account, folder.Name)
+		if err != nil {
+			return err
+		}
+		for _, message := range messages {
+			if message.Preview.ContentHash == "" {
+				continue
+			}
+			ref := mail.SourceRef{Revision: account.Revision, Kind: "imap", AccountID: account.ID, Mailbox: message.Mailbox, UID: message.UID, Validity: message.Validity}
+			p := message.Preview
+			p.Text = summary(p.Text)
+			r := Record{Identity: identityFor(account.ID, account.Revision, p, ref), Ref: ref, AccountName: account.Name, AccountAddress: account.Address, Preview: p, At: message.Received, Own: strings.EqualFold(account.Address, p.Sender), Shared: scope.shared, SharedBy: scope.sharedBy, CanDownload: !scope.shared || scope.canDownload}
+			seen := false
+			for _, flag := range message.Flags {
+				if flag == `\Seen` {
+					seen = true
+				}
+			}
+			r.Unread = !seen
+			if old, ok := records[r.Identity.Key]; ok {
+				r.Unread = r.Unread || old.Unread
+				if old.Ref.Mailbox == "INBOX" && r.Ref.Mailbox != "INBOX" {
+					old.Unread = r.Unread
+					records[r.Identity.Key] = old
+					continue
+				}
+			}
+			records[r.Identity.Key] = r
+		}
+	}
+	if scope.shared || s.outbox == nil {
+		return nil
+	}
+	outgoing, err := s.outbox.Sources(ctx, scope.owner, scope.account)
+	if err != nil {
+		return err
+	}
+	for _, source := range outgoing {
+		p := mailsync.Parse(source.Raw)
+		p.Text = summary(p.Text)
+		ref := mail.SourceRef{Revision: account.Revision, Kind: "outbox", AccountID: account.ID, OutgoingID: source.Record.ID}
+		key := identityFor(account.ID, account.Revision, p, ref)
+		if existing, ok := records[key.Key]; ok {
+			existing.State = source.Record.State
+			existing.CopyState = source.Record.CopyState
+			records[key.Key] = existing
+			continue
+		}
+		records[key.Key] = Record{Identity: key, Ref: ref, AccountName: account.Name, AccountAddress: account.Address, Preview: p, At: source.Record.CreatedAt, Own: true, State: source.Record.State, CopyState: source.Record.CopyState}
+	}
+	return nil
+}
+
+func finishRecords(records map[string]Record, found bool) ([]Record, error) {
 	if !found {
 		return nil, ErrNotFound
 	}
@@ -220,6 +337,7 @@ func (s *Service) List(ctx context.Context, owner, accountFilter string) ([]Reco
 	}
 	return result, nil
 }
+
 func summary(value string) string {
 	runes := []rune(value)
 	if len(runes) > 1000 {

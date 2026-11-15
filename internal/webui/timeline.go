@@ -465,7 +465,7 @@ func FormatTimeline(records []timeline.Record, spaces, labels []collections.Item
 			}
 			all[id] = collection
 		}
-		if !hasSpace && !record.Own && !data.Archived[record.Identity.Key] {
+		if !hasSpace && !record.Own && !record.Shared && !data.Archived[record.Identity.Key] {
 			data.Unsorted++
 		}
 		if record.Unread && !data.Archived[record.Identity.Key] {
@@ -498,7 +498,7 @@ func FormatTimeline(records []timeline.Record, spaces, labels []collections.Item
 		if data.ThreadKey == "" && ((data.Filter == "archived") != data.Archived[record.Identity.Key]) && data.Filter != "all" {
 			continue
 		}
-		if !spaceMatch || !labelMatch || data.Filter == "unsorted" && (hasSpace || record.Own) || data.Filter == "unread" && !record.Unread {
+		if !spaceMatch || !labelMatch || data.Filter == "unsorted" && (hasSpace || record.Own || record.Shared) || data.Filter == "unread" && !record.Unread {
 			continue
 		}
 		if data.Person != "" {
@@ -527,7 +527,7 @@ func FormatTimeline(records []timeline.Record, spaces, labels []collections.Item
 			}
 		}
 
-		message := TimelineMessage{Archived: data.Archived[record.Identity.Key], Decision: DecisionSummary(data.Decisions[record.Identity.Key], spaces), Spaces: data.Spaces, Classifier: data.Classifier && !data.Archived[record.Identity.Key] && !record.Own && !record.Preview.Encrypted && record.Preview.Status == "ready", Record: record, Token: EncodeSource(record.Ref), Day: record.At.In(location).Format("Monday, 2 January 2006"), Time: record.At.In(location).Format("15:04"), ReturnURL: data.CurrentURL(), CSRF: data.CSRF}
+		message := TimelineMessage{Archived: data.Archived[record.Identity.Key], Decision: DecisionSummary(data.Decisions[record.Identity.Key], spaces), Spaces: data.Spaces, Classifier: data.Classifier && !record.Shared && !data.Archived[record.Identity.Key] && !record.Own && !record.Preview.Encrypted && record.Preview.Status == "ready", Record: record, Token: EncodeSource(record.Ref), Day: record.At.In(location).Format("Monday, 2 January 2006"), Time: record.At.In(location).Format("15:04"), ReturnURL: data.CurrentURL(), CSRF: data.CSRF}
 		for _, id := range ids {
 			if collection, ok := all[id]; ok {
 				message.Memberships = append(message.Memberships, collection)
@@ -572,7 +572,7 @@ func FormatTimeline(records []timeline.Record, spaces, labels []collections.Item
 		m.Spaces = data.Spaces
 		m.Labels = data.Labels
 		m.ContextSpace = data.SpaceID
-		m.SeenWrites = data.SeenWrites
+		m.SeenWrites = data.SeenWrites && !m.Shared
 	}
 	data.Total = len(data.Messages)
 	matches := []PersonView{}
@@ -801,6 +801,14 @@ func (m TimelineMessage) LabelsID() string { return "labels-" + m.DOMID() }
 
 // SpacePickerID scopes Space updates to one message without replacing its decrypted body.
 func (m TimelineMessage) SpacePickerID() string { return "spaces-" + m.DOMID() }
+
+// ReadOnly marks a message read from another owner's account through a grant.
+// Read-only messages keep cached preview text but no mutation controls.
+func (m TimelineMessage) ReadOnly() bool { return m.Shared }
+
+// CanFetchRaw gates original MIME and attachment bytes. Owned mail may always
+// fetch; shared mail only when the grant enables download.
+func (m TimelineMessage) CanFetchRaw() bool { return !m.Shared || m.CanDownload }
 
 // SeenID scopes a provider read-state update to one message row.
 func (m TimelineMessage) SeenID() string { return "seen-" + m.DOMID() }

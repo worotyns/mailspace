@@ -935,14 +935,16 @@
     >
       <time class="shrink-0 text-[10px] text-muted">{{ .Time }}</time>
       {{ template "timeline-message-seen" . }}
-      <a
-        href="{{ .ReplyURL }}"
-        hx-get="{{ .ReplyURL }}"
-        class="icon-action"
-        title="Reply"
-        aria-label="Reply"
-        >{{ template "timeline-icon" "message-circle" }}</a
-      >
+      {{ if not .ReadOnly }}
+        <a
+          href="{{ .ReplyURL }}"
+          hx-get="{{ .ReplyURL }}"
+          class="icon-action"
+          title="Reply"
+          aria-label="Reply"
+          >{{ template "timeline-icon" "message-circle" }}</a
+        >
+      {{ end }}
       <a
         href="{{ .ThreadURL }}"
         hx-get="{{ .ThreadURL }}"
@@ -956,14 +958,16 @@
         aria-label="Show thread"
         >{{ template "timeline-icon" "messages" }}</a
       >
-      <a
-        href="{{ .ReadURL }}"
-        class="icon-action"
-        title="Full message / decrypt"
-        aria-label="Full message / decrypt"
-        >{{ template "timeline-icon" "file-text" }}</a
-      >
-      {{ if not .Preview.Encrypted }}
+      {{ if .CanFetchRaw }}
+        <a
+          href="{{ .ReadURL }}"
+          class="icon-action"
+          title="Full message / decrypt"
+          aria-label="Full message / decrypt"
+          >{{ template "timeline-icon" "file-text" }}</a
+        >
+      {{ end }}
+      {{ if and (not .Preview.Encrypted) .CanFetchRaw }}
         <button
           type="button"
           data-load-attachments
@@ -978,7 +982,7 @@
           {{ end }}
         </button>
       {{ end }}
-      {{ if .Classifier }}
+      {{ if and .Classifier (not .ReadOnly) }}
         <form
           action="/automation/preview"
           method="post"
@@ -1005,7 +1009,7 @@
             {{ end }}
           </button>
         </form>
-      {{ else if .Decision }}
+      {{ else if and .Decision (not .ReadOnly) }}
         <a
           href="/automation#run-{{ .Decision.ID }}"
           class="icon-action"
@@ -1016,38 +1020,40 @@
           ></a
         >
       {{ end }}
-      <form action="/messages/archive" method="post" hx-disable>
-        <input type="hidden" name="csrf" value="{{ .CSRF }}" /><input
-          type="hidden"
-          name="reference"
-          value="{{ .Token }}"
-        /><input
-          type="hidden"
-          name="return_to"
-          value="{{ .ReturnURL }}"
-        /><input
-          type="hidden"
-          name="archived"
-          value="{{ .ArchiveSelection }}"
-        /><button
-          class="icon-action"
-          title="{{ if .Archived }}
-            Restore message
-          {{ else }}
-            Archive message
-          {{ end }}"
-          aria-label="{{ if .Archived }}
-            Restore message
-          {{ else }}
-            Archive message
-          {{ end }}"
-        >
-          {{ template "timeline-icon" "archive" }}
-        </button>
-      </form>
+      {{ if not .ReadOnly }}
+        <form action="/messages/archive" method="post" hx-disable>
+          <input type="hidden" name="csrf" value="{{ .CSRF }}" /><input
+            type="hidden"
+            name="reference"
+            value="{{ .Token }}"
+          /><input
+            type="hidden"
+            name="return_to"
+            value="{{ .ReturnURL }}"
+          /><input
+            type="hidden"
+            name="archived"
+            value="{{ .ArchiveSelection }}"
+          /><button
+            class="icon-action"
+            title="{{ if .Archived }}
+              Restore message
+            {{ else }}
+              Archive message
+            {{ end }}"
+            aria-label="{{ if .Archived }}
+              Restore message
+            {{ else }}
+              Archive message
+            {{ end }}"
+          >
+            {{ template "timeline-icon" "archive" }}
+          </button>
+        </form>
+      {{ end }}
       <span class="h-4 shrink-0 border-l border-line" aria-hidden="true"></span>
-      {{ template "timeline-message-spaces" . }}
-      {{ if and .RuleSpace (not .Preview.Encrypted) (not .Own) }}
+      {{ if not .ReadOnly }}{{ template "timeline-message-spaces" . }}{{ end }}
+      {{ if and .RuleSpace (not .Preview.Encrypted) (not .Own) (not .ReadOnly) }}
         <a
           href="{{ .SenderRuleURL .RuleSpace }}"
           class="icon-action"
@@ -1074,7 +1080,7 @@
         aria-label="Unread"
       ></span>
     {{ end }}
-    {{ if and .SeenWrites (eq .Ref.Kind "imap") }}
+    {{ if and .SeenWrites (eq .Ref.Kind "imap") (not .Shared) }}
       <form
         action="/messages/seen"
         method="post"
@@ -1921,7 +1927,14 @@
                   </a>
                 {{ end }}
               {{ end }}
-              {{ if not $.ThreadKey }}
+              {{ if .Shared }}
+                <span
+                  class="space-chip border-line text-muted"
+                  title="Shared by {{ .SharedBy }}"
+                  >shared by {{ .SharedBy }}</span
+                >
+              {{ end }}
+              {{ if and (not $.ThreadKey) (not .Shared) }}
                 {{ template "timeline-message-labels" . }}
               {{ end }}
               {{ template "timeline-send-state" . }}
@@ -1978,13 +1991,15 @@
             {{ if $.ThreadKey }}
               <div class="flex items-center gap-2 py-1 text-[10px] text-muted">
                 <time>{{ .Time }}</time>
-                <a
-                  href="{{ .ReplyURL }}"
-                  hx-get="{{ .ReplyURL }}"
-                  class="underline"
-                  aria-label="Reply to {{ .Sender }} at {{ .Time }}"
-                  >Reply</a
-                >
+                {{ if not .ReadOnly }}
+                  <a
+                    href="{{ .ReplyURL }}"
+                    hx-get="{{ .ReplyURL }}"
+                    class="underline"
+                    aria-label="Reply to {{ .Sender }} at {{ .Time }}"
+                    >Reply</a
+                  >
+                {{ end }}
               </div>
             {{ else }}
               {{ template "timeline-membership" . }}

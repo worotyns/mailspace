@@ -17,6 +17,7 @@ import (
 	"mailspace.local/mailspace/internal/mailfilter"
 	"mailspace.local/mailspace/internal/mailsync"
 	"mailspace.local/mailspace/internal/outbox"
+	"mailspace.local/mailspace/internal/sharing"
 	"mailspace.local/mailspace/internal/timeline"
 	"mailspace.local/mailspace/internal/webui"
 	"net/http"
@@ -179,7 +180,7 @@ func (c *timelineController) data(r *http.Request, s identity.Session) (webui.Ti
 	if data.Filter == "unread" {
 		data.Title = "Unread activity"
 	}
-	records, err := c.sources.List(r.Context(), s.User.ID, data.AccountID)
+	records, err := c.sources.ListForViewer(r.Context(), s.User.ID, data.AccountID)
 	if err != nil {
 		return data, err
 	}
@@ -197,6 +198,13 @@ func (c *timelineController) data(r *http.Request, s identity.Session) (webui.Ti
 			return data, e
 		}
 		data.Accounts = append(data.Accounts, webui.AccountSummary{ID: account.ID, Name: account.Name, Address: configured.Address})
+	}
+	// A viewer with only shared mail lands on All activity instead of the
+	// Unsorted triage queue, which is reserved for owned mail.
+	if len(data.Accounts) == 0 && data.Filter == "unsorted" {
+		data.Filter = "all"
+		data.Title = "Your timeline"
+		data.Description = "Messages, people and context. One place to keep things moving."
 	}
 	workspace, err := c.store.ActiveWorkspace(r.Context(), s.User.ID)
 	if err != nil {
@@ -227,7 +235,7 @@ func (c *timelineController) data(r *http.Request, s identity.Session) (webui.Ti
 			related = related[start : start+100]
 		}
 		for i := range related {
-			resolved, e := c.sources.Resolve(r.Context(), s.User.ID, related[i].Ref)
+			resolved, e := c.sources.ResolveForViewer(r.Context(), s.User.ID, related[i].Ref)
 			if e != nil {
 				return data, e
 			}
@@ -346,6 +354,9 @@ func timelineRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 		return false
 	}
 	source := timeline.New(store, config.Accounts, config.Sync, config.Outbox)
+	// Read-only team access is resolved from current grants; rules, decisions
+	// and every mutation keep using the owner-scoped methods.
+	source.SetSharing(sharing.New(store, config.Accounts))
 	c := &timelineController{config: config, store: store, sources: source, collections: collections.New(store.Database(), source), seenLimiter: &loginLimiter{entries: map[string]windowEntry{}, limit: 120}, seenSlots: make(chan struct{}, 2)}
 	c.bulkRoutes(mux, protected, mutation)
 	mux.HandleFunc("GET /{$}", protected(c.render))
@@ -445,7 +456,7 @@ func timelineRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 			http.Error(w, "Reload this message", 503)
 			return
 		}
-		message := webui.TimelineMessage{Record: resolved.Record, Token: webui.EncodeSource(ref), CSRF: s.CSRF, ReturnURL: timelineReturn(r.FormValue("return_to")), SeenWrites: true}
+		message := webui.TimelineMessage{Record: resolved.Record, Token: webui.EncodeSource(ref), CSRF: s.CSRF, ReturnURL: timelineReturn(r.FormValue("return_to")), SeenWrites: !resolved.Record.Shared}
 		// The automatic caller only needs the outcome, not a redirect or a
 		// fragment it would discard.
 		if r.Header.Get("X-Mailspace-Background") == "1" {
@@ -503,9 +514,15 @@ func timelineRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 			http.NotFound(w, r)
 			return
 		}
-		resolved, err := source.Resolve(r.Context(), s.User.ID, ref)
+		resolved, err := source.ResolveForViewer(r.Context(), s.User.ID, ref)
 		if err != nil {
 			http.NotFound(w, r)
+			return
+		}
+		// A grant that cannot download still reads cached preview text but never
+		// receives original MIME or attachment bytes.
+		if resolved.Record.Shared && !resolved.Record.CanDownload {
+			http.Error(w, "Original message download is not permitted by this grant", 403)
 			return
 		}
 		w.Header().Set("Content-Type", "application/octet-stream")
@@ -518,7 +535,7 @@ func timelineRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 			http.NotFound(w, r)
 			return
 		}
-		resolved, err := source.Resolve(r.Context(), s.User.ID, ref)
+		resolved, err := source.ResolveForViewer(r.Context(), s.User.ID, ref)
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -529,7 +546,7 @@ func timelineRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 			classifyProvider = config.Decisions.ProviderName()
 		}
 		reader := webui.TimelineMessage{Record: resolved.Record}
-		renderSecurePage(w, config, webui.AuthPageData{UserID: s.User.ID, SessionExpires: s.ExpiresAt.UnixMilli(), Email: s.User.Email, ClassifyReference: classifyReference, ClassifyProvider: classifyProvider, CSRF: s.CSRF, SecureRead: true, OrdinaryRead: !resolved.Record.Preview.Encrypted, RawURL: "/api/messages/raw?" + url.Values{"reference": {webui.EncodeSource(ref)}}.Encode(), ToLabel: reader.ToSummary(), CcLabel: reader.CcSummary(), SeenReference: webui.EncodeSource(ref), SeenWrites: config.Sync.FlagWritesEnabled(), SeenUnread: resolved.Record.Unread, ClaimedSender: resolved.Record.Preview.Sender, AccountID: ref.AccountID})
+		renderSecurePage(w, config, webui.AuthPageData{UserID: s.User.ID, SessionExpires: s.ExpiresAt.UnixMilli(), Email: s.User.Email, ClassifyReference: classifyReference, ClassifyProvider: classifyProvider, CSRF: s.CSRF, SecureRead: true, OrdinaryRead: !resolved.Record.Preview.Encrypted, RawURL: "/api/messages/raw?" + url.Values{"reference": {webui.EncodeSource(ref)}}.Encode(), ToLabel: reader.ToSummary(), CcLabel: reader.CcSummary(), ReadOnly: resolved.Record.Shared, SharedBy: resolved.Record.SharedBy, DownloadAllowed: !resolved.Record.Shared || resolved.Record.CanDownload, SeenReference: webui.EncodeSource(ref), SeenWrites: config.Sync.FlagWritesEnabled() && !resolved.Record.Shared, SeenUnread: resolved.Record.Unread, ClaimedSender: resolved.Record.Preview.Sender, AccountID: ref.AccountID})
 	}))
 	mux.HandleFunc("POST /timeline/sync", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
 		if !mutation(w, r, s) {

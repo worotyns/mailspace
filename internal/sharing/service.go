@@ -140,19 +140,29 @@ func (s *Service) List(ctx context.Context, owner string) ([]Grant, error) {
 	return result, rows.Err()
 }
 
-// Authorized reports whether the actor may read the given cached mailbox through
-// a currently valid grant. It fails closed when the grantor no longer owns the
-// account or either user has left the organization.
-func (s *Service) Authorized(ctx context.Context, actor, accountID, mailbox string) (bool, error) {
+// Authorize returns the currently valid grant that lets the actor read the
+// mailbox. It fails closed when the grantor no longer owns the account or
+// either user has left the organization, and prefers a whole-account grant.
+func (s *Service) Authorize(ctx context.Context, actor, accountID, mailbox string) (Grant, bool, error) {
 	if actor == "" || accountID == "" || !validMailbox(mailbox) {
-		return false, nil
+		return Grant{}, false, nil
 	}
-	var found int
-	err := s.store.Database().QueryRowContext(ctx, `SELECT count(*) FROM source_grants g JOIN accounts a ON a.id=g.account_id JOIN workspace_members gm ON gm.workspace_id=g.workspace_id AND gm.user_id=g.grantee_id JOIN workspace_members go ON go.workspace_id=g.workspace_id AND go.user_id=g.grantor_id WHERE g.account_id=? AND g.grantee_id=? AND a.owner_id=g.grantor_id AND (g.mailbox='' OR g.mailbox=?)`, accountID, actor, mailbox).Scan(&found)
+	row := s.store.Database().QueryRowContext(ctx, `SELECT `+grantColumns+` FROM source_grants g JOIN accounts a ON a.id=g.account_id JOIN users gu ON gu.id=g.grantor_id JOIN users ge ON ge.id=g.grantee_id JOIN workspace_members gm ON gm.workspace_id=g.workspace_id AND gm.user_id=g.grantee_id JOIN workspace_members go ON go.workspace_id=g.workspace_id AND go.user_id=g.grantor_id WHERE g.account_id=? AND g.grantee_id=? AND a.owner_id=g.grantor_id AND (g.mailbox='' OR g.mailbox=?) ORDER BY (g.mailbox='') DESC,g.created_at LIMIT 1`, accountID, actor, mailbox)
+	grant, err := scanGrant(row.Scan)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Grant{}, false, nil
+	}
 	if err != nil {
-		return false, err
+		return Grant{}, false, err
 	}
-	return found > 0, nil
+	return grant, true, nil
+}
+
+// Authorized reports whether the actor may read the given cached mailbox through
+// a currently valid grant.
+func (s *Service) Authorized(ctx context.Context, actor, accountID, mailbox string) (bool, error) {
+	_, ok, err := s.Authorize(ctx, actor, accountID, mailbox)
+	return ok, err
 }
 
 // GrantedAccounts lists the actor's currently valid grants, revalidating account

@@ -144,9 +144,23 @@
           </div>
         </section>
         {{ if .SecureRead }}
-          <a href="{{ .RawURL }}" class="block text-xs text-accent"
-            >Download original message</a
-          >
+          {{ if .ReadOnly }}
+            <p class="text-xs text-muted">
+              Shared read-only{{ if .SharedBy }}by {{ .SharedBy }}{{ end }}. No
+              labels, Spaces, archive, read state or reply change is available
+              here.
+            </p>
+          {{ end }}
+          {{ if .DownloadAllowed }}
+            <a href="{{ .RawURL }}" class="block text-xs text-accent"
+              >Download original message</a
+            >
+          {{ else }}
+            <p class="text-xs text-muted">
+              This grant does not permit downloading the original message or
+              attachments.
+            </p>
+          {{ end }}
           <button
             id="mail-decrypt"
             type="button"
