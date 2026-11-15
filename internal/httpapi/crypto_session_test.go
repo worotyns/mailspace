@@ -107,8 +107,18 @@ func TestCryptoWorkerCSPHasOnlyFixedSessionEgress(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, r)
 	policy := w.Header().Get("Content-Security-Policy")
-	if w.Code != 200 || !strings.Contains(policy, "connect-src https://mail.example.test/api/crypto/session;") || !strings.Contains(policy, "worker-src 'none'") || strings.Contains(policy, "unsafe-") {
+	if w.Code != 200 || !strings.Contains(policy, "connect-src https://mail.example.test/api/crypto/session;") || !strings.Contains(policy, "worker-src https://mail.example.test/assets/crypto/vault.mjs ") || strings.Contains(policy, "unsafe-") {
 		t.Fatal("unsafe worker CSP", policy)
+	}
+	for _, module := range []string{"/assets/crypto/vault.mjs", "/assets/crypto/store.mjs", "/assets/crypto/errors.mjs", "/assets/crypto/session-core.mjs", "/assets/vendor/openpgp/openpgp.min.mjs", "/assets/vendor/idb/index.js"} {
+		if !strings.Contains(policy, "https://mail.example.test"+module) {
+			t.Fatalf("missing worker import: %s", module)
+		}
+	}
+	for _, denied := range []string{"worker-src 'self'", "blob:", "/assets/crypto/session-worker.mjs", "/assets/crypto/timeline-ui.mjs"} {
+		if strings.Contains(policy, denied) {
+			t.Fatalf("worker policy admits unexpected source %q: %s", denied, policy)
+		}
 	}
 }
 
@@ -139,7 +149,7 @@ func TestCryptoWorkerLiteralIPOriginUsesSelfWithoutExternalEgress(t *testing.T) 
 		request.AddCookie(&http.Cookie{Name: cookie, Value: token})
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, request)
-		if response.Code != 200 || !strings.Contains(response.Header().Get("Content-Security-Policy"), "connect-src 'self';") {
+		if response.Code != 200 || (!strings.Contains(response.Header().Get("Content-Security-Policy"), "connect-src 'self';") || !strings.Contains(response.Header().Get("Content-Security-Policy"), "worker-src 'self';")) {
 			t.Fatalf("IP worker policy: %d %s", response.Code, response.Header().Get("Content-Security-Policy"))
 		}
 	}

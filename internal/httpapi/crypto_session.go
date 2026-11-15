@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 // The endpoint exposes authentication metadata only. It accepts no key, body,
@@ -37,9 +38,20 @@ func cryptoSessionRoutes(mux *http.ServeMux, config AuthConfig, cookieName strin
 		if ip := net.ParseIP(origin.Hostname()); ip != nil && origin.Hostname() != "127.0.0.1" {
 			endpoint = "'self'"
 		}
+		// WebKit checks static module imports against worker-src as well as
+		// script-src. Admit only this fixed, local dependency graph, not self,
+		// blob URLs, arbitrary asset paths or another worker entrypoint.
+		modules := []string{"/assets/crypto/vault.mjs", "/assets/crypto/store.mjs", "/assets/crypto/errors.mjs", "/assets/crypto/session-core.mjs", "/assets/vendor/openpgp/openpgp.min.mjs", "/assets/vendor/idb/index.js"}
+		for i := range modules {
+			modules[i] = origin.Scheme + "://" + origin.Host + modules[i]
+		}
+		workerSources := strings.Join(modules, " ")
+		if endpoint == "'self'" {
+			workerSources = "'self'"
+		}
 		// Worker CSP is independent of the embedding document's network policy.
 		// Only a fixed metadata endpoint is permitted; RPC data never enters fetch.
-		w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; connect-src "+endpoint+"; worker-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; connect-src "+endpoint+"; worker-src "+workerSources+"; base-uri 'none'; frame-ancestors 'none'")
 		w.Header().Set("Cache-Control", "no-store")
 		webui.Assets(config.Dev).ServeHTTP(w, r)
 	}))
