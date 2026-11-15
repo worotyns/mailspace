@@ -1,0 +1,131 @@
+{{ define "sharing-page" }}
+  <!doctype html>
+  <html lang="en" class="settings-document">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width,initial-scale=1" />
+      <title>Sharing · Mailspace</title>
+      <script src="/assets/theme.js"></script>
+      <script src="/assets/forms.js" defer></script>
+      <script src="/assets/panel-child.js" defer></script>
+      <script src="/assets/toasts.js" defer></script>
+      <link rel="stylesheet" href="/assets/app.css" />
+    </head>
+    <body class="min-h-dvh bg-canvas text-ink">
+      {{ template "settings-simple-header" . }}
+      <main class="settings-main">
+        {{ template "settings-navigation" "sharing" }}
+        <h1 class="text-xl font-semibold">Sharing</h1>
+        <p class="my-3 text-sm text-muted">
+          Give one organization member read-only access to one of your cached
+          mail accounts. A grant never enables sending, keys, labels, Spaces or
+          archive, and revoking blocks the next read immediately. Hidden Bcc
+          recipients are never shared.
+        </p>
+        {{ if .Notice }}
+          <p
+            role="status"
+            class="my-3 rounded-lg border border-line bg-panel p-3 text-sm"
+          >
+            {{ .Notice }}
+          </p>
+        {{ end }}
+        {{ if .Error }}
+          <p
+            role="alert"
+            class="my-3 rounded-lg border border-line bg-panel p-3 text-sm text-error"
+          >
+            {{ .Error }}
+          </p>
+        {{ end }}
+        {{ if .Accounts }}
+          <form
+            action="/sharing"
+            method="post"
+            class="mt-5 space-y-3 rounded-lg border border-line p-4"
+          >
+            <input type="hidden" name="csrf" value="{{ .CSRF }}" />
+            <label class="block text-xs"
+              >Organization<select
+                name="workspace"
+                class="mt-1 w-full rounded-lg border border-line bg-panel px-3 py-2"
+              >
+                {{ range .Workspaces }}
+                  <option value="{{ .ID }}">{{ .Name }}</option>
+                {{ end }}
+              </select></label
+            ><label class="block text-xs"
+              >Account<select
+                name="account"
+                class="mt-1 w-full rounded-lg border border-line bg-panel px-3 py-2"
+              >
+                {{ range .Accounts }}
+                  <option value="{{ .ID }}">
+                    {{ .Name }} ·
+                    {{ .Address }}
+                  </option>
+                {{ end }}
+              </select></label
+            ><label class="block text-xs"
+              >Folder<input
+                name="mailbox"
+                maxlength="1024"
+                placeholder="Leave empty for all folders"
+                class="mt-1 w-full rounded-lg border border-line px-3 py-2"
+            /></label>
+            <label class="block text-xs"
+              >Member email<input
+                name="grantee"
+                type="email"
+                required
+                maxlength="254"
+                class="mt-1 w-full rounded-lg border border-line px-3 py-2"
+            /></label>
+            <label class="flex items-center gap-2 text-xs text-muted"
+              ><input type="checkbox" name="can_download" value="1" />Allow
+              downloading the original message and attachments</label
+            >
+            <button class="rounded-lg bg-action px-4 py-2 text-sm text-white">
+              Share read-only access
+            </button>
+          </form>
+        {{ else }}
+          <p class="text-sm text-muted">
+            Connect a mail account before sharing it.
+          </p>
+        {{ end }}
+        <h2 class="mt-7 font-semibold">Active grants</h2>
+        <div class="mt-3 space-y-3">
+          {{ range .Grants }}
+            <div
+              class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line p-4"
+            >
+              <div class="min-w-0">
+                <p class="truncate text-sm font-medium">{{ .Grantee }}</p>
+                <p class="text-xs text-muted">
+                  {{ .Workspace }} ·
+                  {{ .Account }}{{ if .Mailbox }}
+                    · folder
+                    {{ .Mailbox }}
+                  {{ else }}
+                    · all folders
+                  {{ end }}{{ if .CanDownload }}
+                    · download allowed
+                  {{ else }}
+                    · preview only
+                  {{ end }}
+                </p>
+              </div>
+              <form action="/sharing/{{ .ID }}/revoke" method="post">
+                <input type="hidden" name="csrf" value="{{ $.CSRF }}" />
+                <button class="text-sm text-error">Revoke</button>
+              </form>
+            </div>
+          {{ else }}
+            <p class="text-sm text-muted">No active grants.</p>
+          {{ end }}
+        </div>
+      </main>
+    </body>
+  </html>
+{{ end }}

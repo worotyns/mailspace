@@ -32,6 +32,7 @@ type timelineController struct {
 	store       *identity.Store
 	sources     *timeline.Service
 	collections *collections.Service
+	grants      *sharing.Service
 	// seenLimiter/seenSlots bound provider flag writes separately from the
 	// send/connection budget so ordinary reading cannot block sending.
 	seenLimiter *loginLimiter
@@ -356,8 +357,9 @@ func timelineRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 	source := timeline.New(store, config.Accounts, config.Sync, config.Outbox)
 	// Read-only team access is resolved from current grants; rules, decisions
 	// and every mutation keep using the owner-scoped methods.
-	source.SetSharing(sharing.New(store, config.Accounts))
-	c := &timelineController{config: config, store: store, sources: source, collections: collections.New(store.Database(), source), seenLimiter: &loginLimiter{entries: map[string]windowEntry{}, limit: 120}, seenSlots: make(chan struct{}, 2)}
+	sharingService := sharing.New(store, config.Accounts)
+	source.SetSharing(sharingService)
+	c := &timelineController{config: config, store: store, sources: source, collections: collections.New(store.Database(), source), grants: sharingService, seenLimiter: &loginLimiter{entries: map[string]windowEntry{}, limit: 120}, seenSlots: make(chan struct{}, 2)}
 	c.bulkRoutes(mux, protected, mutation)
 	mux.HandleFunc("GET /{$}", protected(c.render))
 	mux.HandleFunc("GET /views", protected(c.render))
@@ -404,6 +406,32 @@ func timelineRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 			return
 		}
 		webui.RenderPeople(w, r, config.Dev, data)
+	}))
+	mux.HandleFunc("GET /sharing", protected(c.renderSharing))
+	mux.HandleFunc("POST /sharing", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
+		if !mutation(w, r, s) {
+			return
+		}
+		_, err := c.grants.Grant(r.Context(), s.User.ID, r.FormValue("workspace"), r.FormValue("account"), strings.TrimSpace(r.FormValue("mailbox")), strings.TrimSpace(r.FormValue("grantee")), r.FormValue("can_download") == "1")
+		if err != nil {
+			code := "member"
+			if errors.Is(err, sharing.ErrInput) {
+				code = "input"
+			}
+			http.Redirect(w, r, "/sharing?error="+code, 303)
+			return
+		}
+		http.Redirect(w, r, "/sharing?notice=shared", 303)
+	}))
+	mux.HandleFunc("POST /sharing/{id}/revoke", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
+		if !mutation(w, r, s) {
+			return
+		}
+		if err := c.grants.Revoke(r.Context(), s.User.ID, r.PathValue("id")); err != nil {
+			http.Redirect(w, r, "/sharing?error=missing", 303)
+			return
+		}
+		http.Redirect(w, r, "/sharing?notice=revoked", 303)
 	}))
 	mux.HandleFunc("POST /messages/seen", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
 		if !mutation(w, r, s) {
@@ -741,6 +769,62 @@ func timelineRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 	}))
 	return true
 }
+
+// renderSharing is the owner-only grant manager. It never lists another user's
+// grants and never discloses whether a given email is provisioned.
+func (c *timelineController) renderSharing(w http.ResponseWriter, r *http.Request, s identity.Session) {
+	list, err := c.grants.List(r.Context(), s.User.ID)
+	if err != nil {
+		http.Error(w, "Sharing unavailable", 503)
+		return
+	}
+	workspaces, err := c.store.Workspaces(r.Context(), s.User.ID)
+	if err != nil {
+		http.Error(w, "Sharing unavailable", 503)
+		return
+	}
+	configured, err := c.store.Accounts(r.Context(), s.User.ID)
+	if err != nil {
+		http.Error(w, "Sharing unavailable", 503)
+		return
+	}
+	workspaceNames := map[string]string{}
+	data := webui.SharingData{CSRF: s.CSRF}
+	for _, workspace := range workspaces {
+		workspaceNames[workspace.ID] = workspace.Name
+		data.Workspaces = append(data.Workspaces, webui.WorkspaceSummary{ID: workspace.ID, Name: workspace.Name, Role: workspace.Role})
+	}
+	accountNames := map[string]string{}
+	for _, account := range configured {
+		value, e := c.config.Accounts.Get(r.Context(), s.User.ID, account.ID)
+		if e != nil {
+			continue
+		}
+		accountNames[account.ID] = account.Name
+		data.Accounts = append(data.Accounts, webui.AccountSummary{ID: account.ID, Name: account.Name, Address: value.Address})
+	}
+	for _, grant := range list {
+		data.Grants = append(data.Grants, webui.GrantSummary{ID: grant.ID, Workspace: workspaceNames[grant.WorkspaceID], Account: accountNames[grant.AccountID], Mailbox: grant.Mailbox, Grantee: grant.GranteeEmail, CanDownload: grant.CanDownload})
+	}
+	switch r.URL.Query().Get("notice") {
+	case "shared":
+		data.Notice = "Read-only access granted. The member sees only cached mail and cannot reply unless a separate send-as exists."
+	case "revoked":
+		data.Notice = "Grant revoked. The next read is denied immediately."
+	}
+	switch r.URL.Query().Get("error") {
+	case "member":
+		data.Error = "Could not create the grant. Check that the recipient is a provisioned user and a current member of the selected organization."
+	case "input":
+		data.Error = "Check the folder value and that the recipient is not yourself."
+	case "missing":
+		data.Error = "That grant no longer exists."
+	}
+	if err = webui.RenderSharing(w, c.config.Dev, data); err != nil {
+		http.Error(w, "Unable to render sharing", 503)
+	}
+}
+
 func (c *timelineController) renderMembership(w http.ResponseWriter, r *http.Request, s identity.Session, ref mail.SourceRef) {
 	resolved, err := c.sources.Resolve(r.Context(), s.User.ID, ref)
 	if err != nil {

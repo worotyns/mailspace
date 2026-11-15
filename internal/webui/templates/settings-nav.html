@@ -34,6 +34,11 @@
       >Labels</a
     >
     <a
+      href="/sharing"
+      {{ if eq . "sharing" }}aria-current="page"{{ end }}
+      >Sharing</a
+    >
+    <a
       href="/automation"
       {{ if eq . "automation" }}aria-current="page"{{ end }}
       >Decision Model</a
