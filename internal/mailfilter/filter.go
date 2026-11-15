@@ -51,13 +51,7 @@ func Compile(query string) (*Expr, error) {
 	if err != nil {
 		return nil, err
 	}
-	structured := false
-	for _, t := range tokens {
-		field, _, has := strings.Cut(t.text, ":")
-		if has && known(field) || !t.quoted && (t.text == "AND" || t.text == "OR" || t.text == "(" || t.text == ")") {
-			structured = true
-		}
-	}
+	structured := isStructured(tokens)
 	if !structured {
 		if len(tokens) == 1 && tokens[0].quoted {
 			query = tokens[0].text
@@ -71,6 +65,30 @@ func Compile(query string) (*Expr, error) {
 	}
 	return root, nil
 }
+func isStructured(tokens []token) bool {
+	for _, t := range tokens {
+		field, _, has := strings.Cut(t.text, ":")
+		if has && known(field) || !t.quoted && (t.text == "AND" || t.text == "OR" || t.text == "(" || t.text == ")") {
+			return true
+		}
+	}
+	return false
+}
+
+// PlainQuery reports whether a query is a plain word/phrase search rather than
+// the structured field/AND/OR language. Only plain queries use the full-text
+// index; structured predicates keep their exact legacy evaluation.
+func PlainQuery(query string) bool {
+	if len(query) > 2048 || !utf8.ValidString(query) || strings.ContainsAny(query, "\r\n\x00") {
+		return false
+	}
+	tokens, err := lex(strings.TrimSpace(query))
+	if err != nil {
+		return false
+	}
+	return !isStructured(tokens)
+}
+
 func lex(query string) ([]token, error) {
 	result := []token{}
 	for i := 0; i < len(query); {

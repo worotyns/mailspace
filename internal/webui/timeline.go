@@ -332,8 +332,11 @@ type TimelineData struct {
 	PeopleOffset, PeopleTotal int
 	PeoplePage                []PersonView
 
-	Classifier     bool
-	SeenWrites     bool
+	Classifier bool
+	SeenWrites bool
+	// SearchKeys is the local full-text match set for a plain word query,
+	// keyed by SearchRefKey. Structured queries leave it nil.
+	SearchKeys     map[string]bool
 	Provider       string
 	Email          string
 	UserID         string
@@ -464,6 +467,20 @@ func RenderTimeline(w http.ResponseWriter, r *http.Request, dev bool, data Timel
 	_, err = w.Write(body.Bytes())
 	return err
 }
+
+// SearchRefKey identifies one cached physical message for the full-text match
+// set. It is a lookup key, never an authorization capability.
+func SearchRefKey(accountID, mailbox string, uid uint32) string {
+	return accountID + "\x00" + mailbox + "\x00" + strconv.FormatUint(uint64(uid), 10)
+}
+
+func (data *TimelineData) searchMatch(ref mail.SourceRef) bool {
+	if data.SearchKeys == nil {
+		return false
+	}
+	return data.SearchKeys[SearchRefKey(ref.AccountID, ref.Mailbox, ref.UID)]
+}
+
 func FormatTimeline(records []timeline.Record, spaces, labels []collections.Item, memberships map[string][]string, data *TimelineData) {
 	location, err := time.LoadLocation(data.Timezone)
 	if err != nil {
@@ -544,7 +561,7 @@ func FormatTimeline(records []timeline.Record, spaces, labels []collections.Item
 				continue
 			}
 		}
-		if data.Query != "" && !queryFilter.Match(mailfilter.Message{From: record.Preview.Sender, To: record.Preview.To, Subject: record.Preview.Subject, Name: record.Preview.Name, Text: record.Preview.Text, Encrypted: record.Preview.Encrypted}) {
+		if data.Query != "" && !queryFilter.Match(mailfilter.Message{From: record.Preview.Sender, To: record.Preview.To, Subject: record.Preview.Subject, Name: record.Preview.Name, Text: record.Preview.Text, Encrypted: record.Preview.Encrypted}) && !data.searchMatch(record.Ref) {
 			continue
 		}
 		date := record.At.In(location).Format("2006-01-02")

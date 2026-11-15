@@ -291,9 +291,9 @@
           {{ end }}
         </button>
         <span id="mail-filter-help" class="sr-only"
-          >Plain words search sender, recipients and subject. Combine from:,
-          to:, domain:, subject: or body: with AND, OR and parentheses. Body
-          searches ordinary cached text only.</span
+          >Plain words search sender, recipients, subject and ordinary cached
+          message text. Combine from:, to:, domain:, subject: or body: with AND,
+          OR and parentheses. Encrypted mail stays out of text search.</span
         >
         {{ if or .Person .Query }}
           <a
@@ -871,6 +871,17 @@
       {{ if .HistoryEnabled }}
         {{ template "timeline-history-control" . }}
       {{ end }}
+      {{ if .Query }}
+        <p
+          class="mb-3 text-center text-xs text-muted"
+          role="status"
+          aria-live="polite"
+        >
+          {{ .Total }} matching cached
+          {{ if eq .Total 1 }}message{{ else }}messages{{ end }} for
+          “{{ .Query }}”. Text search covers ordinary cached mail only.
+        </p>
+      {{ end }}
       {{ if .Messages }}
         {{ template "timeline-message-list" . }}
       {{ else }}
@@ -882,7 +893,9 @@
             >{{ template "timeline-icon" "messages" }}</span
           >
           <h2 class="text-lg font-semibold">
-            {{ if .SpaceID }}
+            {{ if .Query }}
+              No matches in cached mail
+            {{ else if .SpaceID }}
               This Space is ready
             {{ else if eq .Filter "archived" }}
               Nothing archived
@@ -893,7 +906,11 @@
             {{ end }}
           </h2>
           <p class="mt-2 text-sm leading-relaxed text-muted">
-            {{ if .SpaceID }}
+            {{ if .Query }}
+              Nothing in your cached mail matches this search. Text search
+              covers ordinary cached messages; encrypted mail and uncached
+              provider history are not searched.
+            {{ else if .SpaceID }}
               Add messages from Unsorted. A message can belong to more than one
               Space.
             {{ else if not .Accounts }}

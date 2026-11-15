@@ -185,6 +185,29 @@ func (c *timelineController) data(r *http.Request, s identity.Session) (webui.Ti
 	if err != nil {
 		return data, err
 	}
+	// A plain word search also matches ordinary cached message text through the
+	// local full-text index. Structured queries keep their legacy evaluation.
+	if data.Query != "" && mailfilter.PlainQuery(data.Query) {
+		ids := []string{}
+		seenAccount := map[string]bool{}
+		for _, record := range records {
+			if record.Ref.Kind != "imap" || seenAccount[record.Ref.AccountID] {
+				continue
+			}
+			seenAccount[record.Ref.AccountID] = true
+			ids = append(ids, record.Ref.AccountID)
+		}
+		keys, e := c.config.Sync.SearchText(r.Context(), ids, data.Query)
+		if e != nil {
+			return data, e
+		}
+		for key := range keys {
+			if data.SearchKeys == nil {
+				data.SearchKeys = map[string]bool{}
+			}
+			data.SearchKeys[webui.SearchRefKey(key.AccountID, key.Mailbox, key.UID)] = true
+		}
+	}
 	memberships, err := c.collections.Memberships(r.Context(), s.User.ID)
 	if err != nil {
 		return data, err

@@ -17,7 +17,7 @@ Mailspace is deployable for controlled personal testing, not yet a completed 1.0
 3. Implement team-source/sharing ACLs before advertising a team mailbox. ADR-0045/schema 14 provide the deny-by-default grant foundation with revocation and membership checks and read-only timeline enforcement (shared badge, no mutation controls, `can_download` for original bytes). An owner-only `/sharing` panel manages grants. Remaining: per-user team unread/labels/assignment and separate send-as; no read path widens another user's write access. Optional JEV classification is connected only after operator configuration and per-user consent; live paid OpenRouter routing is not validated by CI. Manual Spaces work without it.
 4. Security/accessibility review, release CI execution on GitHub and an explicit reviewed prerelease. Local checks/container smoke do not prove a published multiarch image.
 
-OAuth-only login, attachment Drive, full-text/semantic search without a model, and YunoHost remain optional roadmap work. PostgreSQL and AI compose were removed from the plan by owner direction. No disabled/fake provider controls should be presented as connected features. Browser keys/local drafts require their own export/recovery procedure.
+OAuth-only login, attachment Drive and YunoHost remain optional roadmap work; local full-text search over ordinary cached text is implemented (ADR-0046). PostgreSQL and AI compose were removed from the plan by owner direction. No disabled/fake provider controls should be presented as connected features. Browser keys/local drafts require their own export/recovery procedure.
 
 Deployment procedure and limits: SERVER_SETUP.md. Record actual validation in VALIDATION.md; do not convert open gates into passed claims.
 

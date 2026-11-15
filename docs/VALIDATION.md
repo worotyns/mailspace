@@ -333,3 +333,12 @@ Not covered: owner-only grant management UI/endpoint, per-user team unread/label
 ### Sharing panel
 
 `GET /sharing` (settings navigation, same-origin panel) lists the session owner's active grants with member, organization, account, folder scope and download state, and creates or revokes them through CSRF/Origin-checked POSTs. It is grantor-scoped: another user's panel is empty and a foreign revoke returns the generic missing-grant error. Unknown-user and non-member creation failures share one message so the panel is not a user-enumeration oracle; self-grants and invalid mailbox values are separate input errors. HTTP tests cover owner listing, grantee non-disclosure, CSRF denial, creation, generic unknown/member feedback, self-grant rejection, foreign revoke denial, successful revoke and the empty post-revoke list. `make check` passed.
+
+
+## Local full-text search — ADR-0046, schema 15
+
+Migration 015 adds an FTS5 `message_search` table with triggers mirroring `mail_messages` inserts, preview-text updates and deletes, and backfills existing rows from `json_extract(preview, '$.Text')`. Plain word queries union the legacy metadata substring match with the index; structured `from:`/`to:`/`domain:`/`subject:`/`body:`/`AND`/`OR` queries keep their exact in-memory evaluation. User words are quoted into an FTS5 expression with implicit AND, so operators and punctuation are literal; terms are capped at 16/64 runes, accounts at 64 and results at 2000. `SearchText` only queries caller-authorized account ids (owned plus currently granted), so it is a lookup, never authorization.
+
+Automated evidence: a `mailsync` test covers multi-term matching, all-terms-AND, absent terms, encrypted/empty-text exclusion, foreign account ids returning nothing, literal FTS operators/punctuation, and trigger maintenance across preview updates and row deletes. A webui test covers the plain-query union with metadata matches and the legacy metadata-only fallback. The HTTP integration test updates one cached preview and verifies `?q=` plain search finds it, an absent term shows the "No matches in cached mail" state, and a structured `body:` query still works. `make check` passed.
+
+Not covered: relevance ordering, result snippets, semantic/embedding search, and any model or remote index remain open. The index duplicates ordinary cached preview text in the same SQLite file with the same sensitivity; ciphertext, decrypted material, keys and credentials never enter it. Docker/actionlint remain unavailable.

@@ -13,7 +13,7 @@ Read state is the one reviewed exception (ADR-0043). A separate bounded capabili
 - 4 MiB per original message and 64 MiB MIME cache per account. Large messages show a placeholder. Cache capacity is a limit, not a claim that every body was downloaded.
 - Polling advances through eight accounts per minute. No IDLE push yet. Restart resumes durable cache checkpoints.
 - Text/plain previews only. No remote image loads, rendered HTML, attachment download or OpenPGP decryption yet. Ordinary outgoing mail is available separately (SENDING.md).
-- Filter searches cached subject/sender metadata only, without an index. Ciphertext is not decrypted or searched.
+- Plain word search matches cached sender/recipients/subject and ordinary cached text through a local SQLite FTS5 index (ADR-0046). Structured `from:`/`to:`/`domain:`/`subject:`/`body:` predicates keep their in-memory evaluation. Ciphertext is not decrypted, indexed or searched; client-decrypted material never enters the index.
 - Threading is limited to one account/folder. Ambiguous/missing references remain separate; duplicate Message-ID never identifies a stored message.
 
 ## Data and recovery

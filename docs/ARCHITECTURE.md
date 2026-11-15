@@ -41,7 +41,7 @@ A Space is a relevance brief and a set of individual message references, not a p
 
 The dialog's compact adjacent-author groups and own-message alignment are presentation only. They never combine send targets, memberships or ACLs. Original thread preview follows only unambiguous cached Message-ID/References within the same current account, across folders/outbox. Cycles terminate; equal subjects do not join messages. It resolves up to 100 cached entries around the selected anchor, not full remote history. Switching Space/person/label leaves that context; Reply selects one original source. Server-derived From and References/In-Reply-To are preserved regardless of the Space.
 
-The main source feed is bounded to 1,000 consolidated cached entries; outbox enumeration is bounded per account. Search is metadata substring filtering, not full-text/semantic indexing. Space/label assignment controls load on demand instead of rendering every possible assignment form for every cached message. Native URLs/forms remain functional without HTMX; browser cryptography deliberately requires JS.
+The main source feed is bounded to 1,000 consolidated cached entries; outbox enumeration is bounded per account. Search combines metadata substring filtering with a local SQLite FTS5 index over ordinary cached text (ADR-0046); there is no model, embedding or remote index. Space/label assignment controls load on demand instead of rendering every possible assignment form for every cached message. Native URLs/forms remain functional without HTMX; browser cryptography deliberately requires JS.
 
 ## Mail transport and certainty
 

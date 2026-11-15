@@ -524,3 +524,27 @@ func TestSharedSentCopyIsNeverLabelledYou(t *testing.T) {
 		t.Fatal("shared sent identity missing", html)
 	}
 }
+
+func TestPlainQueryUnionsMetadataAndFullTextKeys(t *testing.T) {
+	records := []timeline.Record{
+		{Identity: mail.MessageIdentity{Key: "one"}, Ref: mail.SourceRef{Kind: "imap", AccountID: "account", Mailbox: "INBOX", UID: 1}, At: time.Unix(2000, 0), Preview: mailsync.Preview{Sender: "sender@example.test", Subject: "Subject one", Text: "body secret"}},
+		{Identity: mail.MessageIdentity{Key: "two"}, Ref: mail.SourceRef{Kind: "imap", AccountID: "account", Mailbox: "INBOX", UID: 2}, At: time.Unix(1000, 0), Preview: mailsync.Preview{Sender: "other@example.test", Subject: "Subject two", Text: "nothing here"}},
+	}
+	data := TimelineData{Timezone: "UTC", Filter: "all", Query: "secret", SearchKeys: map[string]bool{SearchRefKey("account", "INBOX", 1): true}}
+	FormatTimeline(records, nil, nil, nil, &data)
+	if len(data.Messages) != 1 || data.Messages[0].Ref.UID != 1 {
+		t.Fatalf("full-text key was not applied: %d", len(data.Messages))
+	}
+	// Metadata matches still work alongside the body key set.
+	data = TimelineData{Timezone: "UTC", Filter: "all", Query: "Subject two", SearchKeys: map[string]bool{}}
+	FormatTimeline(records, nil, nil, nil, &data)
+	if len(data.Messages) != 1 || data.Messages[0].Ref.UID != 2 {
+		t.Fatal("metadata match lost when a search key set exists")
+	}
+	// Without an index key set the legacy metadata-only behavior stays.
+	data = TimelineData{Timezone: "UTC", Filter: "all", Query: "secret"}
+	FormatTimeline(records, nil, nil, nil, &data)
+	if len(data.Messages) != 0 {
+		t.Fatal("body matched without the full-text key set")
+	}
+}

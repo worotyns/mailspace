@@ -320,6 +320,20 @@ func TestReadOnlyMailboxEndToEndAndAuthorization(t *testing.T) {
 	if err != nil || containsString(beforeRead.Flags, `\Seen`) != containsString(afterRead.Flags, `\Seen`) {
 		t.Fatal("reading a page changed the cached flag", beforeRead.Flags, afterRead.Flags, err)
 	}
+	// Plain word search reaches ordinary cached message text through the local
+	// full-text index; structured body: queries keep the legacy evaluation.
+	if _, err = db.Database().ExecContext(ctx, `UPDATE mail_messages SET preview=json_set(preview,'$.Text','zzsearchable') WHERE account_id=? AND mailbox='INBOX' AND uid=?`, account.ID, messages[0].UID); err != nil {
+		t.Fatal(err)
+	}
+	if search := request("GET", "/?filter=all&q=zzsearchable", token, "", false); search.Code != 200 || !strings.Contains(search.Body.String(), `id="message-`+sourceIdentity.Key+`"`) || !strings.Contains(search.Body.String(), "matching cached") {
+		t.Fatalf("plain body search did not find the cached message: %d", search.Code)
+	}
+	if absent := request("GET", "/?filter=all&q=zzabsentterm", token, "", false); absent.Code != 200 || strings.Contains(absent.Body.String(), `id="message-`+sourceIdentity.Key+`"`) || !strings.Contains(absent.Body.String(), "No matches in cached mail") {
+		t.Fatalf("absent search did not show the empty state: %d", absent.Code)
+	}
+	if structured := request("GET", "/?filter=all&q="+url.QueryEscape("body:zzsearchable"), token, "", false); structured.Code != 200 || !strings.Contains(structured.Body.String(), `id="message-`+sourceIdentity.Key+`"`) {
+		t.Fatalf("structured body search regressed: %d", structured.Code)
+	}
 	seenID := "seen-message-" + sourceIdentity.Key
 	seen := func(cookie, csrf, state string) *httptest.ResponseRecorder {
 		values := url.Values{"csrf": {csrf}, "reference": {webui.EncodeSource(ref)}, "seen": {state}, "return_to": {"/"}}

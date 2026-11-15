@@ -98,7 +98,7 @@ Recent bounded read-only IMAP cache, not full archive synchronization or remote 
 
 Optional [Space automation](docs/AUTOMATION.md) uses local/OpenRouter proposals behind a deterministic JEV gate. It defaults to Off and supports dry-run, review, auto-assignment and replay. [Continuous SQLite backup](docs/BACKUPS.md) uses an explicit Litestream overlay and is also off by default.
 
-Team sharing, attachment Drive, full-text/semantic search and YunoHost remain roadmap work. None is mandatory or displayed as connected. Encrypted content cannot silently enter backend indexing, AI, webhook or trace. Modules are reviewed built-in contributions: fork → PR → review → merge; no public plugin loader/API.
+Read-only team sharing with explicit revocable grants and local full-text search over cached ordinary text are implemented; attachment Drive and YunoHost remain roadmap work. None is mandatory or displayed as connected. Encrypted content cannot silently enter backend indexing, AI, webhook or trace. Modules are reviewed built-in contributions: fork → PR → review → merge; no public plugin loader/API.
 
 ## Contributing and source
 

@@ -72,6 +72,9 @@ var migrationThirteen string
 //go:embed migrations/014_source_grants.sql
 var migrationFourteen string
 
+//go:embed migrations/015_message_search.sql
+var migrationFifteen string
+
 type User struct {
 	Name     string `json:"name"`
 	Timezone string `json:"timezone"`
@@ -158,7 +161,7 @@ func (s *Store) migrate() error {
 	if err = tx.QueryRowContext(ctx, "SELECT coalesce(max(version),0) FROM schema_migrations").Scan(&version); err != nil {
 		return err
 	}
-	if version > 14 {
+	if version > 15 {
 		return errors.New("database is newer than this binary; use a compatible version or restore backup")
 	}
 	if version == 0 {
@@ -270,6 +273,14 @@ func (s *Store) migrate() error {
 			return err
 		}
 		if _, err = tx.ExecContext(ctx, "INSERT INTO schema_migrations(version,applied_at) VALUES(14,?)", time.Now().Unix()); err != nil {
+			return err
+		}
+	}
+	if version < 15 {
+		if _, err = tx.ExecContext(ctx, migrationFifteen); err != nil {
+			return err
+		}
+		if _, err = tx.ExecContext(ctx, "INSERT INTO schema_migrations(version,applied_at) VALUES(15,?)", time.Now().Unix()); err != nil {
 			return err
 		}
 	}
