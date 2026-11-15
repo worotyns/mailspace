@@ -64,3 +64,5 @@ Accepted oznacza decyzję projektową, nie gotową implementację. Zmiany przez 
 - [0038 — Explicit local original-message quotes](0038.md)
 - [0039 — Compact local image previews and attachment controls](0039.md)
 - [0040 — Authenticator App TOTP and gated sessions](0040.md)
+
+- [0041 — Bounded timeline pages and upward cached-history loading](0041.md)

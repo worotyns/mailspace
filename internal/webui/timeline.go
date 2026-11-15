@@ -168,8 +168,10 @@ func DecisionSummary(run decision.Run, spaces []collections.Item) *DecisionView 
 }
 
 type TimelineData struct {
-	ViewsOpen           bool
-	FromDate, UntilDate string
+	HistoryEnabled, HasOlder, HasNewer bool
+	HistoryBefore, NextBefore          string
+	ViewsOpen                          bool
+	FromDate, UntilDate                string
 
 	Archived                  map[string]bool
 	Decisions                 map[string]decision.Run
@@ -219,6 +221,11 @@ func (d TimelineData) Link(key, value string) string {
 			q.Set(k, v)
 		}
 	}
+	if key == "" || key == "reply" || key == "compose" {
+		if d.HistoryBefore != "" {
+			q.Set("before", d.HistoryBefore)
+		}
+	}
 	switch key {
 	case "space", "label", "person", "filter", "account", "day":
 		q.Del("thread")
@@ -253,6 +260,7 @@ func (d TimelineData) ViewsURL() string   { return "/views" + strings.TrimPrefix
 func (d TimelineData) CurrentURL() string { return d.Link("", "") }
 func (d TimelineData) NewURL() string {
 	d.ThreadKey = ""
+	d.HistoryBefore = ""
 	return d.Link("compose", "new") + "#inline-composer"
 }
 func (d TimelineData) SelectedSpace() bool { return d.SpaceID != "" }
@@ -476,6 +484,7 @@ func (m TimelineMessage) ThreadURL() string {
 	parsed, _ := url.Parse(m.ReturnURL)
 	q := parsed.Query()
 	q.Set("thread", m.Identity.Key)
+	q.Del("before")
 	q.Del("reply")
 	q.Del("compose")
 	parsed.RawQuery = q.Encode()

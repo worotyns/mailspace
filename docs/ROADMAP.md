@@ -81,3 +81,6 @@ MS-021 identity foundation is implemented in ADR-0040/schema 13, with a reviewed
 
 
 Owner acceptance follow-up is tracked in MS-022. Security now remains in the trusted settings modal with independently refreshed parent session metadata; the native empty-password submit bug is fixed. Label pickers use compact colored badge popovers, and named People/sender headers show secondary email addresses. Next active slices: automatic-on-open and manual provider read/unread flags (explicitly selected by the owner), and latest-20 timeline pagination with upward older-message loading/anchor preservation. Recipient metadata and People suggestions remain open. These changes do not close the wider 1.0 gates.
+
+
+ADR-0041 implements latest-20 root timeline rendering, scope-bound older cursors, native older-page links and upward HTMX loading with retained DOM/scroll/composer. Counts and rule/bulk/People scopes still use the complete bounded cache; the thread drawer keeps its separate 100-message cap. This is not full provider history. The owner requested stopping after this committed/pushed slice; next resumed priority is compact Space assignment popovers and clearer assigned-Space badges, followed by provider read/unread and recipient/contact follow-up (MS-022).

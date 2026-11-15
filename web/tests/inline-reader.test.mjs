@@ -276,3 +276,35 @@ test("quote rendering keeps inline replies visible and limits pathological node 
     dom.window.close();
   }
 });
+
+test("older encrypted rows join the existing local reader without clearing a mounted preview", async () => {
+  const f = fixture();
+  try {
+    await f.reader.preview(f.entry);
+    const output = f.entry.querySelector("[data-local-preview]"),
+      retained = output.firstChild;
+    const row = f.document.createElement("article");
+    row.dataset.messageReference = "ciphertext-older";
+    row.dataset.messagePerson = "sender@example.test";
+    row.innerHTML =
+      '<div data-inline-encrypted hx-disable><a data-inline-decrypt href="/messages/read?reference=ciphertext-older">Preview locally</a><div data-local-preview hidden></div></div>';
+    f.shell.prepend(row);
+    f.reader.extend();
+    f.reader.extend();
+    assert.equal(f.reader.entries.length, 2);
+    assert.equal(output.firstChild, retained);
+    await f.reader.preview(row.querySelector("[data-inline-encrypted]"));
+    assert.match(
+      row.querySelector("[data-local-preview]").textContent,
+      /PRIVATE_INLINE_CANARY/,
+    );
+    f.reader.clearPrivate();
+    assert.equal(
+      row.querySelector("[data-local-preview]").childNodes.length,
+      0,
+    );
+    assert.equal(output.childNodes.length, 0);
+  } finally {
+    f.close();
+  }
+});

@@ -25,3 +25,6 @@ Full reply composition offers Quote original locally for the selected cached mes
 
 
 Send certainty appears in the upper-right message header, outside Space controls, with accepted/pending/uncertain text and distinct icons. Acceptance still means SMTP acceptance, not confirmed delivery. Settings calls the classifier section Decision Model; existing configuration variable names stay compatible.
+
+
+The root feed initially shows the latest 20 authorized matching cached messages, newest at the bottom. Scroll upward near the top to prepend another 20; Load 20 older messages also works by keyboard and has a full native-page fallback. A retained message keeps its viewport position and mounted body/draft. Latest messages restarts the view when a cached anchor is no longer available. The end marker means the start of the current bounded cache, not all provider history. Sidebar counts and bulk/rule/People scopes stay unchanged; original-thread drawers retain their existing separate cap.

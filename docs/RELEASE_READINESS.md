@@ -31,7 +31,7 @@ Local detached signing and multipart/signed composition now have an application 
 
 ADR-0029 adds the Spaces-only workflow, thread drawer, bounded People/commands, local archive and explicit attachment viewing. ADR-0030/0033 restore user-defined labels in Settings, sidebar filters and inline message headers; schema 10 preserved their existing records/colors. See WORKFLOW.md for limits and local-versus-provider behavior. These changes do not close the team-sharing or broader 1.0 gates.
 
-## Current testing snapshot: 45bd0f1
+## Historical testing snapshot: 45bd0f1
 
 The tested personal workflow now includes shared AND/OR filter/rule semantics (ADR-0031), memory-only worker vault sessions and inline local decryption/autopreview (ADR-0032), user-defined sidebar/header labels (ADR-0033), inert Markdown display (ADR-0034), and a mobile title-triggered view switcher. These are implemented slices, not remaining implementation tasks. Label names and colors come from the user's records; no fixed status set is created.
 
@@ -41,3 +41,6 @@ Authored signed-only sending is implemented end to end in the full composer (ADR
 
 
 MS-021/ADR-0040 now implements optional Authenticator App 2FA end to end: password-gated enrollment, local QR, first-code confirmation, unprivileged login challenges, single-use app/recovery proof, encrypted seeds, recovery replacement/disable and local operator reset. These checks are independent of browser OpenPGP keys. Automated acceptance is recorded in VALIDATION.md; real Authenticator app pairing and manual phone/desktop/keyboard acceptance remain with the owner. This does not close the other 1.0 gates.
+
+
+ADR-0041 adds cached root-feed pagination (latest 20, older batches on upward scroll/native link), preserving mounted message/decrypted DOM and composer. It does not change existing cache/provider limits, thread cap, source authorization or read-only flags. At the owner's request, final validation was limited to targeted pagination/reader/HTTP checks, Go vet, asset build and Chrome at three sizes; the full repository/race/container suite was not repeated for this slice. See VALIDATION.md and NEXT_SESSION.md. The owner requested stopping after its commit/push; no release/deployment is implied.

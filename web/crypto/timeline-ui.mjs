@@ -2,15 +2,18 @@
 import { enhanceReadableMessages } from "./message-text.mjs";
 import "./recipient-picker.mjs";
 import "./label-picker.mjs";
+import "./history-ui.mjs";
 import "./app-panels.mjs";
 // Plain replies use HTMX. Encrypted mode has no serializable body field and
 // intercepts submission before HTMX; the crypto module uploads ciphertext only.
 let cleanup = () => {};
 let readerCleanup = () => {};
 let readerGeneration = 0;
+let readerController = null;
 let threadSent = false;
 function initializeReader(shell) {
   readerCleanup();
+  readerController = null;
   readerCleanup = () => {};
   const generation = ++readerGeneration;
   if (!shell.querySelector("[data-inline-encrypted]")) {
@@ -24,10 +27,17 @@ function initializeReader(shell) {
     .then(({ InlineReader }) => {
       if (generation !== readerGeneration || !shell.isConnected) return;
       const reader = new InlineReader(shell);
+      readerController = reader;
       readerCleanup = () => reader.dispose();
     })
     .catch(() => {});
 }
+window.addEventListener("mailspace:history-loaded", () => {
+  const shell = document.getElementById("timeline-shell");
+  if (!shell) return;
+  if (readerController) readerController.extend();
+  else initializeReader(shell);
+});
 const attachmentViewers = new Set();
 const attachmentRequests = new Set();
 let attachmentEpoch = 0;

@@ -57,7 +57,7 @@ func timelineReturn(value string) string {
 	}
 	q := url.Values{}
 	source := parsed.Query()
-	for _, key := range []string{"space", "label", "person", "filter", "q", "day", "account", "reply", "compose", "thread", "from", "until"} {
+	for _, key := range []string{"space", "label", "person", "filter", "q", "day", "account", "reply", "compose", "thread", "from", "until", "before"} {
 		if value := source.Get(key); value != "" && len(value) <= 1000 {
 			q.Set(key, value)
 		}
@@ -79,6 +79,10 @@ func (c *timelineController) data(r *http.Request, s identity.Session) (webui.Ti
 	// All activity is an explicit view, never a second physical IMAP Inbox.
 	if data.Filter == "" && data.SpaceID == "" && data.LabelID == "" && data.Person == "" && data.Query == "" && data.Day == "" && data.ThreadKey == "" && q.Get("reply") == "" && !data.ComposeNew {
 		data.Filter = "unsorted"
+	}
+	data.HistoryBefore = q.Get("before")
+	if len(data.HistoryBefore) > 512 {
+		return data, webui.ErrHistoryCursor
 	}
 	data.Classifier = c.config.Decisions != nil && c.config.Decisions.Available()
 	if data.Classifier {
@@ -290,7 +294,14 @@ func (c *timelineController) data(r *http.Request, s identity.Session) (webui.Ti
 }
 func (c *timelineController) render(w http.ResponseWriter, r *http.Request, s identity.Session) {
 	data, err := c.data(r, s)
+	if err == nil {
+		err = webui.PageTimeline(&data)
+	}
 	if err != nil {
+		if errors.Is(err, webui.ErrHistoryCursor) {
+			http.Error(w, webui.ErrHistoryCursor.Error(), 400)
+			return
+		}
 		if errors.Is(err, mailfilter.ErrQuery) {
 			w.Header().Set("X-Mailspace-Notice", mailfilter.ErrQuery.Error())
 			http.Error(w, mailfilter.ErrQuery.Error(), 400)
@@ -309,6 +320,16 @@ func (c *timelineController) render(w http.ResponseWriter, r *http.Request, s id
 		return
 	}
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self' "+hash+"; img-src blob:; connect-src 'self'; worker-src 'self'; frame-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+	if r.URL.Path == "/timeline/history" {
+		if data.ThreadKey != "" || data.HistoryBefore == "" {
+			http.Error(w, "Choose an older cached page from the timeline", 400)
+			return
+		}
+		if err = webui.RenderTimelineHistory(w, c.config.Dev, data); err != nil {
+			http.Error(w, "Unable to load older messages", 500)
+		}
+		return
+	}
 	if err = webui.RenderTimeline(w, r, c.config.Dev, data); err != nil {
 		http.Error(w, "Unable to render timeline", 500)
 	}
@@ -322,6 +343,17 @@ func timelineRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 	c.bulkRoutes(mux, protected, mutation)
 	mux.HandleFunc("GET /{$}", protected(c.render))
 	mux.HandleFunc("GET /views", protected(c.render))
+	mux.HandleFunc("GET /timeline/history", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
+		if r.Header.Get("HX-Request") != "true" {
+			http.Redirect(w, r, "/?"+r.URL.RawQuery, 303)
+			return
+		}
+		if r.Header.Get("HX-Target") != "timeline-history" {
+			http.Error(w, "Invalid history target", 400)
+			return
+		}
+		c.render(w, r, s)
+	}))
 	mux.HandleFunc("GET /people/suggestions", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
 		query := strings.TrimSpace(r.URL.Query().Get("q"))
 		if len(query) < 2 || len(query) > 254 {

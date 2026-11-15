@@ -12,7 +12,7 @@ This is an implementation checklist, not a release declaration. RELEASE_READINES
 
 Optional Drive, full-text/semantic indexing, AI compose, PostgreSQL and YunoHost are follow-up modules, not mandatory dependencies or pretend-complete features. JEV/OpenRouter and Litestream remain opt-in, independently tested boundaries. Live paid-provider availability and real external-client acceptance must be recorded honestly, never inferred from mocks.
 
-## Current evidence
+## Historical evidence (current resume order: NEXT_SESSION.md)
 
 Main f2266a2 has passing GitHub CI, including crypto tests, Go race tests, Docker build and continuous SQLite write/restore drill. 1.0 compatibility/team/security gates remain open. The tested readiness work is merged into main. Work continues directly on main in tested, bounded commits; no pull request is required for owner-directed work. Each completed slice updates this record and RELEASE_READINESS.md before publication.
 
@@ -44,7 +44,7 @@ Thread drawer/original-target replies, immediate Space chips, latest overall Jev
 
 AND/OR filters and rule drafts, worker-backed memory sessions, inline local decrypt, optional per-tab autopreview, user-defined sidebar/header labels, inert Markdown text and the mobile view switcher are implemented and pushed. Both recent feature commits passed GitHub CI. A fresh read-only non-root container smoke also passed after restart. Detailed evidence and remaining browser/external-client limits are recorded in VALIDATION.md and RELEASE_READINESS.md.
 
-The next implementation slice is an explicit signed-only send contract and action, preserving original reply references, single-attempt SMTP outcomes, explicit plaintext consent and the encrypted-parent downgrade block. Do not close MS-006 merely because local detached signing or GnuPG tests already pass. Team ACL and operational/compatibility gates remain separate.
+That snapshot preceded the signed-only send contract/action now implemented under ADR-0037, preserving original reply references, single-attempt SMTP outcomes, explicit plaintext consent and the encrypted-parent downgrade block. Current resume priorities are recorded in NEXT_SESSION.md. Do not close MS-006 merely because local detached signing or GnuPG tests already pass. Team ACL and operational/compatibility gates remain separate.
 
 
 ### MS-006 authored signed transport foundation
@@ -65,3 +65,8 @@ ADR-0038 implements exact-source bounded quotes in the full browser composer, wi
 ### Added owner requirements before 1.0
 
 Inline multi-recipient To/Cc/Bcc composition is implemented for native and encrypted sending. Complete recipient metadata display and People suggestion reliability. Authenticator App 2FA (MS-021/ADR-0040) is implemented with integrated session gating, Security enrollment/local QR, recovery, encrypted seeds, replay/rate/ownership guards and operator reset. Manual real-app/browser acceptance remains open.
+
+
+### MS-022 cached timeline paging and next session
+
+ADR-0041 implements the latest 20 matching cached messages, upward 20-message loading, stable scoped cursors, native fallback and retained viewport/body/composer. This closes the requested UI pagination slice, not provider archive synchronization/retention. The owner requested a stop after commit/push of this slice. Resume with the Spaces popover/membership presentation, then automatic/manual provider read/unread, then recipient metadata and People suggestions. NEXT_SESSION.md records that order and the remaining 1.0 acceptance gates.

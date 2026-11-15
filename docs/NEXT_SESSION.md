@@ -1,0 +1,26 @@
+# Next session — owner handoff, 2026-11-15
+
+Work directly in the existing checkout on main. Preserve changes, use no worktrees/PRs, commit and push each completed working slice to origin/main. Never force-push, publish a release or deploy without separate authorization. The owner requested stopping after the cached-history loading slice and returning to 1.0 work in a later session.
+
+## Delivered in the latest work
+
+- Authenticator App 2FA: encrypted seed storage/recovery, password-gated pending login, Settings enrollment/local QR, first-code activation, code replacement/disable and local operator reset. Empty-password browser submission fixed in 267c805; Security stays inside the modal and refreshes parent session metadata in 3b34ed1. Real app/Safari acceptance is still separate.
+- Inline To/Cc/Bcc recipient lists for ordinary and encrypted mail (c58ef15), with trust for every recipient, private Bcc envelope and no encrypted-parent downgrade.
+- Compact native label popovers and secondary email addresses under contact names (aa7b938).
+- ADR-0041: latest-20 root timeline, upward older cached pages, bounded scoped cursors, native fallback and retained viewport/decrypted DOM/composer. This is pagination of the current cache, not an unlimited provider archive. The final targeted checks are recorded in VALIDATION.md; broad test repetition was waived by the owner for this slice.
+
+## Next implementation slices, in owner priority order
+
+1. **Spaces presentation (MS-022):** replace the horizontal list of all assignment options with a compact popover like Labels. Show assigned-Space badges clearly in All activity/Unread/Unsorted; inside one Space show only other assigned Spaces. Keep many-to-many membership, metadata-only updates, current ownership/source checks and explicit human overrides.
+2. **Read/unread:** owner explicitly chose automatic after opening content plus a manual toggle, synchronized to the provider. Current IMAP reads use EXAMINE/BODY.PEEK and never set Seen. Define a new capability/ADR before adding safe bounded flag writes, current revision/UIDVALIDITY checks, timeout/error behavior and ownership tests. Merely fetching a timeline must never mark all cached messages read.
+3. **Recipients/contacts:** display To/Cc/Bcc metadata honestly (hidden Bcc cannot be invented for incoming mail; private outgoing envelope needs proper ownership). Complete reliable People datalists, including inline/full composition and stale asynchronous result handling. Do not confuse suggestions with OpenPGP trust.
+
+## Remaining 1.0 gates
+
+- External OpenPGP compatibility and real Thunderbird/secure-quote/manual key/draft recovery acceptance; GnuPG/Chromium fixtures do not prove those clients.
+- Broader provider, charset/large MIME, reconnect/soak, history/retention and visible storage-budget acceptance. Current cached paging does not implement full archive sync, native IMAP IDLE or remote archive/delete.
+- Team-source/sharing ACLs, revocation and separate send-as. Organization membership and Space rules currently grant no private-mail access.
+- Security/accessibility/dependency/license review, Safari/mobile/manual acceptance and real Authenticator pairing. Distinguish internal testing from independent audit.
+- Current-commit CI/release/multiarch validation, upgrade/rollback and SQLite + credential-keys + auth-keys restore plus separate browser key/draft recovery. A reviewed prerelease/stable publication remains a separately authorized action.
+
+Optional OAuth-only providers, PostgreSQL, Drive, full-text/semantic indexing, AI compose and YunoHost are not mandatory hidden core dependencies. Follow RELEASE_READINESS.md and RELEASE_1_0_PLAN.md rather than declaring 1.0 complete from the personal workflow alone.

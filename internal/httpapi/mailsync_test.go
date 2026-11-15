@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/json"
+	"fmt"
 	"html"
 	"mailspace.local/mailspace/internal/accounts"
 	"mailspace.local/mailspace/internal/collections"
@@ -700,6 +701,76 @@ func TestReadOnlyMailboxEndToEndAndAuthorization(t *testing.T) {
 		}
 		if r := request("GET", "/outbox?account="+account.ID, other, "", false); r.Code != 404 {
 			t.Fatal("foreign outbox recipient metadata disclosed")
+		}
+	})
+
+	t.Run("bounded upward cached history", func(t *testing.T) {
+		tx, err := db.Database().BeginTx(ctx, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer tx.Rollback()
+		for i := 0; i < 55; i++ {
+			raw := []byte(fmt.Sprintf("From: history@example.test\r\nTo: demo@example.test\r\nSubject: History %02d\r\nMessage-ID: <paging-%d@example.test>\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nSynthetic cached history %d.", i, i, i))
+			preview, _ := json.Marshal(mailsync.Parse(raw))
+			if _, err := tx.ExecContext(ctx, "INSERT INTO mail_messages(account_id,mailbox,uid,flags,size,received_at,raw,preview) VALUES(?, 'INBOX',?, '[]',?,?,?,?)", account.ID, 10000+i, len(raw), time.Now().Add(24*time.Hour).Unix()+int64(i), raw, string(preview)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			t.Fatal(err)
+		}
+		view := "/?" + url.Values{"account": {account.ID}, "filter": {"all"}}.Encode()
+		latest := request("GET", view, token, "", false)
+		keys := regexp.MustCompile(`data-message-key="([a-f0-9]+)"`)
+		firstKeys := keys.FindAllStringSubmatch(latest.Body.String(), -1)
+		if latest.Code != 200 || len(firstKeys) != 20 || !strings.Contains(latest.Body.String(), "History 54") || strings.Contains(latest.Body.String(), "History 34") {
+			t.Fatal("initial HTTP view is not latest 20")
+		}
+		linkPattern := regexp.MustCompile(`(?s)<a\s+href="([^"]+)"[^>]*data-history-load`)
+		match := linkPattern.FindStringSubmatch(latest.Body.String())
+		if len(match) != 2 {
+			t.Fatal("native history link missing")
+		}
+		older := html.UnescapeString(match[1])
+		parsed, _ := url.Parse(older)
+		historyURL := "/timeline/history?" + parsed.RawQuery
+		load := func(cookie string, target string) *httptest.ResponseRecorder {
+			req := httptest.NewRequest("GET", historyURL, nil)
+			req.AddCookie(&http.Cookie{Name: "__Host-mailspace", Value: cookie})
+			req.Header.Set("HX-Request", "true")
+			req.Header.Set("HX-Target", target)
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, req)
+			return response
+		}
+		page := load(token, "timeline-history")
+		secondKeys := keys.FindAllStringSubmatch(page.Body.String(), -1)
+		if page.Code != 200 || len(secondKeys) != 20 || strings.Contains(page.Body.String(), `id="timeline-shell"`) || strings.Contains(page.Body.String(), "data-reply-body") || !strings.Contains(page.Body.String(), "History 15") || strings.Contains(page.Body.String(), "History 35") {
+			t.Fatal("history fragment scope/boundary wrong", page.Code)
+		}
+		seen := map[string]bool{}
+		for _, m := range append(firstKeys, secondKeys...) {
+			if seen[m[1]] {
+				t.Fatal("HTTP cursor duplicated a message")
+			}
+			seen[m[1]] = true
+		}
+		native := request("GET", older, token, "", false)
+		if native.Code != 200 || len(keys.FindAllStringSubmatch(native.Body.String(), -1)) != 20 || !strings.Contains(native.Body.String(), "Latest messages") {
+			t.Fatal("native older page missing")
+		}
+		if load(other, "timeline-history").Code == 200 || load("", "timeline-history").Code != 401 || load(token, "timeline-shell").Code != 400 {
+			t.Fatal("history ownership/target boundary failed")
+		}
+		if request("GET", historyURL, token, "", false).Code != 303 {
+			t.Fatal("direct fragment navigation lacks native fallback")
+		}
+		// The list/scroll path must not mark cached mail read before that separate
+		// provider capability is explicitly implemented and enabled.
+		var flags string
+		if err := db.Database().QueryRowContext(ctx, "SELECT flags FROM mail_messages WHERE account_id=? AND mailbox='INBOX' AND uid=10000", account.ID).Scan(&flags); err != nil || flags != "[]" {
+			t.Fatal("history read mutated flags")
 		}
 	})
 

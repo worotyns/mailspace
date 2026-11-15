@@ -187,6 +187,17 @@ export class InlineReader {
         })
         .catch(() => {});
   }
+  extend() {
+    if (this.disposed) return;
+    for (const entry of this.shell.querySelectorAll(
+      "[data-inline-encrypted]",
+    )) {
+      if (this.entries.includes(entry)) continue;
+      this.entries.push(entry);
+      this.observer?.observe(entry);
+    }
+    if (this.automatic) this.queueVisible();
+  }
   announce(message) {
     this.window.dispatchEvent(
       new this.window.CustomEvent("mailspace:toast", { detail: { message } }),
