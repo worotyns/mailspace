@@ -29,4 +29,4 @@ Work directly in the existing checkout on main. Preserve changes, use no worktre
 - Security/accessibility/dependency/license review, Safari/mobile/manual acceptance and real Authenticator pairing. Distinguish internal testing from independent audit.
 - Current-commit CI/release/multiarch validation, upgrade/rollback and SQLite + credential-keys + auth-keys restore plus separate browser key/draft recovery. A reviewed prerelease/stable publication remains a separately authorized action.
 
-Optional OAuth-only providers, Drive, full-text/semantic indexing and YunoHost are not mandatory hidden core dependencies. PostgreSQL and AI compose were removed from the plan. Follow RELEASE_READINESS.md and RELEASE_1_0_PLAN.md rather than declaring 1.0 complete from the personal workflow alone.
+Optional Drive, full-text/semantic indexing and YunoHost are not mandatory hidden core dependencies. PostgreSQL, AI compose and OAuth-only providers were removed from the plan. Follow RELEASE_READINESS.md and RELEASE_1_0_PLAN.md rather than declaring 1.0 complete from the personal workflow alone.

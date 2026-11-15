@@ -22,7 +22,7 @@ Status: specyfikacje lokalne, nie zgłoszenia utworzone na GitHub. MS-001–MS-0
 
 | MS-017 | M0 | P0 | [Reproducible release pipeline i smoke](issues/MS-017.md) | M0 |
 
-PostgreSQL (MS-015) is removed from the plan by owner direction (2026-11-15). AI compose/summarize is removed too; MS-014 keeps only full-text/semantic search without a model. Neither is a hidden runtime dependency.
+PostgreSQL (MS-015), AI compose/summarize and OAuth-only provider support are removed from the plan by owner direction. MS-014 keeps only full-text/semantic search without a model. None of these is a hidden runtime dependency.
 
 Szacunki dopiero po M1 spike. P0: bramka bezpieczeństwa/core; P1: UX/team; P2: moduły i dystrybucja. Kolejność etapów w ROADMAP.
 
