@@ -92,6 +92,7 @@ func TestReadOnlyMailboxEndToEndAndAuthorization(t *testing.T) {
 		t.Fatal(err)
 	}
 	syncer := mailsync.New(db.Database(), a, connector)
+	syncer.SetFlagWriter(connector)
 	outgoing := outbox.New(db.Database(), a, syncer, connector)
 	handler, err := NewPersonal(dir, db, AuthConfig{Outbox: outgoing, Origin: "https://mail.example.test", Accounts: a, Sync: syncer, MailEndpointsEnabled: true})
 	if err != nil {
@@ -297,6 +298,104 @@ func TestReadOnlyMailboxEndToEndAndAuthorization(t *testing.T) {
 	}
 	if res := assignSpace(token, session.CSRF, "0", "/"); res.Code != 200 {
 		t.Fatal("explicit Space removal rejected", res.Code)
+	}
+	// Provider read-state writes are a separate bounded capability with their
+	// own response fragment and never touch message content.
+	beforeRead, err := syncer.Source(ctx, alice.ID, account.ID, ref.Mailbox, ref.Validity, ref.UID, ref.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	modernRead := request("GET", "/messages/read?"+url.Values{"reference": {webui.EncodeSource(ref)}}.Encode(), token, "", false)
+	if modernRead.Code != 200 {
+		t.Fatal("modern reader unavailable", modernRead.Code)
+	}
+	for _, want := range []string{`data-seen-writes="true"`, `data-seen-reference="`, `data-seen-unread="`} {
+		if !strings.Contains(modernRead.Body.String(), want) {
+			t.Fatalf("reader page missing %s", want)
+		}
+	}
+	// Merely fetching the timeline or a page must never write a flag.
+	afterRead, err := syncer.Source(ctx, alice.ID, account.ID, ref.Mailbox, ref.Validity, ref.UID, ref.Revision)
+	if err != nil || containsString(beforeRead.Flags, `\Seen`) != containsString(afterRead.Flags, `\Seen`) {
+		t.Fatal("reading a page changed the cached flag", beforeRead.Flags, afterRead.Flags, err)
+	}
+	seenID := "seen-message-" + sourceIdentity.Key
+	seen := func(cookie, csrf, state string) *httptest.ResponseRecorder {
+		values := url.Values{"csrf": {csrf}, "reference": {webui.EncodeSource(ref)}, "seen": {state}, "return_to": {"/"}}
+		req := httptest.NewRequest("POST", "/messages/seen", strings.NewReader(values.Encode()))
+		req.Header.Set("Origin", "https://mail.example.test")
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("HX-Request", "true")
+		req.Header.Set("HX-Target", seenID)
+		req.AddCookie(&http.Cookie{Name: "__Host-mailspace", Value: cookie})
+		res := httptest.NewRecorder()
+		handler.ServeHTTP(res, req)
+		return res
+	}
+	if res := seen(other, otherSession.CSRF, "1"); res.Code != 404 {
+		t.Fatal("foreign read-state write accepted", res.Code)
+	}
+	if res := seen(token, "wrong", "1"); res.Code != 403 {
+		t.Fatal("read-state write bypassed CSRF", res.Code)
+	}
+	if res := seen(token, session.CSRF, "maybe"); res.Code != 400 {
+		t.Fatal("ambiguous read state accepted", res.Code)
+	}
+	if res := seen(token, session.CSRF, "1"); res.Code != 200 || !strings.Contains(res.Body.String(), `id="`+seenID+`"`) || !strings.Contains(res.Body.String(), `hx-target="#`+seenID+`"`) || strings.Contains(res.Body.String(), "data-local-preview") {
+		t.Fatal("read-state response replaced private content", res.Code, res.Body.String())
+	}
+	marked, err := syncer.Source(ctx, alice.ID, account.ID, ref.Mailbox, ref.Validity, ref.UID, ref.Revision)
+	if err != nil || !containsString(marked.Flags, `\Seen`) {
+		t.Fatal("confirmed read state not cached", marked.Flags, err)
+	}
+	if res := seen(token, session.CSRF, "0"); res.Code != 200 || !strings.Contains(res.Body.String(), "Mark as read") {
+		t.Fatal("read state could not be reverted", res.Code, res.Body.String())
+	}
+	unmarked, err := syncer.Source(ctx, alice.ID, account.ID, ref.Mailbox, ref.Validity, ref.UID, ref.Revision)
+	if err != nil || containsString(unmarked.Flags, `\Seen`) {
+		t.Fatal("unread state not cached", unmarked.Flags, err)
+	}
+	background := func(state string) *httptest.ResponseRecorder {
+		values := url.Values{"csrf": {session.CSRF}, "reference": {webui.EncodeSource(ref)}, "seen": {state}}
+		req := httptest.NewRequest("POST", "/messages/seen", strings.NewReader(values.Encode()))
+		req.Header.Set("Origin", "https://mail.example.test")
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("X-Mailspace-Background", "1")
+		req.AddCookie(&http.Cookie{Name: "__Host-mailspace", Value: token})
+		res := httptest.NewRecorder()
+		handler.ServeHTTP(res, req)
+		return res
+	}
+	if res := background("1"); res.Code != 204 || res.Body.Len() != 0 {
+		t.Fatal("background read-state write did not confirm silently", res.Code, res.Body.String())
+	}
+	automatic, err := syncer.Source(ctx, alice.ID, account.ID, ref.Mailbox, ref.Validity, ref.UID, ref.Revision)
+	if err != nil || !containsString(automatic.Flags, `\Seen`) {
+		t.Fatal("automatic read state not cached", automatic.Flags, err)
+	}
+	if res := background("0"); res.Code != 204 {
+		t.Fatal("background revert failed", res.Code)
+	}
+	// A stale revision or unknown locator must fail closed without a remote write.
+	if err = syncer.SetSeen(ctx, alice.ID, account.ID, ref.Mailbox, ref.Validity, ref.UID, ref.Revision+1, true); err == nil {
+		t.Fatal("stale revision accepted for a flag write")
+	}
+	if err = syncer.SetSeen(ctx, alice.ID, account.ID, ref.Mailbox, ref.Validity, ref.UID+9999, ref.Revision, true); err == nil {
+		t.Fatal("unknown message locator accepted for a flag write")
+	}
+	finalProvider, err := connector.OpenRead(ctx, endpoint(server.IMAPAddr), login)
+	if err != nil {
+		t.Fatal(err)
+	}
+	finalSnapshot, err := finalProvider.Snapshot("INBOX")
+	finalProvider.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range finalSnapshot.Messages {
+		if m.UID == ref.UID && containsString(m.Flags, `\Seen`) {
+			t.Fatal("failed or reverted writes left a remote seen flag")
+		}
 	}
 	threadURL := "/?thread=" + sourceIdentity.Key + "&space=" + space.ID
 	replyURL := "/?" + url.Values{"thread": {sourceIdentity.Key}, "space": {space.ID}, "reply": {sourceIdentity.Key}}.Encode() + "#thread-composer"
@@ -873,4 +972,13 @@ func verifyTransportSignature(t *testing.T, entity []byte) {
 	if exec.Command("gpg", "--homedir", home, "--batch", "--verify", sigPath, dataPath).Run() == nil {
 		t.Fatal("GnuPG accepted mutated transport bytes")
 	}
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }

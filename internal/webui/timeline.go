@@ -50,6 +50,7 @@ type TimelineMessage struct {
 	LabelsFocusID string
 	SpacesOpen    bool
 	SpacesFocusID string
+	SeenWrites    bool
 	Archived      bool
 	Decision      *DecisionView
 	timeline.Record
@@ -124,6 +125,14 @@ func (m TimelineMessage) SentHint() string {
 	return "Sent message"
 }
 
+// ReceivedHint names the sender and the account that received the message.
+func (m TimelineMessage) ReceivedHint() string {
+	if m.AccountName == "" {
+		return m.Sender()
+	}
+	return m.Sender() + " to " + m.AccountName
+}
+
 // HeaderLabel is the accessible name of one message row.
 func (m TimelineMessage) HeaderLabel() string {
 	suffix := " at " + m.Time
@@ -133,7 +142,7 @@ func (m TimelineMessage) HeaderLabel() string {
 		}
 		return "You sent this" + suffix
 	}
-	return "Message from " + m.Sender() + suffix
+	return "Message from " + m.ReceivedHint() + suffix
 }
 
 // RecipientSummary names the outgoing counterpart without inventing a display
@@ -227,6 +236,7 @@ type TimelineData struct {
 	PeoplePage                []PersonView
 
 	Classifier     bool
+	SeenWrites     bool
 	Provider       string
 	Email          string
 	UserID         string
@@ -482,6 +492,7 @@ func FormatTimeline(records []timeline.Record, spaces, labels []collections.Item
 		m.Spaces = data.Spaces
 		m.Labels = data.Labels
 		m.ContextSpace = data.SpaceID
+		m.SeenWrites = data.SeenWrites
 	}
 	data.Total = len(data.Messages)
 	matches := []PersonView{}
@@ -711,6 +722,33 @@ func (m TimelineMessage) LabelsID() string { return "labels-" + m.DOMID() }
 // SpacePickerID scopes Space updates to one message without replacing its decrypted body.
 func (m TimelineMessage) SpacePickerID() string { return "spaces-" + m.DOMID() }
 
+// SeenID scopes a provider read-state update to one message row.
+func (m TimelineMessage) SeenID() string { return "seen-" + m.DOMID() }
+
+// SeenNext is the explicit next read state sent by the manual toggle.
+func (m TimelineMessage) SeenNext() string {
+	if m.Unread {
+		return "1"
+	}
+	return "0"
+}
+
+// SeenToggleLabel names the action the manual toggle performs.
+func (m TimelineMessage) SeenToggleLabel() string {
+	if m.Unread {
+		return "Mark as read"
+	}
+	return "Mark as unread"
+}
+
+// SeenPressed is the aria-pressed value for the manual toggle.
+func (m TimelineMessage) SeenPressed() string {
+	if m.Unread {
+		return "false"
+	}
+	return "true"
+}
+
 // SpaceBadges lists assigned Spaces for the compact badge summary. The Space
 // currently being viewed is omitted because the view itself already states it;
 // the popover still offers every assignment so a human can add or remove one.
@@ -740,6 +778,10 @@ func RenderMessageLabels(w http.ResponseWriter, dev bool, message TimelineMessag
 
 func RenderMessageSpaces(w http.ResponseWriter, dev bool, message TimelineMessage, sidebar TimelineData) error {
 	return renderTimelinePart(w, dev, "timeline-space-response", MessageSpacesData{Message: message, Sidebar: sidebar})
+}
+
+func RenderMessageSeen(w http.ResponseWriter, dev bool, message TimelineMessage) error {
+	return renderTimelinePart(w, dev, "timeline-message-seen", message)
 }
 
 // Composer links override the reply form's status-only HTMX target.

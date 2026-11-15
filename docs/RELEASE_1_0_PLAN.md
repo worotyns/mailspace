@@ -80,3 +80,8 @@ ADR-0042 replaces the horizontal list of every Space with the shared compact nat
 ### MS-022 message header identity line
 
 Each started run shows one identity line across the timeline, Spaces, filters and the original-thread drawer: received mail keeps the sender name with the sender address beneath it, sent mail shows `You → recipient` with the recipient summary, and the owning account appears once as its bare address (display name only in the tooltip). Cache previews keep `To` addresses, so recipient display names are not invented and hidden Bcc recipients stay absent. Remaining in MS-022: automatic-after-open plus manual provider read/unread with an explicit flag-write capability/ADR, complete To/Cc/Bcc metadata and reliable People suggestions.
+
+
+### MS-022 provider-synchronized read state
+
+ADR-0043 adds the only provider write outside sending: a bounded `\Seen` capability with current owner/account revision and UIDVALIDITY checks, server-confirmed flags and a local cache update only after confirmation. Opening the full reader (ordinary on load, encrypted after local decrypt) or an inline decrypted preview marks the message read; the row also has a manual read/unread toggle. Fetching a timeline never writes, outbox rows are excluded, and writes use a dedicated rate/concurrency bound instead of the send budget. `MAILSPACE_IMAP_FLAG_WRITES=0` disables the capability. Remaining MS-022 scope: complete To/Cc/Bcc metadata and reliable People suggestions.

@@ -6,6 +6,7 @@ import { extractEncrypted, parseLocalMime } from "./mime.mjs";
 import { extractSigned } from "./signed-mime.mjs";
 import { messageText } from "./mail-html.mjs";
 import { AttachmentViewer } from "./attachments.mjs";
+import { markMessageRead } from "./read-state.mjs";
 let preference = false;
 let dialogNumber = 0;
 
@@ -482,6 +483,9 @@ export class InlineReader {
       this.viewers.set(entry, viewer);
       output.replaceChildren(text, signature, attachments);
       output.hidden = false;
+      // The decrypted preview is visible: an opened message may be marked read
+      // through its own scoped form. No decrypted text leaves this DOM.
+      void markMessageRead(entry.closest("[data-message-key]"));
       trigger.textContent = "Refresh local preview";
     } catch {
       if (this.valid(epoch) && !automatic)

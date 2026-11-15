@@ -90,6 +90,11 @@ func main() {
 			log.Fatal(err)
 		}
 		syncer := mailsync.New(store.Database(), mailAccounts, connector)
+		// Provider \Seen synchronization is on by default and explicitly
+		// disableable; a disabled capability makes no remote flag call.
+		if !flagWritesDisabled() {
+			syncer.SetFlagWriter(connector)
+		}
 		outgoing := outbox.New(store.Database(), mailAccounts, syncer, connector)
 		if err = outgoing.Recover(ctx); err != nil {
 			log.Fatal(err)

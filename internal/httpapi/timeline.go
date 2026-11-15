@@ -9,11 +9,13 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mailspace.local/mailspace/internal/accounts"
 	"mailspace.local/mailspace/internal/collections"
 	"mailspace.local/mailspace/internal/decision"
 	"mailspace.local/mailspace/internal/identity"
 	"mailspace.local/mailspace/internal/mail"
 	"mailspace.local/mailspace/internal/mailfilter"
+	"mailspace.local/mailspace/internal/mailsync"
 	"mailspace.local/mailspace/internal/outbox"
 	"mailspace.local/mailspace/internal/timeline"
 	"mailspace.local/mailspace/internal/webui"
@@ -29,6 +31,10 @@ type timelineController struct {
 	store       *identity.Store
 	sources     *timeline.Service
 	collections *collections.Service
+	// seenLimiter/seenSlots bound provider flag writes separately from the
+	// send/connection budget so ordinary reading cannot block sending.
+	seenLimiter *loginLimiter
+	seenSlots   chan struct{}
 }
 
 func decodeSource(value string) (mail.SourceRef, error) {
@@ -84,6 +90,7 @@ func (c *timelineController) data(r *http.Request, s identity.Session) (webui.Ti
 	if len(data.HistoryBefore) > 512 {
 		return data, webui.ErrHistoryCursor
 	}
+	data.SeenWrites = c.config.Sync != nil && c.config.Sync.FlagWritesEnabled()
 	data.Classifier = c.config.Decisions != nil && c.config.Decisions.Available()
 	if data.Classifier {
 		data.Provider = c.config.Decisions.ProviderName()
@@ -339,7 +346,7 @@ func timelineRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 		return false
 	}
 	source := timeline.New(store, config.Accounts, config.Sync, config.Outbox)
-	c := &timelineController{config: config, store: store, sources: source, collections: collections.New(store.Database(), source)}
+	c := &timelineController{config: config, store: store, sources: source, collections: collections.New(store.Database(), source), seenLimiter: &loginLimiter{entries: map[string]windowEntry{}, limit: 120}, seenSlots: make(chan struct{}, 2)}
 	c.bulkRoutes(mux, protected, mutation)
 	mux.HandleFunc("GET /{$}", protected(c.render))
 	mux.HandleFunc("GET /views", protected(c.render))
@@ -386,6 +393,72 @@ func timelineRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 			return
 		}
 		webui.RenderPeople(w, r, config.Dev, data)
+	}))
+	mux.HandleFunc("POST /messages/seen", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
+		if !mutation(w, r, s) {
+			return
+		}
+		value := strings.TrimSpace(r.FormValue("seen"))
+		if value != "0" && value != "1" {
+			http.Error(w, "Explicit read state required", 400)
+			return
+		}
+		ref, err := decodeSource(r.FormValue("reference"))
+		if err != nil || ref.Kind != "imap" {
+			http.Error(w, "Invalid message reference", 400)
+			return
+		}
+		if !c.config.Sync.FlagWritesEnabled() {
+			http.Error(w, "Provider read state is disabled", 503)
+			return
+		}
+		// Read-state updates have their own bounded window and two slots so they
+		// can never exhaust or block the mail-send connection budget.
+		if !c.seenLimiter.allow(s.User.ID, time.Now()) {
+			w.Header().Set("Retry-After", "60")
+			http.Error(w, "Too many read-state updates", 429)
+			return
+		}
+		select {
+		case c.seenSlots <- struct{}{}:
+			defer func() { <-c.seenSlots }()
+		default:
+			w.Header().Set("Retry-After", "1")
+			http.Error(w, "Read-state update busy; try again", 503)
+			return
+		}
+		err = c.config.Sync.SetSeen(r.Context(), s.User.ID, ref.AccountID, ref.Mailbox, ref.Validity, ref.UID, ref.Revision, value == "1")
+		if err != nil {
+			if errors.Is(err, accounts.ErrNotFound) || errors.Is(err, mailsync.ErrChanged) {
+				http.Error(w, "This message or account changed; reload before retrying", 404)
+				return
+			}
+			// Provider outcome is unknown or rejected: local state stays unchanged
+			// and the client must reload before assuming anything.
+			w.Header().Set("X-Mailspace-Notice", "The mail server did not confirm the read-state change. Local state is unchanged.")
+			http.Error(w, "The mail server did not confirm this change.", 503)
+			return
+		}
+		resolved, err := c.sources.Resolve(r.Context(), s.User.ID, ref)
+		if err != nil {
+			w.Header().Set("X-Mailspace-Notice", "Read state changed on the mail server. Reload to see it.")
+			http.Error(w, "Reload this message", 503)
+			return
+		}
+		message := webui.TimelineMessage{Record: resolved.Record, Token: webui.EncodeSource(ref), CSRF: s.CSRF, ReturnURL: timelineReturn(r.FormValue("return_to")), SeenWrites: true}
+		// The automatic caller only needs the outcome, not a redirect or a
+		// fragment it would discard.
+		if r.Header.Get("X-Mailspace-Background") == "1" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if r.Header.Get("HX-Request") == "true" && r.Header.Get("HX-Target") == message.SeenID() {
+			if err = webui.RenderMessageSeen(w, c.config.Dev, message); err != nil {
+				http.Error(w, "Unable to render read state", 503)
+			}
+			return
+		}
+		http.Redirect(w, r, timelineReturn(r.FormValue("return_to")), 303)
 	}))
 	mux.HandleFunc("POST /messages/archive", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
 		if !mutation(w, r, s) {
@@ -455,7 +528,7 @@ func timelineRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 			classifyReference = webui.EncodeSource(ref)
 			classifyProvider = config.Decisions.ProviderName()
 		}
-		renderSecurePage(w, config, webui.AuthPageData{UserID: s.User.ID, SessionExpires: s.ExpiresAt.UnixMilli(), Email: s.User.Email, ClassifyReference: classifyReference, ClassifyProvider: classifyProvider, CSRF: s.CSRF, SecureRead: true, OrdinaryRead: !resolved.Record.Preview.Encrypted, RawURL: "/api/messages/raw?" + url.Values{"reference": {webui.EncodeSource(ref)}}.Encode(), ClaimedSender: resolved.Record.Preview.Sender, AccountID: ref.AccountID})
+		renderSecurePage(w, config, webui.AuthPageData{UserID: s.User.ID, SessionExpires: s.ExpiresAt.UnixMilli(), Email: s.User.Email, ClassifyReference: classifyReference, ClassifyProvider: classifyProvider, CSRF: s.CSRF, SecureRead: true, OrdinaryRead: !resolved.Record.Preview.Encrypted, RawURL: "/api/messages/raw?" + url.Values{"reference": {webui.EncodeSource(ref)}}.Encode(), SeenReference: webui.EncodeSource(ref), SeenWrites: config.Sync.FlagWritesEnabled(), SeenUnread: resolved.Record.Unread, ClaimedSender: resolved.Record.Preview.Sender, AccountID: ref.AccountID})
 	}))
 	mux.HandleFunc("POST /timeline/sync", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
 		if !mutation(w, r, s) {
@@ -681,7 +754,7 @@ func (c *timelineController) renderMembership(w http.ResponseWriter, r *http.Req
 	if parsed, err := url.Parse(returnURL); err == nil {
 		contextSpace = parsed.Query().Get("space")
 	}
-	message := webui.TimelineMessage{Archived: archived[resolved.Record.Identity.Key], Classifier: !archived[resolved.Record.Identity.Key] && c.config.Decisions != nil && c.config.Decisions.Available() && !resolved.Record.Own && !resolved.Record.Preview.Encrypted && resolved.Record.Preview.Status == "ready", Record: resolved.Record, Token: webui.EncodeSource(ref), CSRF: s.CSRF, ReturnURL: returnURL, ContextSpace: contextSpace, Expanded: true}
+	message := webui.TimelineMessage{Archived: archived[resolved.Record.Identity.Key], SeenWrites: c.config.Sync.FlagWritesEnabled(), Classifier: !archived[resolved.Record.Identity.Key] && c.config.Decisions != nil && c.config.Decisions.Available() && !resolved.Record.Own && !resolved.Record.Preview.Encrypted && resolved.Record.Preview.Status == "ready", Record: resolved.Record, Token: webui.EncodeSource(ref), CSRF: s.CSRF, ReturnURL: returnURL, ContextSpace: contextSpace, Expanded: true}
 	if c.config.Decisions != nil {
 		runs, e := c.config.Decisions.Runs(r.Context(), s.User.ID)
 		if e == nil {

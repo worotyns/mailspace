@@ -2,7 +2,9 @@
 
 Connect an IMAP/SMTP account as described in MAIL_ACCOUNTS.md. After saving, Mailspace opens the real mailbox view and schedules a first download. Select **Refresh mail** for an immediate read. Subsequent polling runs in the background; reload or refresh the view to see new cached mail. The sidebar switches actual folders and connected accounts; Account & session settings remains available. On mobile, folder shortcuts and Settings remain accessible.
 
-Incoming synchronization is read-only. Outgoing composition is separate (SENDING.md). Reading uses EXAMINE/BODY.PEEK and does not set Seen or change server flags. Synchronizing reconciles local flags and removed messages. Cached messages remain readable when a server is unavailable. A failure banner does not erase previously cached mail.
+Incoming synchronization is read-only. Outgoing composition is separate (SENDING.md). Reading uses EXAMINE/BODY.PEEK; fetching, paging or refreshing a timeline never sets Seen or changes server flags. Synchronizing reconciles local flags and removed messages. Cached messages remain readable when a server is unavailable. A failure banner does not erase previously cached mail.
+
+Read state is the one reviewed exception (ADR-0043). A separate bounded capability can set or clear the `\Seen` flag of one message, with the exact cached account, mailbox, UIDVALIDITY, UID and connection revision. It runs only after an explicit action: opening the full message reader, decrypting an inline preview, or using the message's read/unread toggle. The provider must confirm the returned flags before the local cache is updated; a stale revision, foreign owner or unconfirmed response changes nothing. Disable it entirely with `MAILSPACE_IMAP_FLAG_WRITES=0`.
 
 ## Current explicit limits
 

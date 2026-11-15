@@ -39,6 +39,16 @@ type windowEntry struct {
 type loginLimiter struct {
 	mu      sync.Mutex
 	entries map[string]windowEntry
+	limit   int
+}
+
+// maximum keeps the historical login/connection cap at ten per minute; other
+// bounded windows such as provider flag writes set a higher explicit limit.
+func (l *loginLimiter) maximum() int {
+	if l.limit <= 0 {
+		return 10
+	}
+	return l.limit
 }
 
 func (l *loginLimiter) allow(key string, now time.Time) bool {
@@ -58,7 +68,7 @@ func (l *loginLimiter) allow(key string, now time.Time) bool {
 	if now.Sub(entry.started) >= time.Minute || entry.started.IsZero() {
 		entry = windowEntry{started: now}
 	}
-	if entry.attempts >= 10 {
+	if entry.attempts >= l.maximum() {
 		return false
 	}
 	entry.attempts++

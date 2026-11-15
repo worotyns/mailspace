@@ -68,3 +68,5 @@ Accepted oznacza decyzję projektową, nie gotową implementację. Zmiany przez 
 - [0041 — Bounded timeline pages and upward cached-history loading](0041.md)
 
 - [0042 — Compact Space picker and visible membership badges](0042.md)
+
+- [0043 — Provider-synchronized read state](0043.md)

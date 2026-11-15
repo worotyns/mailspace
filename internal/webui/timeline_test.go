@@ -170,14 +170,72 @@ func TestMessageHeaderShowsOneIdentityAndBareAccountAddress(t *testing.T) {
 		t.Fatal(err)
 	}
 	html := response.Body.String()
-	// html/template escapes the recipient count plus sign in both attributes and text.
-	for _, want := range []string{"Mateusz Worotynski", "worotyns@hotmail.com &#43;1", ">You</span", `aria-hidden="true"`, "→", "i@worotyns.ovh"} {
+	// Both directions name the identity pair, with the addresses on the second
+	// line. html/template escapes the recipient count plus sign.
+	for _, want := range []string{"Mateusz Worotynski", "worotyns@hotmail.com &#43;1", "worotyns@hotmail.com", ">You</span", `aria-hidden="true"`, `aria-label="Mateusz Worotynski to Mateusz Worotynski (i@worotyns.ovh)"`, "→", "i@worotyns.ovh"} {
 		if !strings.Contains(html, want) {
 			t.Fatalf("missing %q", want)
 		}
 	}
-	if strings.Count(html, `title="Mateusz Worotynski (i@worotyns.ovh)"`) != 2 {
-		t.Fatal("account display name must stay available only as the account tooltip")
+	// Received: sender name -> account name, then sender address + account
+	// address. Sent: You -> recipient, then account address + recipient.
+	for _, visible := range []string{
+		">Mateusz Worotynski</span",
+		">Mateusz Worotynski (i@worotyns.ovh)</span",
+		">worotyns@hotmail.com</span",
+		">i@worotyns.ovh</span",
+	} {
+		if !strings.Contains(html, visible) {
+			t.Fatalf("missing visible identity text %q", visible)
+		}
+	}
+}
+
+func TestMessageSeenToggleIsMetadataOnlyAndCapabilityGated(t *testing.T) {
+	unread := TimelineMessage{SeenWrites: true, Record: timeline.Record{Identity: mail.MessageIdentity{Key: "one"}, Unread: true, Ref: mail.SourceRef{Kind: "imap"}, Preview: mailsync.Preview{Sender: "sender@example.test"}}, Token: "reference", CSRF: "csrf", ReturnURL: "/"}
+	response := httptest.NewRecorder()
+	if err := RenderMessageSeen(response, false, unread); err != nil {
+		t.Fatal(err)
+	}
+	html := response.Body.String()
+	for _, want := range []string{`id="seen-message-one"`, `data-message-seen`, `action="/messages/seen"`, `hx-target="#seen-message-one"`, `name="seen"`, `value="1"`, `aria-label="Unread"`, "Mark as read"} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("missing %q in %s", want, html)
+		}
+	}
+	for _, forbidden := range []string{"inline-composer", "data-local-preview", "textarea"} {
+		if strings.Contains(html, forbidden) {
+			t.Fatalf("read-state fragment contains %q", forbidden)
+		}
+	}
+	read := unread
+	read.Unread = false
+	response = httptest.NewRecorder()
+	if err := RenderMessageSeen(response, false, read); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(response.Body.String(), "Mark as unread") || strings.Contains(response.Body.String(), `aria-label="Unread"`) || !strings.Contains(response.Body.String(), `value="0"`) {
+		t.Fatal("read message rendered the wrong toggle", response.Body.String())
+	}
+	// A disabled capability keeps the unread indicator but never offers a write.
+	disabled := unread
+	disabled.SeenWrites = false
+	response = httptest.NewRecorder()
+	if err := RenderMessageSeen(response, false, disabled); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(response.Body.String(), "<form") || !strings.Contains(response.Body.String(), `aria-label="Unread"`) {
+		t.Fatal("disabled capability still offered a flag write", response.Body.String())
+	}
+	// Outbox/sent rows have no provider flag to write and must not offer it.
+	outgoing := unread
+	outgoing.Ref = mail.SourceRef{Kind: "outbox", OutgoingID: "11111111-1111-1111-1111-111111111111"}
+	response = httptest.NewRecorder()
+	if err := RenderMessageSeen(response, false, outgoing); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(response.Body.String(), "<form") {
+		t.Fatal("non-IMAP message offered a provider flag write", response.Body.String())
 	}
 }
 
@@ -339,9 +397,15 @@ func TestNamedContactsShowSecondaryEmailInPeopleAndSenderHeaders(t *testing.T) {
 	if err := RenderTimeline(response, httptest.NewRequest("GET", "/", nil), false, data); err != nil {
 		t.Fatal(err)
 	}
+	blocks := regexp.MustCompile(`(?s)<small[^>]*>.*?</small`).FindAllString(response.Body.String(), -1)
 	for _, address := range []string{"first@example.test", "second@example.test"} {
-		matches := regexp.MustCompile(`<small[^>]*>\s*`+regexp.QuoteMeta(address)+`\s*</small`).FindAllString(response.Body.String(), -1)
-		if len(matches) < 2 {
+		count := 0
+		for _, block := range blocks {
+			if strings.Contains(block, address) {
+				count++
+			}
+		}
+		if count < 2 {
 			t.Fatal("named contact must show its address in both sidebar and message header", address)
 		}
 	}

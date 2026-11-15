@@ -16,6 +16,7 @@ import {
   parseLocalMime,
 } from "./mime.mjs";
 import { addressParser } from "../vendor/postal-mime/postal-mime.js";
+import { markReaderRead } from "./read-state.mjs";
 const root = document.getElementById("secure-mail");
 const el = (id) => document.getElementById(id);
 const status = el("secure-status"),
@@ -515,6 +516,9 @@ try {
                   .join("; ");
         attachmentViewer.render(parsed.attachments);
         el("decrypted-content").hidden = false;
+        // Content is actually visible now: this is the explicit open that may
+        // mark the message read on the provider.
+        void markReaderRead(root);
         selectionClassifier?.enable();
         notify(
           ordinary

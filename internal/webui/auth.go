@@ -48,6 +48,9 @@ type AuthPageData struct {
 	OrdinaryRead          bool
 	SecureRead            bool
 	RawURL                string
+	SeenReference         string
+	SeenWrites            bool
+	SeenUnread            bool
 	ClaimedSender         string
 	UserID                string
 	SessionExpires        int64

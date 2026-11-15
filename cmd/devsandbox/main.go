@@ -172,6 +172,7 @@ func run() error {
 		}
 	}
 	syncer := mailsync.New(store.Database(), service, connector)
+	syncer.SetFlagWriter(connector)
 	outgoing := outbox.New(store.Database(), service, syncer, connector)
 	if err = outgoing.Recover(ctx); err != nil {
 		return err

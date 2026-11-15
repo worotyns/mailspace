@@ -23,6 +23,7 @@ type Service struct {
 	db        *sql.DB
 	accounts  *accounts.Service
 	reader    mailnet.Reader
+	writer    mailnet.FlagWriter
 	mu        sync.Mutex
 	queue     chan syncRequest
 	afterMu   sync.RWMutex
@@ -32,6 +33,13 @@ type Service struct {
 func New(db *sql.DB, a *accounts.Service, r mailnet.Reader) *Service {
 	return &Service{db: db, accounts: a, reader: r, queue: make(chan syncRequest, 32)}
 }
+
+// SetFlagWriter enables provider-synchronized \Seen updates. Without a writer
+// the capability stays disabled and no flag write call is made.
+func (s *Service) SetFlagWriter(w mailnet.FlagWriter) { s.writer = w }
+
+// FlagWritesEnabled reports whether the bounded provider flag capability is on.
+func (s *Service) FlagWritesEnabled() bool { return s.writer != nil }
 
 type Folder struct {
 	Name     string

@@ -933,13 +933,8 @@
       role="group"
       aria-label="Message actions and Spaces"
     >
-      <time class="shrink-0 text-[10px] text-muted">{{ .Time }}</time
-      >{{ if .Unread }}
-        <span
-          class="size-1 shrink-0 rounded-full bg-action"
-          aria-label="Unread"
-        ></span>
-      {{ end }}
+      <time class="shrink-0 text-[10px] text-muted">{{ .Time }}</time>
+      {{ template "timeline-message-seen" . }}
       <a
         href="{{ .ReplyURL }}"
         hx-get="{{ .ReplyURL }}"
@@ -1071,6 +1066,48 @@
     {{ end }}
   </div>
 {{ end }}
+{{ define "timeline-message-seen" }}
+  <span id="{{ .SeenID }}" data-message-seen class="contents"
+    >{{ if .Unread }}
+      <span
+        class="size-1 shrink-0 rounded-full bg-action"
+        aria-label="Unread"
+      ></span>
+    {{ end }}
+    {{ if and .SeenWrites (eq .Ref.Kind "imap") }}
+      <form
+        action="/messages/seen"
+        method="post"
+        hx-post="/messages/seen"
+        hx-target="#{{ .SeenID }}"
+        hx-swap="outerHTML"
+        hx-push-url="false"
+      >
+        <input type="hidden" name="csrf" value="{{ .CSRF }}" /><input
+          type="hidden"
+          name="reference"
+          value="{{ .Token }}"
+        /><input
+          type="hidden"
+          name="return_to"
+          value="{{ .ReturnURL }}"
+        /><input type="hidden" name="seen" value="{{ .SeenNext }}" /><button
+          class="icon-action"
+          aria-pressed="{{ .SeenPressed }}"
+          title="{{ .SeenToggleLabel }}"
+          aria-label="{{ .SeenToggleLabel }}"
+        >
+          {{ if .Unread }}
+            {{ template "timeline-icon" "eye" }}
+          {{ else }}
+            {{ template "timeline-icon" "eye-off" }}
+          {{ end }}
+        </button>
+      </form>
+    {{ end }}</span
+  >
+{{ end }}
+
 {{ define "timeline-send-state" }}
   {{ if .State }}
     <span
@@ -1836,36 +1873,50 @@
                     aria-label="{{ .SentHint }}"
                     href="/?person={{ .Recipient }}"
                     hx-get="/?person={{ .Recipient }}"
-                    class="flex min-w-0 items-center gap-1 text-xs font-semibold"
-                    ><span class="shrink-0">You</span>{{ if .RecipientSummary }}
-                      <span class="shrink-0 text-muted" aria-hidden="true"
-                        >→</span
-                      ><span class="truncate">{{ .RecipientSummary }}</span>
-                    {{ end }}</a
-                  ><span
-                    class="text-[10px] text-muted"
-                    title="{{ .AccountName }}"
-                    >{{ .AccountAddress }}</span
+                    class="min-w-0 text-xs font-semibold"
                   >
+                    <span class="flex min-w-0 items-center gap-1"
+                      ><span class="shrink-0">You</span
+                      >{{ if .RecipientSummary }}
+                        <span class="shrink-0 text-muted" aria-hidden="true"
+                          >→</span
+                        ><span class="truncate">{{ .RecipientSummary }}</span>
+                      {{ end }}</span
+                    >
+                    <small
+                      class="mt-0.5 flex min-w-0 items-center gap-3 text-[10px] font-normal text-muted"
+                      ><span class="truncate" title="{{ .AccountName }}"
+                        >{{ .AccountAddress }}</span
+                      >{{ if .Recipient }}
+                        <span class="truncate">{{ .Recipient }}</span>
+                      {{ end }}</small
+                    >
+                  </a>
                 {{ else }}
                   <a
-                    title="{{ .Preview.Sender }}"
-                    aria-label="{{ .Sender }} ({{ .Preview.Sender }})"
+                    title="{{ .Sender }} ({{ .Preview.Sender }})"
+                    aria-label="{{ .ReceivedHint }}"
                     href="/?person={{ .Preview.Sender }}"
                     hx-get="/?person={{ .Preview.Sender }}"
                     class="min-w-0 text-xs font-semibold"
-                    ><span class="block truncate">{{ .Sender }}</span
-                    >{{ if .Preview.Name }}
-                      <small
-                        class="block truncate text-[10px] font-normal text-muted"
-                        >{{ .Preview.Sender }}</small
-                      >
-                    {{ end }}</a
-                  ><span
-                    class="text-[10px] text-muted"
-                    title="{{ .AccountName }}"
-                    >{{ .AccountAddress }}</span
                   >
+                    <span class="flex min-w-0 items-center gap-1"
+                      ><span class="shrink-0">{{ .Sender }}</span
+                      >{{ if .AccountName }}
+                        <span class="shrink-0 text-muted" aria-hidden="true"
+                          >→</span
+                        ><span class="truncate">{{ .AccountName }}</span>
+                      {{ end }}</span
+                    >
+                    <small
+                      class="mt-0.5 flex min-w-0 items-center gap-3 text-[10px] font-normal text-muted"
+                      >{{ if .Preview.Name }}
+                        <span class="truncate">{{ .Preview.Sender }}</span>
+                      {{ end }}<span class="truncate"
+                        >{{ .AccountAddress }}</span
+                      ></small
+                    >
+                  </a>
                 {{ end }}
               {{ end }}
               {{ if not $.ThreadKey }}
