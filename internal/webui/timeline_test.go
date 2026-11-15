@@ -502,3 +502,25 @@ func TestSharedMessageRendersReadOnlyWithoutMutationControls(t *testing.T) {
 		t.Fatal("download-enabled shared row lost the read controls or gained write controls", html)
 	}
 }
+
+func TestSharedSentCopyIsNeverLabelledYou(t *testing.T) {
+	sent := TimelineMessage{StartsRun: true, Record: timeline.Record{Identity: mail.MessageIdentity{Key: "shared-sent"}, Ref: mail.SourceRef{Kind: "imap"}, Own: true, Shared: true, SharedBy: "alice@example.test", CanDownload: true, AccountName: "Work", AccountAddress: "alice@example.test", Preview: mailsync.Preview{Name: "Alice", Sender: "alice@example.test", To: []string{"bob@example.test"}, ToRecipients: []mailsync.Recipient{{Name: "Bob", Address: "bob@example.test"}}}}}
+	if got := sent.OwnLabel(); got != "Alice" {
+		t.Fatalf("shared sent copy labelled %q", got)
+	}
+	if hint := sent.SentHint(); !strings.Contains(hint, "Alice sent this to Bob") {
+		t.Fatalf("shared sent hint %q", hint)
+	}
+	data := TimelineData{Timezone: "UTC", Filter: "all", Messages: []TimelineMessage{sent}}
+	response := httptest.NewRecorder()
+	if err := RenderTimeline(response, httptest.NewRequest("GET", "/", nil), false, data); err != nil {
+		t.Fatal(err)
+	}
+	html := response.Body.String()
+	if strings.Contains(html, ">You</span") {
+		t.Fatal("shared sent copy labelled You")
+	}
+	if !strings.Contains(html, ">Alice</span") || !strings.Contains(html, "shared by alice@example.test") || !strings.Contains(html, "Bob") {
+		t.Fatal("shared sent identity missing", html)
+	}
+}

@@ -117,10 +117,38 @@ func (m TimelineMessage) Recipient() string {
 	return ""
 }
 
+// OwnLabel names the sending side of a sent message. A grantee never sees
+// another owner's Sent copy labelled "You".
+func (m TimelineMessage) OwnLabel() string {
+	if m.Shared {
+		return m.senderIdentity()
+	}
+	return "You"
+}
+
+// senderIdentity always names the real sender, never the "You" shorthand used
+// for this account's own mail.
+func (m TimelineMessage) senderIdentity() string {
+	if m.Preview.Name != "" {
+		return m.Preview.Name
+	}
+	if m.Preview.Sender != "" {
+		return m.Preview.Sender
+	}
+	return m.AccountAddress
+}
+
 // SentHint is the tooltip and accessible name of the sent identity link. It
 // never invents a recipient display name.
 func (m TimelineMessage) SentHint() string {
-	if summary := m.RecipientSummary(); summary != "" {
+	summary := m.RecipientSummary()
+	if m.Shared {
+		if summary != "" {
+			return m.senderIdentity() + " sent this to " + summary
+		}
+		return m.senderIdentity() + " sent this"
+	}
+	if summary != "" {
 		return "Sent to " + summary
 	}
 	return "Sent message"
@@ -138,6 +166,12 @@ func (m TimelineMessage) ReceivedHint() string {
 func (m TimelineMessage) HeaderLabel() string {
 	suffix := " at " + m.Time
 	if m.Own {
+		if m.Shared {
+			if summary := m.RecipientSummary(); summary != "" {
+				return m.senderIdentity() + " sent this to " + summary + suffix
+			}
+			return m.senderIdentity() + " sent this" + suffix
+		}
 		if summary := m.RecipientSummary(); summary != "" {
 			return "You sent this to " + summary + suffix
 		}
