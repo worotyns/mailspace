@@ -65,7 +65,15 @@ test("native security submit preserves password/code serialization while broadca
     assert.equal(data.get("password"), "synthetic-password");
     assert.equal(data.get("code"), "001234");
     assert.deepEqual(JSON.parse(JSON.stringify(calls)), [{ type: "lock" }]);
+    // Emulate a browser microtask checkpoint between native event callbacks:
+    // the bubble lock still belongs to the same submit task.
     await Promise.resolve();
+    dom.window.dispatchEvent(new Event("mailspace:lock"));
+    assert.equal(form.elements.code.value, "001234");
+    assert.equal(form.elements.password.value, "synthetic-password");
+    const serialized = new FormData(form);
+    assert.equal(serialized.get("password"), "synthetic-password");
+    await new Promise((resolve) => dom.window.setTimeout(resolve, 0));
     dom.window.dispatchEvent(new Event("mailspace:lock"));
     assert.equal(form.elements.code.value, "");
     assert.equal(form.elements.password.value, "");

@@ -137,7 +137,11 @@ func TestAuthenticatorHTTPEnrollmentLoginRecoveryAndDisable(t *testing.T) {
 	sameOwner := &http.Cookie{Name: old.Name, Value: otherToken}
 	mfaStatus(t, h.request("POST", "/security/authenticator/setup", "https://foreign.test", url.Values{"csrf": {s.CSRF}, "password": {mfaTestPassword}}, old), 403)
 	mfaStatus(t, h.request("POST", "/security/authenticator/setup", mfaTestOrigin, url.Values{"csrf": {"wrong"}, "password": {mfaTestPassword}}, old), 403)
-	mfaStatus(t, h.request("POST", "/security/authenticator/setup", mfaTestOrigin, url.Values{"csrf": {s.CSRF}, "password": {"incorrect password"}}, old), 400)
+	wrongPassword := h.request("POST", "/security/authenticator/setup", mfaTestOrigin, url.Values{"csrf": {s.CSRF}, "password": {"incorrect password"}}, old)
+	mfaStatus(t, wrongPassword, 400)
+	if !strings.Contains(wrongPassword.Body.String(), "Current Mailspace sign-in password not accepted") || strings.Contains(wrongPassword.Body.String(), "Use a fresh Authenticator code") {
+		t.Fatal("setup password error requests a nonexistent app/recovery code")
+	}
 	secret := h.begin(old, s.CSRF)
 	for _, c := range []*http.Cookie{nil, bob, sameOwner} {
 		r := h.request("GET", "/security/authenticator/qr", "", nil, c)

@@ -164,6 +164,9 @@ func mfaRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store,
 			}
 			if err != nil {
 				status, message := mfaFailure(err)
+				if action == "setup" && errors.Is(err, identity.ErrCredentials) {
+					message = "Current Mailspace sign-in password not accepted. Enter the password used to sign in to Mailspace."
+				}
 				if status == 429 {
 					w.Header().Set("Retry-After", "300")
 				}

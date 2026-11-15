@@ -8,9 +8,11 @@ document.addEventListener(
     // session.js broadcasts a lock during native submit. Keep controls intact
     // until the browser has serialized them; a foreign lock still clears them.
     submitting = true;
-    queueMicrotask(() => {
+    // Native browser dispatch can run microtasks between capture and bubble
+    // listeners. Keep the guard for the whole submit task, through serialization.
+    setTimeout(() => {
       submitting = false;
-    });
+    }, 0);
   },
   true,
 );
