@@ -676,7 +676,12 @@ func (c *timelineController) renderMembership(w http.ResponseWriter, r *http.Req
 		http.Error(w, "Archive unavailable", 503)
 		return
 	}
-	message := webui.TimelineMessage{Archived: archived[resolved.Record.Identity.Key], Classifier: !archived[resolved.Record.Identity.Key] && c.config.Decisions != nil && c.config.Decisions.Available() && !resolved.Record.Own && !resolved.Record.Preview.Encrypted && resolved.Record.Preview.Status == "ready", Record: resolved.Record, Token: webui.EncodeSource(ref), CSRF: s.CSRF, ReturnURL: timelineReturn(r.FormValue("return_to")), Expanded: true}
+	returnURL := timelineReturn(r.FormValue("return_to"))
+	contextSpace := ""
+	if parsed, err := url.Parse(returnURL); err == nil {
+		contextSpace = parsed.Query().Get("space")
+	}
+	message := webui.TimelineMessage{Archived: archived[resolved.Record.Identity.Key], Classifier: !archived[resolved.Record.Identity.Key] && c.config.Decisions != nil && c.config.Decisions.Available() && !resolved.Record.Own && !resolved.Record.Preview.Encrypted && resolved.Record.Preview.Status == "ready", Record: resolved.Record, Token: webui.EncodeSource(ref), CSRF: s.CSRF, ReturnURL: returnURL, ContextSpace: contextSpace, Expanded: true}
 	if c.config.Decisions != nil {
 		runs, e := c.config.Decisions.Runs(r.Context(), s.User.ID)
 		if e == nil {
@@ -713,6 +718,18 @@ func (c *timelineController) renderMembership(w http.ResponseWriter, r *http.Req
 		message.LabelsOpen = true
 		message.LabelsFocusID = r.PathValue("id")
 		webui.RenderMessageLabels(w, c.config.Dev, message, sidebar)
+	} else if r.Header.Get("HX-Request") == "true" && r.Header.Get("HX-Target") == message.SpacePickerID() {
+		sidebarRequest := r.Clone(r.Context())
+		sidebarRequest.Method = http.MethodGet
+		sidebarRequest.URL, _ = url.Parse(message.ReturnURL)
+		sidebar, err := c.data(sidebarRequest, s)
+		if err != nil {
+			http.Error(w, "Spaces unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		message.SpacesOpen = true
+		message.SpacesFocusID = r.PathValue("id")
+		webui.RenderMessageSpaces(w, c.config.Dev, message, sidebar)
 	} else if r.Header.Get("HX-Request") == "true" {
 		webui.RenderMembership(w, c.config.Dev, message)
 	} else {

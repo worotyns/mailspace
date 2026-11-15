@@ -48,6 +48,8 @@ type TimelineMessage struct {
 	Classifier    bool
 	LabelsOpen    bool
 	LabelsFocusID string
+	SpacesOpen    bool
+	SpacesFocusID string
 	Archived      bool
 	Decision      *DecisionView
 	timeline.Record
@@ -64,6 +66,9 @@ type TimelineMessage struct {
 	Labels      []CollectionView
 	ReturnURL   string
 	CSRF        string
+	// ContextSpace is the Space currently being viewed, if any. Its membership
+	// badge is implied by the view and stays out of the compact Space picker.
+	ContextSpace string
 }
 
 func (m TimelineMessage) Initials() string {
@@ -434,6 +439,7 @@ func FormatTimeline(records []timeline.Record, spaces, labels []collections.Item
 		previous = m.Day
 		m.Spaces = data.Spaces
 		m.Labels = data.Labels
+		m.ContextSpace = data.SpaceID
 	}
 	data.Total = len(data.Messages)
 	matches := []PersonView{}
@@ -660,13 +666,38 @@ func (m TimelineMessage) LabelsURL() string {
 // LabelsID scopes label updates to one message without replacing its decrypted body.
 func (m TimelineMessage) LabelsID() string { return "labels-" + m.DOMID() }
 
+// SpacePickerID scopes Space updates to one message without replacing its decrypted body.
+func (m TimelineMessage) SpacePickerID() string { return "spaces-" + m.DOMID() }
+
+// SpaceBadges lists assigned Spaces for the compact badge summary. The Space
+// currently being viewed is omitted because the view itself already states it;
+// the popover still offers every assignment so a human can add or remove one.
+func (m TimelineMessage) SpaceBadges() []CollectionView {
+	badges := make([]CollectionView, 0, len(m.Memberships))
+	for _, collection := range m.Memberships {
+		if collection.Kind == "space" && collection.ID != m.ContextSpace {
+			badges = append(badges, collection)
+		}
+	}
+	return badges
+}
+
 type MessageLabelsData struct {
+	Message TimelineMessage
+	Sidebar TimelineData
+}
+
+type MessageSpacesData struct {
 	Message TimelineMessage
 	Sidebar TimelineData
 }
 
 func RenderMessageLabels(w http.ResponseWriter, dev bool, message TimelineMessage, sidebar TimelineData) error {
 	return renderTimelinePart(w, dev, "timeline-label-response", MessageLabelsData{Message: message, Sidebar: sidebar})
+}
+
+func RenderMessageSpaces(w http.ResponseWriter, dev bool, message TimelineMessage, sidebar TimelineData) error {
+	return renderTimelinePart(w, dev, "timeline-space-response", MessageSpacesData{Message: message, Sidebar: sidebar})
 }
 
 // Composer links override the reply form's status-only HTMX target.

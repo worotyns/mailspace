@@ -70,3 +70,8 @@ Inline multi-recipient To/Cc/Bcc composition is implemented for native and encry
 ### MS-022 cached timeline paging and next session
 
 ADR-0041 implements the latest 20 matching cached messages, upward 20-message loading, stable scoped cursors, native fallback and retained viewport/body/composer. This closes the requested UI pagination slice, not provider archive synchronization/retention. The owner requested a stop after commit/push of this slice. Resume with the Spaces popover/membership presentation, then automatic/manual provider read/unread, then recipient metadata and People suggestions. NEXT_SESSION.md records that order and the remaining 1.0 acceptance gates.
+
+
+### MS-022 compact Space picker and visible badges
+
+ADR-0042 replaces the horizontal list of every Space with the shared compact native popover already used for labels. Assigned Space badges stay visible in All activity/Unread/Unsorted; inside one Space only the other assigned Spaces are badged, while every authorized Space remains an independent toggle with current owner/source checks and explicit human overrides. The membership POST now replaces only the picker and refreshes sidebar counts out of band, so mounted bodies, local decrypted content and drafts survive. Next in MS-022: automatic-after-open plus manual provider read/unread with an explicit flag-write capability/ADR, and complete To/Cc/Bcc metadata with reliable People suggestions.

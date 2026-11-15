@@ -153,26 +153,8 @@
           >{{ template "timeline-icon" "plus" }}</a
         >
       </div>
-      <nav aria-label="Spaces" class="space-y-1">
-        {{ range .Spaces }}
-          <a
-            href="{{ $.Link "space" .ID }}"
-            hx-get="{{ $.Link "space" .ID }}"
-            class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-hover {{ if .Active }}
-              bg-canvas font-semibold
-            {{ end }}"
-            {{ if .Active }}aria-current="page"{{ end }}
-            ><span
-              class="flex size-6 shrink-0 items-center justify-center rounded-md text-xs {{ .Tone }}"
-              >#</span
-            ><span class="truncate">{{ .Name }}</span
-            ><span class="ml-auto text-[10px] text-muted">{{ .Count }}</span></a
-          >
-        {{ else }}
-          <p class="px-3 text-xs leading-relaxed text-muted">
-            Create a Space for a project, your work or personal life.
-          </p>
-        {{ end }}
+      <nav id="sidebar-spaces" aria-label="Spaces" class="space-y-1">
+        {{ template "timeline-space-links" . }}
       </nav>
       <div class="mb-2 mt-7 flex items-center justify-between px-3">
         <h2
@@ -1069,45 +1051,7 @@
         </button>
       </form>
       <span class="h-4 shrink-0 border-l border-line" aria-hidden="true"></span>
-      {{ $m:=. }}{{ range .Spaces }}
-        <form
-          action="/collections/{{ .ID }}/membership"
-          method="post"
-          hx-post="/collections/{{ .ID }}/membership"
-          hx-target="#{{ $m.MembershipID }}"
-          hx-swap="outerHTML"
-          hx-push-url="false"
-        >
-          <input type="hidden" name="csrf" value="{{ $m.CSRF }}" /><input
-            type="hidden"
-            name="reference"
-            value="{{ $m.Token }}"
-          /><input
-            type="hidden"
-            name="return_to"
-            value="{{ $m.ReturnURL }}"
-          /><input type="hidden" name="kind" value="space" /><input
-            type="hidden"
-            name="selected"
-            value="{{ $m.NextSelection .ID }}"
-          /><button
-            aria-pressed="{{ $m.Has .ID }}"
-            title="{{ .Name }}{{ if $m.Suggested .ID }}
-              · suggested by Decision Model
-            {{ end }}"
-            class="space-chip {{ if $m.Has .ID }}
-              border-accent text-accent
-            {{ else }}
-              border-line text-muted
-            {{ end }} {{ if $m.Suggested .ID }}suggested-space{{ end }}"
-          >
-            {{ if $m.Has .ID }}✓{{ else }}+{{ end }}
-            {{ .Name }}{{ if and ($m.Suggested .ID) $m.Decision }}
-              <span class="text-[9px]">{{ $m.Decision.Confidence }}%</span>
-            {{ end }}
-          </button>
-        </form>
-      {{ end }}
+      {{ template "timeline-message-spaces" . }}
       {{ if and .RuleSpace (not .Preview.Encrypted) (not .Own) }}
         <a
           href="{{ .SenderRuleURL .RuleSpace }}"
@@ -1588,7 +1532,7 @@
       <title>Organize message · Mailspace</title>
       <script src="/assets/theme.js"></script>
       <script src="/assets/forms.js" defer></script>
-      <script type="module" src="/assets/crypto/label-picker.mjs"></script>
+      <script type="module" src="/assets/crypto/collection-picker.mjs"></script>
       <script src="/assets/panel-child.js" defer></script>
       <script src="/assets/toasts.js" defer></script>
       <link rel="stylesheet" href="/assets/app.css" />
@@ -1604,6 +1548,28 @@
       </main>
     </body>
   </html>
+{{ end }}
+
+{{ define "timeline-space-links" }}
+  {{ range .Spaces }}
+    <a
+      href="{{ $.Link "space" .ID }}"
+      hx-get="{{ $.Link "space" .ID }}"
+      class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-hover {{ if .Active }}
+        bg-canvas font-semibold
+      {{ end }}"
+      {{ if .Active }}aria-current="page"{{ end }}
+      ><span
+        class="flex size-6 shrink-0 items-center justify-center rounded-md text-xs {{ .Tone }}"
+        >#</span
+      ><span class="truncate">{{ .Name }}</span
+      ><span class="ml-auto text-[10px] text-muted">{{ .Count }}</span></a
+    >
+  {{ else }}
+    <p class="px-3 text-xs leading-relaxed text-muted">
+      Create a Space for a project, your work or personal life.
+    </p>
+  {{ end }}
 {{ end }}
 
 {{ define "timeline-label-links" }}
@@ -1626,6 +1592,96 @@
   {{ else }}
     <p class="px-3 text-xs text-muted">Create your own labels in Settings.</p>
   {{ end }}
+{{ end }}
+
+{{ define "timeline-message-spaces" }}
+  <details
+    id="{{ .SpacePickerID }}"
+    class="min-w-0 max-w-full text-[10px]"
+    data-space-picker
+    {{ if .SpacesOpen }}open{{ end }}
+  >
+    <summary
+      class="flex min-h-6 cursor-pointer list-none flex-wrap items-center gap-1 rounded-md text-muted"
+      title="Edit message Spaces"
+    >
+      {{ template "timeline-icon" "layout-list" }}<span class="sr-only"
+        >Edit message Spaces</span
+      >
+      {{ range .SpaceBadges }}
+        <span class="space-chip {{ .Tone }}">{{ .Name }}</span>
+      {{ end }}
+      <span aria-hidden="true">+</span>
+    </summary>
+    <div
+      class="mt-1 flex max-w-sm flex-wrap gap-1 rounded-lg border border-line bg-panel p-2"
+      data-space-options
+      aria-label="Message Spaces"
+    >
+      {{ $m := . }}{{ range .Spaces }}
+        <form
+          action="/collections/{{ .ID }}/membership"
+          method="post"
+          hx-post="/collections/{{ .ID }}/membership"
+          hx-target="#{{ $m.SpacePickerID }}"
+          hx-swap="outerHTML"
+          hx-push-url="false"
+        >
+          <input type="hidden" name="csrf" value="{{ $m.CSRF }}" /><input
+            type="hidden"
+            name="reference"
+            value="{{ $m.Token }}"
+          /><input
+            type="hidden"
+            name="return_to"
+            value="{{ $m.ReturnURL }}"
+          /><input type="hidden" name="kind" value="space" /><input
+            type="hidden"
+            name="selected"
+            value="{{ $m.NextSelection .ID }}"
+          />
+          <button
+            id="{{ $m.SpacePickerID }}-{{ .ID }}"
+            {{ if eq $m.SpacesFocusID .ID }}autofocus{{ end }}
+            class="collection-choice rounded-md p-0.5 text-xs focus-visible:outline-accent"
+            aria-pressed="{{ $m.Has .ID }}"
+            title="{{ .Name }}{{ if $m.Suggested .ID }}
+              · suggested by Decision Model
+            {{ end }}"
+          >
+            <span
+              class="space-chip {{ .Tone }} {{ if $m.Has .ID }}
+                ring-1 ring-current
+              {{ else }}
+                opacity-70 hover:opacity-100
+              {{ end }} {{ if $m.Suggested .ID }}suggested-space{{ end }}"
+              >{{ if $m.Has .ID }}✓{{ else }}+{{ end }}
+              {{ .Name }}{{ if and ($m.Suggested .ID) $m.Decision }}
+                <span class="text-[9px]">{{ $m.Decision.Confidence }}%</span>
+              {{ end }}</span
+            >
+          </button>
+        </form>
+      {{ end }}
+      <a
+        href="/spaces/new"
+        class="flex min-h-8 items-center px-2 text-[11px] text-accent"
+        >New Space</a
+      >
+    </div>
+  </details>
+{{ end }}
+
+{{ define "timeline-space-response" }}
+  {{ template "timeline-message-spaces" .Message }}
+  <nav
+    id="sidebar-spaces"
+    aria-label="Spaces"
+    class="space-y-1"
+    hx-swap-oob="outerHTML"
+  >
+    {{ template "timeline-space-links" .Sidebar }}
+  </nav>
 {{ end }}
 
 {{ define "timeline-message-labels" }}
@@ -1679,7 +1735,7 @@
           <button
             id="{{ $m.LabelsID }}-{{ .ID }}"
             {{ if eq $m.LabelsFocusID .ID }}autofocus{{ end }}
-            class="label-choice rounded-md p-0.5 text-xs focus-visible:outline-accent"
+            class="collection-choice rounded-md p-0.5 text-xs focus-visible:outline-accent"
             aria-pressed="{{ $m.Has .ID }}"
           >
             <span
@@ -1769,7 +1825,7 @@
           </div>
           <div class="min-w-0 flex-1">
             <div
-              class="mb-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-1 {{ if .Own }}
+              class="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 {{ if .Own }}
                 justify-end
               {{ end }}"
             >

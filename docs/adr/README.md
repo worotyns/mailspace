@@ -66,3 +66,5 @@ Accepted oznacza decyzję projektową, nie gotową implementację. Zmiany przez 
 - [0040 — Authenticator App TOTP and gated sessions](0040.md)
 
 - [0041 — Bounded timeline pages and upward cached-history loading](0041.md)
+
+- [0042 — Compact Space picker and visible membership badges](0042.md)

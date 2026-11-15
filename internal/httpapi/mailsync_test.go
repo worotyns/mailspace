@@ -264,6 +264,40 @@ func TestReadOnlyMailboxEndToEndAndAuthorization(t *testing.T) {
 	if res := assignLabel(token, session.CSRF); res.Code != 200 || !strings.Contains(res.Body.String(), `id="labels-message-`+sourceIdentity.Key+`"`) || !strings.Contains(res.Body.String(), `hx-swap-oob="outerHTML"`) || strings.Contains(res.Body.String(), "data-local-preview") {
 		t.Fatal("header-label response replaced private message content or omitted sidebar", res.Code, res.Body.String())
 	}
+	assignSpace := func(cookie, csrf, selected, returnTo string) *httptest.ResponseRecorder {
+		values := url.Values{"csrf": {csrf}, "kind": {"space"}, "reference": {webui.EncodeSource(ref)}, "selected": {selected}, "return_to": {returnTo}}
+		req := httptest.NewRequest("POST", "/collections/"+space.ID+"/membership", strings.NewReader(values.Encode()))
+		req.Header.Set("Origin", "https://mail.example.test")
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("HX-Request", "true")
+		req.Header.Set("HX-Target", "spaces-message-"+sourceIdentity.Key)
+		req.AddCookie(&http.Cookie{Name: "__Host-mailspace", Value: cookie})
+		res := httptest.NewRecorder()
+		handler.ServeHTTP(res, req)
+		return res
+	}
+	if res := assignSpace(other, otherSession.CSRF, "1", "/"); res.Code != 404 {
+		t.Fatal("foreign Space mutation accepted", res.Code)
+	}
+	if res := assignSpace(token, "wrong", "1", "/"); res.Code != 403 {
+		t.Fatal("Space mutation accepted without CSRF", res.Code)
+	}
+	if res := assignSpace(token, session.CSRF, "1", "/"); res.Code != 200 || !strings.Contains(res.Body.String(), `id="spaces-message-`+sourceIdentity.Key+`"`) || !strings.Contains(res.Body.String(), `id="sidebar-spaces"`) || !strings.Contains(res.Body.String(), `hx-swap-oob="outerHTML"`) || strings.Contains(res.Body.String(), "data-local-preview") {
+		t.Fatal("Space response replaced private message content or omitted sidebar", res.Code, res.Body.String())
+	}
+	spaceResponse := assignSpace(token, session.CSRF, "1", "/").Body.String()
+	summary := spaceResponse[strings.Index(spaceResponse, "<summary"):strings.Index(spaceResponse, "</summary>")]
+	if !strings.Contains(summary, "Work") || strings.Contains(summary, "<form") {
+		t.Fatalf("assigned Space badge missing from compact summary: %s", summary)
+	}
+	spacedResponse := assignSpace(token, session.CSRF, "1", "/?space="+space.ID).Body.String()
+	spacedSummary := spacedResponse[strings.Index(spacedResponse, "<summary"):strings.Index(spacedResponse, "</summary>")]
+	if strings.Contains(spacedSummary, "Work") {
+		t.Fatalf("current Space repeated inside its own view: %s", spacedSummary)
+	}
+	if res := assignSpace(token, session.CSRF, "0", "/"); res.Code != 200 {
+		t.Fatal("explicit Space removal rejected", res.Code)
+	}
 	threadURL := "/?thread=" + sourceIdentity.Key + "&space=" + space.ID
 	replyURL := "/?" + url.Values{"thread": {sourceIdentity.Key}, "space": {space.ID}, "reply": {sourceIdentity.Key}}.Encode() + "#thread-composer"
 	if response = request("GET", threadURL, token, "", false); response.Code != 200 || !strings.Contains(response.Body.String(), "Original email thread") || !strings.Contains(response.Body.String(), `href="`+html.EscapeString(replyURL)+`"`) {

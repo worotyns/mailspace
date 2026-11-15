@@ -507,8 +507,8 @@
   color: var(--color-ink);
 }
 
-/* Label choices stay visually compact while retaining separate touch targets. */
-.label-popover {
+/* Badge choices stay visually compact while retaining separate touch targets. */
+.collection-popover {
   position: fixed;
   inset: auto;
   margin: 0;
@@ -522,19 +522,19 @@
   background: var(--color-panel);
   box-shadow: 0 0.5rem 2rem #0002;
 }
-.label-popover:popover-open {
+.collection-popover:popover-open {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.25rem;
 }
-.label-picker-toggle,
-.label-choice {
+.collection-picker-toggle,
+.collection-choice {
   min-block-size: 2rem;
 }
 @media (pointer: coarse) {
-  .label-picker-toggle,
-  .label-choice {
+  .collection-picker-toggle,
+  .collection-choice {
     min-block-size: 2.75rem;
   }
 }

@@ -158,6 +158,67 @@ func TestContactComposeAndInclusiveDateRange(t *testing.T) {
 	}
 }
 
+func TestSpacePickerShowsAssignedBadgesAndKeepsAllExplicitToggles(t *testing.T) {
+	record := timeline.Record{Identity: mail.MessageIdentity{Key: "one"}, Preview: mailsync.Preview{Sender: "sender@example.test", Status: "ready"}}
+	spaces := []collections.Item{
+		{ID: "current", Kind: "space", Name: "Current project", Color: "blue"},
+		{ID: "other", Kind: "space", Name: "Other project"},
+		{ID: "free", Kind: "space", Name: "Free project"},
+	}
+	memberships := map[string][]string{"one": {"current", "other"}}
+	all := TimelineData{Filter: "all", Timezone: "UTC"}
+	FormatTimeline([]timeline.Record{record}, spaces, nil, memberships, &all)
+	if len(all.Messages) != 1 || len(all.Messages[0].SpaceBadges()) != 2 {
+		t.Fatal("All activity must show every assigned Space badge")
+	}
+	data := TimelineData{Filter: "space", SpaceID: "current", Timezone: "UTC"}
+	FormatTimeline([]timeline.Record{record}, spaces, nil, memberships, &data)
+	if len(data.Messages) != 1 {
+		t.Fatal("Space view lost the assigned message")
+	}
+	message := data.Messages[0]
+	badges := message.SpaceBadges()
+	if len(badges) != 1 || badges[0].ID != "other" {
+		t.Fatalf("inside a Space only other assigned Spaces are badged: %#v", badges)
+	}
+	if message.SpacePickerID() != "spaces-message-one" || message.LabelsID() != "labels-message-one" || message.MembershipID() != "membership-one" {
+		t.Fatal("scoped metadata ids changed")
+	}
+	response := httptest.NewRecorder()
+	if err := RenderMembership(response, false, message); err != nil {
+		t.Fatal(err)
+	}
+	html := response.Body.String()
+	for _, want := range []string{`data-space-picker`, `data-space-options`, `id="spaces-message-one"`, `id="spaces-message-one-current"`, `id="spaces-message-one-free"`, `hx-target="#spaces-message-one"`, `action="/collections/current/membership"`, `aria-pressed="true"`, "Other project", "Free project"} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("missing %s", want)
+		}
+	}
+	summary := html[strings.Index(html, "<summary"):strings.Index(html, "</summary>")]
+	if strings.Contains(summary, "Current project") || !strings.Contains(summary, "Other project") || strings.Contains(summary, "<form") {
+		t.Fatalf("compact summary must show only other assigned badges: %s", summary)
+	}
+	selections := regexp.MustCompile(`<input[^>]*name="selected"[^>]*value="([01])"[^>]*>`).FindAllStringSubmatch(html, -1)
+	zero, one := 0, 0
+	for _, match := range selections {
+		if match[1] == "0" {
+			zero++
+		} else {
+			one++
+		}
+	}
+	if zero != 2 || one != 1 {
+		t.Fatal("many-to-many toggles changed", zero, one)
+	}
+	fragment := httptest.NewRecorder()
+	if err := RenderMessageSpaces(fragment, false, message, all); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(fragment.Body.String(), `id="sidebar-spaces"`) || !strings.Contains(fragment.Body.String(), `hx-swap-oob="outerHTML"`) {
+		t.Fatal("Space counts must refresh out of band without replacing the message body")
+	}
+}
+
 func TestThreadPresentationAndCancelKeepFragmentScope(t *testing.T) {
 	for _, thread := range []string{"", "original"} {
 		data := TimelineData{ThreadKey: thread, Timezone: "UTC", Filter: "all"}
