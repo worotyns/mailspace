@@ -64,4 +64,4 @@ ADR-0038 implements exact-source bounded quotes in the full browser composer, wi
 
 ### Added owner requirements before 1.0
 
-Complete the remaining recipient/People suggestion UI feedback. Authenticator App 2FA (MS-021/ADR-0040) is implemented with integrated session gating, Security enrollment/local QR, recovery, encrypted seeds, replay/rate/ownership guards and operator reset. Manual real-app/browser acceptance remains open.
+Inline multi-recipient To/Cc/Bcc composition is implemented for native and encrypted sending. Complete recipient metadata display and People suggestion reliability. Authenticator App 2FA (MS-021/ADR-0040) is implemented with integrated session gating, Security enrollment/local QR, recovery, encrypted seeds, replay/rate/ownership guards and operator reset. Manual real-app/browser acceptance remains open.

@@ -212,3 +212,34 @@ func TestOutgoingStateRemainsVisibleOutsideScrollingSpaceControls(t *testing.T) 
 		}
 	}
 }
+
+func TestInlineRecipientGroupsKeepNativeFormsAndScopedSuggestions(t *testing.T) {
+	for _, selected := range []bool{false, true} {
+		data := TimelineData{ComposeNew: true, Person: "new@example.test"}
+		wantRecipient := "new@example.test"
+		if selected {
+			data.Reply = &TimelineMessage{Record: timeline.Record{Preview: mailsync.Preview{Sender: "original@example.test"}}}
+			wantRecipient = "original@example.test"
+		}
+		response := httptest.NewRecorder()
+		if err := renderTimelinePart(response, false, "inline-composer", data); err != nil {
+			t.Fatal(err)
+		}
+		body := response.Body.String()
+		for _, field := range []string{"to", "cc", "bcc"} {
+			prefix := data.ComposerPrefix() + "-" + field
+			if !strings.Contains(body, `for="`+prefix+`"`) || !strings.Contains(body, `id="`+prefix+`"`) || !strings.Contains(body, `name="`+field+`"`) || !strings.Contains(body, `list="`+prefix+`-suggestions"`) || !strings.Contains(body, `id="`+prefix+`-suggestions"`) {
+				t.Fatal("recipient lacks a scoped label/control/datalist", field)
+			}
+		}
+		if !strings.Contains(body, `value="`+wantRecipient+`"`) {
+			t.Fatal("selected original recipient changed or acquired whitespace")
+		}
+		if !strings.Contains(body, `action="/timeline/replies/plain"`) || !strings.Contains(body, `method="post"`) || !strings.Contains(body, "Separate addresses with commas") {
+			t.Fatal("native send fallback or recipient format help missing")
+		}
+		if strings.Contains(body, `type="email"`) {
+			t.Fatal("native email input would reject display-name recipient lists")
+		}
+	}
+}

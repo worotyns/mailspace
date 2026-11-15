@@ -179,18 +179,29 @@ export class InlineEncryption {
         return;
       }
       const value = (name) => this.form.elements.namedItem(name)?.value || "";
-      const to = value("to");
-      if (to.length > 8192 || /[\r\n\0]/.test(to))
-        throw new VaultError("invalid-recipients");
-      const recipients = addressParser(to, { flatten: true }).map(
-        (item) => item.address,
-      );
+      const routing = { to: value("to"), cc: value("cc"), bcc: value("bcc") };
+      const recipients = Object.values(routing).flatMap((value) => {
+        if (
+          new TextEncoder().encode(value).length > 8192 ||
+          /[\r\n\0]/.test(value)
+        )
+          throw new VaultError("invalid-recipients");
+        if (!value.trim()) return [];
+        const parsed = addressParser(value, { flatten: true }).map(
+          (item) => item.address,
+        );
+        if (!parsed.length) throw new VaultError("invalid-recipients");
+        return parsed;
+      });
       if (
         !recipients.length ||
         recipients.length > 100 ||
         recipients.some(
           (address) =>
-            !address || !address.includes("@") || /[^\x21-\x7e]/.test(address),
+            !address ||
+            address.length > 254 ||
+            !address.includes("@") ||
+            /[^\x21-\x7e]/.test(address),
         )
       )
         throw new VaultError("invalid-recipients");
@@ -203,6 +214,16 @@ export class InlineEncryption {
         new TextEncoder().encode(subject).length > 200
       )
         throw new VaultError("subject-limit");
+      // Freeze visible routing with the signing identity before asynchronous
+      // encryption. Editing a control cannot change the encrypted envelope.
+      const metadata = {
+        account: value("account"),
+        requestId: value("request_id"),
+        reference: value("reference"),
+        space: value("space"),
+        ...routing,
+        subject,
+      };
       const ciphertext = await this.vault.encryptSigned(
         composeEntity(this.body.value, []),
         from,
@@ -212,14 +233,7 @@ export class InlineEncryption {
       this.check();
       // Explicit allowlist; no FormData, body, key, passphrase or decrypted MIME.
       const payload = {
-        account: value("account"),
-        requestId: value("request_id"),
-        reference: value("reference"),
-        space: value("space"),
-        to,
-        cc: "",
-        bcc: "",
-        subject,
+        ...metadata,
         encryptedMime: encryptedEntity(ciphertext),
       };
       this.submitted = true;

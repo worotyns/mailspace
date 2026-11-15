@@ -1284,7 +1284,7 @@
 {{ define "inline-composer" }}
   <footer
     id="{{ .ComposerPrefix }}-composer"
-    class="shrink-0 border-t border-line bg-panel px-4 py-3 sm:px-7"
+    class="max-h-[55dvh] shrink-0 overflow-y-auto border-t border-line bg-panel px-4 py-3 sm:px-7"
   >
     <div class="mx-auto max-w-4xl">
       {{ if or .Reply .ComposeNew }}
@@ -1338,17 +1338,6 @@
                 >×</a
               >
             </p>
-            <label class="mb-2 flex items-center gap-2 text-[11px] text-muted"
-              >To<input
-                name="to"
-                data-recipient-picker
-                list="{{ .ComposerPrefix }}-recipient-suggestions"
-                autocomplete="off"
-                value="{{ .Reply.Recipient }}"
-                maxlength="8192"
-                required
-                class="min-w-0 flex-1 border-0 bg-transparent text-[11px] text-ink outline-none"
-            /></label>
           {{ else }}
             <div class="mb-2 grid gap-2 sm:grid-cols-2">
               <label class="flex items-center gap-2 text-xs text-muted"
@@ -1367,18 +1356,6 @@
                   {{ end }}
                 </select></label
               ><label class="flex items-center gap-2 text-xs text-muted"
-                >To<input
-                  value="{{ .ComposeRecipient }}"
-                  name="to"
-                  data-recipient-picker
-                  list="{{ .ComposerPrefix }}-recipient-suggestions"
-                  autocomplete="off"
-                  maxlength="8192"
-                  required
-                  placeholder="person@example.test"
-                  class="min-w-0 flex-1 rounded border border-line px-2 py-1 text-xs" /></label
-              ><label
-                class="flex items-center gap-2 text-xs text-muted sm:col-span-2"
                 >Topic<input
                   name="subject"
                   maxlength="200"
@@ -1387,7 +1364,89 @@
               /></label>
             </div>
           {{ end }}
-          <datalist id="{{ .ComposerPrefix }}-recipient-suggestions"></datalist>
+          {{ $recipient := .ComposeRecipient }}{{ if .Reply }}
+            {{ $recipient = .Reply.Recipient }}
+          {{ end }}
+          <fieldset class="mb-3 grid min-w-0 gap-2 sm:grid-cols-2">
+            <legend class="sr-only">Recipients</legend>
+            <div class="min-w-0 sm:col-span-2">
+              <label
+                for="{{ .ComposerPrefix }}-to"
+                class="block text-xs text-muted"
+                >To</label
+              >
+              <input
+                id="{{ .ComposerPrefix }}-to"
+                name="to"
+                type="text"
+                inputmode="email"
+                value="{{ $recipient }}"
+                data-recipient-picker
+                list="{{ .ComposerPrefix }}-to-suggestions"
+                autocomplete="off"
+                autocorrect="off"
+                autocapitalize="none"
+                spellcheck="false"
+                aria-describedby="{{ .ComposerPrefix }}-recipients-help"
+                maxlength="8192"
+                class="mt-1 min-h-12 w-full min-w-0 rounded-lg border border-line bg-canvas px-3 py-2 text-base outline-accent sm:min-h-9 sm:py-1 sm:text-sm"
+              />
+              <datalist id="{{ .ComposerPrefix }}-to-suggestions"></datalist>
+            </div>
+            <div class="min-w-0">
+              <label
+                for="{{ .ComposerPrefix }}-cc"
+                class="block text-xs text-muted"
+                >Cc</label
+              >
+              <input
+                id="{{ .ComposerPrefix }}-cc"
+                name="cc"
+                type="text"
+                inputmode="email"
+                data-recipient-picker
+                list="{{ .ComposerPrefix }}-cc-suggestions"
+                autocomplete="off"
+                autocorrect="off"
+                autocapitalize="none"
+                spellcheck="false"
+                aria-describedby="{{ .ComposerPrefix }}-recipients-help"
+                maxlength="8192"
+                class="mt-1 min-h-12 w-full min-w-0 rounded-lg border border-line bg-canvas px-3 py-2 text-base outline-accent sm:min-h-9 sm:py-1 sm:text-sm"
+              />
+              <datalist id="{{ .ComposerPrefix }}-cc-suggestions"></datalist>
+            </div>
+            <div class="min-w-0">
+              <label
+                for="{{ .ComposerPrefix }}-bcc"
+                class="block text-xs text-muted"
+                >Bcc</label
+              >
+              <input
+                id="{{ .ComposerPrefix }}-bcc"
+                name="bcc"
+                type="text"
+                inputmode="email"
+                data-recipient-picker
+                list="{{ .ComposerPrefix }}-bcc-suggestions"
+                autocomplete="off"
+                autocorrect="off"
+                autocapitalize="none"
+                spellcheck="false"
+                aria-describedby="{{ .ComposerPrefix }}-recipients-help"
+                maxlength="8192"
+                class="mt-1 min-h-12 w-full min-w-0 rounded-lg border border-line bg-canvas px-3 py-2 text-base outline-accent sm:min-h-9 sm:py-1 sm:text-sm"
+              />
+              <datalist id="{{ .ComposerPrefix }}-bcc-suggestions"></datalist>
+            </div>
+            <p
+              id="{{ .ComposerPrefix }}-recipients-help"
+              class="text-[11px] text-muted sm:col-span-2"
+            >
+              Add at least one recipient. Separate addresses with commas. Bcc
+              addresses stay out of visible email headers.
+            </p>
+          </fieldset>
           <label class="sr-only" for="{{ .ComposerPrefix }}-reply-body"
             >Your reply</label
           ><textarea

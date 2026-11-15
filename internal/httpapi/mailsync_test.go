@@ -20,6 +20,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	netmail "net/mail"
 	"net/url"
 	"os"
 	"os/exec"
@@ -432,7 +433,7 @@ func TestReadOnlyMailboxEndToEndAndAuthorization(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	encryptedInput := map[string]string{"account": account.ID, "requestId": "SYNTHETIC_HTTP_ENCRYPTED_SEND_12345", "to": "recipient@example.test", "bcc": "hidden@example.test", "subject": "Encrypted SMTP fixture", "encryptedMime": string(fixture)}
+	encryptedInput := map[string]string{"account": account.ID, "requestId": "SYNTHETIC_HTTP_ENCRYPTED_SEND_12345", "to": "recipient@example.test, second@example.test", "cc": "copy@example.test", "bcc": "hidden@example.test", "subject": "Encrypted SMTP fixture", "encryptedMime": string(fixture)}
 	sendEncrypted := func(cookie, csrf string, payload map[string]string) *httptest.ResponseRecorder {
 		encoded, _ := json.Marshal(payload)
 		req := httptest.NewRequest("POST", "/api/outbox/encrypted", bytes.NewReader(encoded))
@@ -488,6 +489,11 @@ func TestReadOnlyMailboxEndToEndAndAuthorization(t *testing.T) {
 		source := request("GET", "/api/mail/raw?"+q, token, "", false)
 		if source.Code != 200 || source.Header().Get("Content-Type") != "application/octet-stream" || !mailsync.Parse(source.Body.Bytes()).Encrypted || bytes.Contains(source.Body.Bytes(), []byte("Synthetic encrypted fixture")) {
 			t.Fatal("raw ciphertext boundary failed")
+		}
+
+		encryptedHeaders, e := netmail.ReadMessage(bytes.NewReader(source.Body.Bytes()))
+		if e != nil || !strings.Contains(encryptedHeaders.Header.Get("Cc"), "copy@example.test") || !strings.Contains(encryptedHeaders.Header.Get("To"), "second@example.test") || bytes.Contains(source.Body.Bytes(), []byte("hidden@example.test")) {
+			t.Fatal("encrypted recipient headers or Bcc privacy changed")
 		}
 		for _, path := range []string{"/api/mail/raw?", "/secure/read?"} {
 			if request("GET", path+q, other, "", false).Code != 404 {
@@ -615,6 +621,88 @@ func TestReadOnlyMailboxEndToEndAndAuthorization(t *testing.T) {
 			t.Fatal("signed messages not found", count)
 		}
 	})
+	t.Run("inline multi-recipient native send", func(t *testing.T) {
+		handler, err := NewPersonal(dir, db, AuthConfig{Outbox: outgoing, Origin: "https://mail.example.test", Accounts: a, Sync: syncer, MailEndpointsEnabled: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		send := func(cookie, csrf string, values url.Values) *httptest.ResponseRecorder {
+			values.Set("csrf", csrf)
+			req := httptest.NewRequest("POST", "/timeline/replies/plain", strings.NewReader(values.Encode()))
+			req.Header.Set("Origin", "https://mail.example.test")
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req.AddCookie(&http.Cookie{Name: "__Host-mailspace", Value: cookie})
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, req)
+			return response
+		}
+		values := url.Values{"account": {account.ID}, "request_id": {"INLINE_RECIPIENT_GROUP_SEND_123456"}, "reference": {webui.EncodeSource(typedRef)}, "to": {"One <one@example.test>, Two <two@example.test>"}, "cc": {"Copy <copy@example.test>"}, "bcc": {"blind@example.test"}, "subject": {"Ignored reply subject"}, "body": {"Synthetic inline multi-recipient reply"}, "allow_plaintext": {"1"}, "return_to": {"/?account=" + account.ID}}
+		if send(token, "wrong", values).Code != 403 {
+			t.Fatal("inline recipient send bypassed CSRF")
+		}
+		if send(other, otherSession.CSRF, values).Code != 404 {
+			t.Fatal("foreign inline recipient send accepted")
+		}
+		for i := 0; i < 2; i++ {
+			if r := send(token, session.CSRF, values); r.Code != 303 {
+				t.Fatal("native inline multi-recipient reply failed", r.Code)
+			}
+		}
+		var raw []byte
+		var encoded, state, copyState string
+		if err := db.Database().QueryRowContext(ctx, "SELECT raw,recipients,state,copy_state FROM outbox WHERE account_id=? AND nonce=?", account.ID, values.Get("request_id")).Scan(&raw, &encoded, &state, &copyState); err != nil {
+			t.Fatal(err)
+		}
+		var recipients []string
+		if err := json.Unmarshal([]byte(encoded), &recipients); err != nil || len(recipients) != 4 || state != "accepted" || copyState != "saved" {
+			t.Fatal("inline envelope/SMTP/Sent result incorrect")
+		}
+		for _, address := range []string{"one@example.test", "two@example.test", "copy@example.test", "blind@example.test"} {
+			found := false
+			for _, actual := range recipients {
+				if actual == address {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatal("inline envelope lost an explicitly entered recipient")
+			}
+		}
+		message, err := netmail.ReadMessage(bytes.NewReader(raw))
+		if err != nil {
+			t.Fatal(err)
+		}
+		tos, err := message.Header.AddressList("To")
+		if err != nil || len(tos) != 2 {
+			t.Fatal("multiple To headers lost")
+		}
+		ccs, err := message.Header.AddressList("Cc")
+		if err != nil || len(ccs) != 1 {
+			t.Fatal("Cc header lost")
+		}
+		if message.Header.Get("Bcc") != "" || bytes.Contains(raw, []byte("blind@example.test")) || message.Header.Get("In-Reply-To") != "<"+messages[0].Preview.MessageID+">" {
+			t.Fatal("Bcc privacy or original reply reference changed")
+		}
+		values.Set("request_id", "INLINE_BLIND_ONLY_SEND_1234567890")
+		values.Del("to")
+		values.Del("cc")
+		values.Del("reference")
+		values.Set("subject", "Bcc only")
+		if r := send(token, session.CSRF, values); r.Code != 303 {
+			t.Fatal("Bcc-only native send failed", r.Code)
+		}
+		if err := db.Database().QueryRowContext(ctx, "SELECT raw,recipients FROM outbox WHERE account_id=? AND nonce=?", account.ID, values.Get("request_id")).Scan(&raw, &encoded); err != nil {
+			t.Fatal(err)
+		}
+		message, err = netmail.ReadMessage(bytes.NewReader(raw))
+		if err != nil || message.Header.Get("To") != "undisclosed-recipients:;" || message.Header.Get("Bcc") != "" || bytes.Contains(raw, []byte("blind@example.test")) {
+			t.Fatal("Bcc-only visible header boundary changed")
+		}
+		if r := request("GET", "/outbox?account="+account.ID, other, "", false); r.Code != 404 {
+			t.Fatal("foreign outbox recipient metadata disclosed")
+		}
+	})
+
 }
 
 func verifyTransportSignature(t *testing.T, entity []byte) {
