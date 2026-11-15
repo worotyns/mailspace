@@ -17,7 +17,7 @@ Work directly in the existing checkout on main. Preserve changes, use no worktre
 
 ## Next implementation slices, in owner priority order
 
-1. **Team sharing UI and per-user state (MS-009/MS-010, ADR-0045):** the grant foundation and read-only enforcement are implemented (schema 14). Next: per-user team unread/labels/assignment scoping (MS-010) and separate send-as as its own decision; the owner-only `/sharing` grant manager is implemented. Two-user denial tests stay mandatory for any new widened path.
+1. **Team sharing UI and per-user state (MS-009/MS-010, ADR-0045):** the grant foundation and read-only enforcement are implemented (schema 14). Per-user read state for shared mail is implemented (ADR-0047). Next: per-user labels/Spaces and assignment for shared mail, and separate send-as as its own decision; the owner-only `/sharing` grant manager is implemented. Two-user denial tests stay mandatory for any new widened path.
 2. **Then, in order:** Drive attachments, YunoHost packaging. Local full-text search is implemented (ADR-0046, schema 15); PostgreSQL and AI compose are removed from the plan and Litestream is already implemented as the opt-in SQLite-only overlay.
 
 ## Remaining 1.0 gates

@@ -76,3 +76,5 @@ Accepted oznacza decyzję projektową, nie gotową implementację. Zmiany przez 
 - [0045 — Team source grants foundation](0045.md)
 
 - [0046 — Local full-text index over cached ordinary text](0046.md)
+
+- [0047 — Per-user read state for shared mail](0047.md)

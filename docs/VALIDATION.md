@@ -342,3 +342,12 @@ Migration 015 adds an FTS5 `message_search` table with triggers mirroring `mail_
 Automated evidence: a `mailsync` test covers multi-term matching, all-terms-AND, absent terms, encrypted/empty-text exclusion, foreign account ids returning nothing, literal FTS operators/punctuation, and trigger maintenance across preview updates and row deletes. A webui test covers the plain-query union with metadata matches and the legacy metadata-only fallback. The HTTP integration test updates one cached preview and verifies `?q=` plain search finds it, an absent term shows the "No matches in cached mail" state, and a structured `body:` query still works. `make check` passed.
 
 Not covered: relevance ordering, result snippets, semantic/embedding search, and any model or remote index remain open. The index duplicates ordinary cached preview text in the same SQLite file with the same sensitivity; ciphertext, decrypted material, keys and credentials never enter it. Docker/actionlint remain unavailable.
+
+
+## Per-user read state for shared mail — ADR-0047, schema 16
+
+Migration 016 adds `shared_read_state(user_id, message_key, unread, updated_at)`. `ListForViewer` and `ResolveForViewer` overlay the viewer's rows for shared records, so the row indicator, the Unread filter and the unread count are per-user; a missing row inherits the cached provider state. `POST /messages/seen` keeps the owner-scoped provider path for owned mail and writes only the viewer's local row for shared mail, so a teammate never changes the owner's cached flags, provider state or timeline, and two teammates stay independent. The local toggle is available for shared mail regardless of the provider flag-write capability; sharing stays read-only for labels, Spaces, archive, reply, assignment and download.
+
+Automated evidence: a `timeline` test covers inherited default state, list/resolver overlay, owner state staying unchanged, independent teammate state and input validation. The HTTP integration test covers a teammate marking shared mail read and unread (native redirect), the Unread filter following the local state, and the owner's cached `\Seen` flag staying absent. A webui test confirms a shared row keeps its local read-state toggle while archive, Space, reply, full-read and attachment controls stay hidden when download is not granted. `make check` passed.
+
+Not covered: per-user labels/Spaces and assignment for shared mail, separate send-as, and real-provider/manual acceptance remain open. Docker/actionlint remain unavailable.

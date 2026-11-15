@@ -1097,7 +1097,7 @@
         aria-label="Unread"
       ></span>
     {{ end }}
-    {{ if and .SeenWrites (eq .Ref.Kind "imap") (not .Shared) }}
+    {{ if and .SeenWrites (eq .Ref.Kind "imap") }}
       <form
         action="/messages/seen"
         method="post"

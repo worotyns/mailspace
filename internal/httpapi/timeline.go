@@ -470,44 +470,60 @@ func timelineRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 			http.Error(w, "Invalid message reference", 400)
 			return
 		}
-		if !c.config.Sync.FlagWritesEnabled() {
-			http.Error(w, "Provider read state is disabled", 503)
-			return
-		}
-		// Read-state updates have their own bounded window and two slots so they
-		// can never exhaust or block the mail-send connection budget.
-		if !c.seenLimiter.allow(s.User.ID, time.Now()) {
-			w.Header().Set("Retry-After", "60")
-			http.Error(w, "Too many read-state updates", 429)
-			return
-		}
-		select {
-		case c.seenSlots <- struct{}{}:
-			defer func() { <-c.seenSlots }()
-		default:
-			w.Header().Set("Retry-After", "1")
-			http.Error(w, "Read-state update busy; try again", 503)
-			return
-		}
-		err = c.config.Sync.SetSeen(r.Context(), s.User.ID, ref.AccountID, ref.Mailbox, ref.Validity, ref.UID, ref.Revision, value == "1")
+		resolved, err := c.sources.ResolveForViewer(r.Context(), s.User.ID, ref)
 		if err != nil {
-			if errors.Is(err, accounts.ErrNotFound) || errors.Is(err, mailsync.ErrChanged) {
-				http.Error(w, "This message or account changed; reload before retrying", 404)
+			http.NotFound(w, r)
+			return
+		}
+		seen := value == "1"
+		if resolved.Record.Shared {
+			// A teammate keeps read state locally; the owner's provider flags and
+			// view are never changed by a shared read.
+			if err = c.sources.SetSharedUnread(r.Context(), s.User.ID, resolved.Record.Identity.Key, !seen); err != nil {
+				http.Error(w, "Unable to record read state", 503)
 				return
 			}
-			// Provider outcome is unknown or rejected: local state stays unchanged
-			// and the client must reload before assuming anything.
-			w.Header().Set("X-Mailspace-Notice", "The mail server did not confirm the read-state change. Local state is unchanged.")
-			http.Error(w, "The mail server did not confirm this change.", 503)
-			return
+			resolved.Record.Unread = !seen
+		} else {
+			if !c.config.Sync.FlagWritesEnabled() {
+				http.Error(w, "Provider read state is disabled", 503)
+				return
+			}
+			// Read-state updates have their own bounded window and two slots so
+			// they can never exhaust or block the mail-send connection budget.
+			if !c.seenLimiter.allow(s.User.ID, time.Now()) {
+				w.Header().Set("Retry-After", "60")
+				http.Error(w, "Too many read-state updates", 429)
+				return
+			}
+			select {
+			case c.seenSlots <- struct{}{}:
+				defer func() { <-c.seenSlots }()
+			default:
+				w.Header().Set("Retry-After", "1")
+				http.Error(w, "Read-state update busy; try again", 503)
+				return
+			}
+			err = c.config.Sync.SetSeen(r.Context(), s.User.ID, ref.AccountID, ref.Mailbox, ref.Validity, ref.UID, ref.Revision, seen)
+			if err != nil {
+				if errors.Is(err, accounts.ErrNotFound) || errors.Is(err, mailsync.ErrChanged) {
+					http.Error(w, "This message or account changed; reload before retrying", 404)
+					return
+				}
+				// Provider outcome is unknown or rejected: local state stays
+				// unchanged and the client must reload before assuming anything.
+				w.Header().Set("X-Mailspace-Notice", "The mail server did not confirm the read-state change. Local state is unchanged.")
+				http.Error(w, "The mail server did not confirm this change.", 503)
+				return
+			}
+			resolved, err = c.sources.Resolve(r.Context(), s.User.ID, ref)
+			if err != nil {
+				w.Header().Set("X-Mailspace-Notice", "Read state changed on the mail server. Reload to see it.")
+				http.Error(w, "Reload this message", 503)
+				return
+			}
 		}
-		resolved, err := c.sources.Resolve(r.Context(), s.User.ID, ref)
-		if err != nil {
-			w.Header().Set("X-Mailspace-Notice", "Read state changed on the mail server. Reload to see it.")
-			http.Error(w, "Reload this message", 503)
-			return
-		}
-		message := webui.TimelineMessage{Record: resolved.Record, Token: webui.EncodeSource(ref), CSRF: s.CSRF, ReturnURL: timelineReturn(r.FormValue("return_to")), SeenWrites: !resolved.Record.Shared}
+		message := webui.TimelineMessage{Record: resolved.Record, Token: webui.EncodeSource(ref), CSRF: s.CSRF, ReturnURL: timelineReturn(r.FormValue("return_to")), SeenWrites: true}
 		// The automatic caller only needs the outcome, not a redirect or a
 		// fragment it would discard.
 		if r.Header.Get("X-Mailspace-Background") == "1" {
@@ -597,7 +613,7 @@ func timelineRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 			classifyProvider = config.Decisions.ProviderName()
 		}
 		reader := webui.TimelineMessage{Record: resolved.Record}
-		renderSecurePage(w, config, webui.AuthPageData{UserID: s.User.ID, SessionExpires: s.ExpiresAt.UnixMilli(), Email: s.User.Email, ClassifyReference: classifyReference, ClassifyProvider: classifyProvider, CSRF: s.CSRF, SecureRead: true, OrdinaryRead: !resolved.Record.Preview.Encrypted, RawURL: "/api/messages/raw?" + url.Values{"reference": {webui.EncodeSource(ref)}}.Encode(), ToLabel: reader.ToSummary(), CcLabel: reader.CcSummary(), ReadOnly: resolved.Record.Shared, SharedBy: resolved.Record.SharedBy, DownloadAllowed: !resolved.Record.Shared || resolved.Record.CanDownload, SeenReference: webui.EncodeSource(ref), SeenWrites: config.Sync.FlagWritesEnabled() && !resolved.Record.Shared, SeenUnread: resolved.Record.Unread, ClaimedSender: resolved.Record.Preview.Sender, AccountID: ref.AccountID})
+		renderSecurePage(w, config, webui.AuthPageData{UserID: s.User.ID, SessionExpires: s.ExpiresAt.UnixMilli(), Email: s.User.Email, ClassifyReference: classifyReference, ClassifyProvider: classifyProvider, CSRF: s.CSRF, SecureRead: true, OrdinaryRead: !resolved.Record.Preview.Encrypted, RawURL: "/api/messages/raw?" + url.Values{"reference": {webui.EncodeSource(ref)}}.Encode(), ToLabel: reader.ToSummary(), CcLabel: reader.CcSummary(), ReadOnly: resolved.Record.Shared, SharedBy: resolved.Record.SharedBy, DownloadAllowed: !resolved.Record.Shared || resolved.Record.CanDownload, SeenReference: webui.EncodeSource(ref), SeenWrites: resolved.Record.Shared || config.Sync.FlagWritesEnabled(), SeenUnread: resolved.Record.Unread, ClaimedSender: resolved.Record.Preview.Sender, AccountID: ref.AccountID})
 	}))
 	mux.HandleFunc("POST /timeline/sync", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
 		if !mutation(w, r, s) {

@@ -442,7 +442,7 @@ func TestReadOnlyMailboxEndToEndAndAuthorization(t *testing.T) {
 			t.Fatalf("grantee did not see the shared message: %d %s", sharedView.Code, sharedView.Body.String())
 		}
 		page := sharedView.Body.String()
-		for _, forbidden := range []string{`action="/messages/archive"`, `hx-post="/messages/seen"`, "Edit message Spaces"} {
+		for _, forbidden := range []string{`action="/messages/archive"`, "Edit message Spaces"} {
 			if strings.Contains(page, forbidden) {
 				t.Fatalf("read-only shared row exposed %s", forbidden)
 			}
@@ -467,8 +467,22 @@ func TestReadOnlyMailboxEndToEndAndAuthorization(t *testing.T) {
 			handler.ServeHTTP(res, req)
 			return res
 		}
-		if res := post("/messages/seen", url.Values{"seen": {"1"}}); res.Code != 404 {
-			t.Fatal("grantee marked shared mail read", res.Code)
+		// A teammate keeps read state locally; the owner's provider flags do not change.
+		if res := post("/messages/seen", url.Values{"seen": {"1"}}); res.Code != 303 {
+			t.Fatal("teammate could not record local read state", res.Code)
+		}
+		if unreadView := request("GET", "/?filter=unread", other, "", false); strings.Contains(unreadView.Body.String(), `id="message-`+sourceIdentity.Key+`"`) {
+			t.Fatal("teammate unread filter ignored local read state")
+		}
+		ownerFlags, flagErr := syncer.Source(ctx, alice.ID, account.ID, ref.Mailbox, ref.Validity, ref.UID, ref.Revision)
+		if flagErr != nil || containsString(ownerFlags.Flags, `\Seen`) {
+			t.Fatal("teammate read state changed the owner's provider flags", ownerFlags.Flags, flagErr)
+		}
+		if res := post("/messages/seen", url.Values{"seen": {"0"}}); res.Code != 303 {
+			t.Fatal("teammate could not mark shared mail unread", res.Code)
+		}
+		if unreadView := request("GET", "/?filter=unread", other, "", false); !strings.Contains(unreadView.Body.String(), `id="message-`+sourceIdentity.Key+`"`) {
+			t.Fatal("teammate unread state was not restored")
 		}
 		if res := post("/messages/archive", url.Values{"archived": {"1"}}); res.Code != 404 {
 			t.Fatal("grantee archived shared mail", res.Code)

@@ -161,6 +161,11 @@ func (s *Service) ResolveForViewer(ctx context.Context, viewer string, ref mail.
 	resolved.Record.Shared = true
 	resolved.Record.SharedBy = grant.GrantorEmail
 	resolved.Record.CanDownload = grant.CanDownload
+	if states, e := s.sharedUnreadStates(ctx, viewer, []string{resolved.Record.Identity.Key}); e == nil {
+		if unread, ok := states[resolved.Record.Identity.Key]; ok {
+			resolved.Record.Unread = unread
+		}
+	}
 	return resolved, nil
 }
 
@@ -243,7 +248,78 @@ func (s *Service) ListForViewer(ctx context.Context, viewer, accountFilter strin
 			return nil, err
 		}
 	}
+	sharedKeys := make([]string, 0, len(records))
+	for _, record := range records {
+		if record.Shared {
+			sharedKeys = append(sharedKeys, record.Identity.Key)
+		}
+	}
+	states, err := s.sharedUnreadStates(ctx, viewer, sharedKeys)
+	if err != nil {
+		return nil, err
+	}
+	for key, unread := range states {
+		if record, ok := records[key]; ok {
+			record.Unread = unread
+			records[key] = record
+		}
+	}
 	return finishRecords(records, found)
+}
+
+// maxSharedReadKeys bounds one local read-state lookup.
+const maxSharedReadKeys = 2000
+
+// sharedUnreadStates returns the viewer's own read state for shared message
+// keys. Keys without a row keep the cached provider state.
+func (s *Service) sharedUnreadStates(ctx context.Context, viewer string, keys []string) (map[string]bool, error) {
+	result := map[string]bool{}
+	unique := make([]string, 0, len(keys))
+	seen := map[string]bool{}
+	for _, key := range keys {
+		if key == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		unique = append(unique, key)
+		if len(unique) == maxSharedReadKeys {
+			break
+		}
+	}
+	if viewer == "" || len(unique) == 0 {
+		return result, nil
+	}
+	placeholders := make([]string, len(unique))
+	args := make([]any, 0, len(unique)+1)
+	args = append(args, viewer)
+	for i, key := range unique {
+		placeholders[i] = "?"
+		args = append(args, key)
+	}
+	rows, err := s.users.Database().QueryContext(ctx, `SELECT message_key,unread FROM shared_read_state WHERE user_id=? AND message_key IN (`+strings.Join(placeholders, ",")+`)`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var key string
+		var unread bool
+		if err = rows.Scan(&key, &unread); err != nil {
+			return nil, err
+		}
+		result[key] = unread
+	}
+	return result, rows.Err()
+}
+
+// SetSharedUnread records the viewer's local read state for one shared message.
+// It never writes a provider flag or another user's state.
+func (s *Service) SetSharedUnread(ctx context.Context, viewer, messageKey string, unread bool) error {
+	if viewer == "" || len(messageKey) < 16 || len(messageKey) > 256 {
+		return ErrInput
+	}
+	_, err := s.users.Database().ExecContext(ctx, `INSERT INTO shared_read_state(user_id,message_key,unread,updated_at) VALUES(?,?,?,?) ON CONFLICT(user_id,message_key) DO UPDATE SET unread=excluded.unread,updated_at=excluded.updated_at`, viewer, messageKey, unread, time.Now().Unix())
+	return err
 }
 
 // collect merges one account's cached IMAP messages into records. A shared

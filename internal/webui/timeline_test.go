@@ -484,10 +484,14 @@ func TestSharedMessageRendersReadOnlyWithoutMutationControls(t *testing.T) {
 	if !strings.Contains(html, "shared by alice@example.test") || !strings.Contains(html, `id="message-shared"`) {
 		t.Fatal("shared badge missing", html)
 	}
-	for _, forbidden := range []string{`action="/messages/archive"`, `hx-post="/messages/seen"`, "Edit message Spaces", `href="/messages/read?`, "data-load-attachments"} {
+	for _, forbidden := range []string{`action="/messages/archive"`, "Edit message Spaces", `href="/messages/read?`, "data-load-attachments", `aria-label="Reply"`} {
 		if strings.Contains(html, forbidden) {
 			t.Fatalf("read-only shared row exposed %s", forbidden)
 		}
+	}
+	// Read state is per-user and local, so the shared row keeps that toggle.
+	if !strings.Contains(html, `hx-post="/messages/seen"`) || !strings.Contains(html, "data-message-seen") {
+		t.Fatal("shared row lost its local read-state toggle", html)
 	}
 	// A download-enabled grant restores the original-message and attachment controls.
 	downloadable := shared

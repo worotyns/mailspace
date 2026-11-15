@@ -623,7 +623,9 @@ func FormatTimeline(records []timeline.Record, spaces, labels []collections.Item
 		m.Spaces = data.Spaces
 		m.Labels = data.Labels
 		m.ContextSpace = data.SpaceID
-		m.SeenWrites = data.SeenWrites && !m.Shared
+		// Shared mail uses the viewer's own local read state, so its toggle does
+		// not depend on the provider flag capability.
+		m.SeenWrites = m.Shared || data.SeenWrites
 	}
 	data.Total = len(data.Messages)
 	matches := []PersonView{}

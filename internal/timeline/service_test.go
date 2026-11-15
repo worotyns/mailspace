@@ -267,3 +267,60 @@ func TestSharedGrantIsReadOnlyFolderScopedAndRevocable(t *testing.T) {
 		t.Fatal("revoked grant still resolved")
 	}
 }
+
+func TestSharedReadStateIsPerUser(t *testing.T) {
+	service, store, a, _, owner, other, account := setup(t)
+	ctx := context.Background()
+	put(t, store, account.ID, "INBOX", 1, fixture("shared@example.test", "Shared body", ""), false, false)
+	workspace, err := store.CreateWorkspace(ctx, owner, "Team")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = store.AddMember(ctx, owner, workspace.ID, "other@example.test"); err != nil {
+		t.Fatal(err)
+	}
+	grants := sharing.New(store, a)
+	service.SetSharing(grants)
+	if _, err = grants.Grant(ctx, owner, workspace.ID, account.ID, "", "other@example.test", false); err != nil {
+		t.Fatal(err)
+	}
+	records, err := service.ListForViewer(ctx, other, "")
+	if err != nil || len(records) != 1 || !records[0].Unread {
+		t.Fatalf("shared unread default not inherited: %#v (%v)", records, err)
+	}
+	key := records[0].Identity.Key
+	if err = service.SetSharedUnread(ctx, other, key, false); err != nil {
+		t.Fatal(err)
+	}
+	if records, err = service.ListForViewer(ctx, other, ""); err != nil || len(records) != 1 || records[0].Unread {
+		t.Fatal("local read state not applied to the list", records, err)
+	}
+	if resolved, e := service.ResolveForViewer(ctx, other, records[0].Ref); e != nil || resolved.Record.Unread {
+		t.Fatal("local read state not applied to the resolver", resolved.Record.Unread, e)
+	}
+	// The owner's provider-derived state is untouched.
+	if owned, e := service.List(ctx, owner, ""); e != nil || len(owned) != 1 || !owned[0].Unread {
+		t.Fatal("owner unread state changed", owned)
+	}
+	// Another teammate keeps an independent state.
+	carol, err := store.CreateUser(ctx, "carol@example.test", "synthetic long password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = store.AddMember(ctx, owner, workspace.ID, carol.Email); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = grants.Grant(ctx, owner, workspace.ID, account.ID, "", carol.Email, false); err != nil {
+		t.Fatal(err)
+	}
+	carolRecords, err := service.ListForViewer(ctx, carol.ID, "")
+	if err != nil || len(carolRecords) != 1 || !carolRecords[0].Unread {
+		t.Fatal("read state leaked between teammates", carolRecords, err)
+	}
+	if err = service.SetSharedUnread(ctx, "", key, true); !errors.Is(err, ErrInput) {
+		t.Fatal("empty viewer accepted")
+	}
+	if err = service.SetSharedUnread(ctx, other, "short", true); !errors.Is(err, ErrInput) {
+		t.Fatal("invalid message key accepted")
+	}
+}
