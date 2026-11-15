@@ -13,7 +13,7 @@ Mailspace is deployable for controlled personal testing, not yet a completed 1.0
 ## Remaining 1.0 gates
 
 1. Complete the OpenPGP compatibility matrix: additional legacy variants and manual secure-quote/real Thunderbird acceptance. The full-composer local quote implementation is covered by ADR-0038. Authored signed-only sending is implemented under ADR-0037, with external-client acceptance still required. GnuPG round-trips alone do not close this gate.
-2. Complete broader provider/charset/large-mail/history/reconnect acceptance and operational soak tests. Current synchronization is a recent bounded read-only cache, not full archive synchronization or remote seen/archive/delete support.
+2. Complete broader provider/charset/large-mail/history/reconnect acceptance and operational soak tests. Current synchronization is a recent bounded read-only cache, not full archive synchronization. Provider-synchronized `\Seen` is implemented (ADR-0043) as one bounded write; remote archive/move/delete and native IDLE remain unsupported.
 3. Implement team-source/sharing ACLs before advertising a team mailbox; organizations currently do not grant private-mail access. Optional JEV classification is connected only after operator configuration and per-user consent; live paid OpenRouter routing is not validated by CI. Manual Spaces work without it.
 4. Security/accessibility review, release CI execution on GitHub and an explicit reviewed prerelease. Local checks/container smoke do not prove a published multiarch image.
 
@@ -44,3 +44,6 @@ MS-021/ADR-0040 now implements optional Authenticator App 2FA end to end: passwo
 
 
 ADR-0041 adds cached root-feed pagination (latest 20, older batches on upward scroll/native link), preserving mounted message/decrypted DOM and composer. It does not change existing cache/provider limits, thread cap, source authorization or read-only flags. At the owner's request, final validation was limited to targeted pagination/reader/HTTP checks, Go vet, asset build and Chrome at three sizes; the full repository/race/container suite was not repeated for this slice. See VALIDATION.md and NEXT_SESSION.md. The owner requested stopping after its commit/push; no release/deployment is implied.
+
+
+ADR-0042 replaces the expanded Space assignment list with the shared compact picker and visible badges; ADR-0043 adds the one bounded provider write outside sending (`\Seen` on a single message after an explicit open or manual toggle, with revision/UIDVALIDITY checks and server confirmation). Neither changes the read-only sync path, cache limits or authorization model. Real-provider flag semantics and owner manual acceptance remain open, along with the wider 1.0 gates above.

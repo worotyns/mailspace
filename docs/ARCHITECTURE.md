@@ -45,7 +45,7 @@ The main source feed is bounded to 1,000 consolidated cached entries; outbox enu
 
 ## Mail transport and certainty
 
-Synchronization uses verified TLS and read-only EXAMINE/BODY.PEEK, durable checkpoints/current connection generations and explicit MIME/cache budgets. It does not implement a full archive mirror, remote flag/delete/archive operations, native IDLE/CONDSTORE/QRESYNC guarantees or provider OAuth. Exact current limits are in MAIL_SYNC.md. Original MIME octets remain available for cryptographic parsing; HTML is not a source of reconstructed signed bytes.
+Synchronization uses verified TLS and read-only EXAMINE/BODY.PEEK, durable checkpoints/current connection generations and explicit MIME/cache budgets. A separate bounded capability may set or clear the `\Seen` flag of one cached message after an explicit open or toggle, requiring the exact account/mailbox/UIDVALIDITY/revision and the server's confirmation (ADR-0043); it is not part of synchronization. It does not implement a full archive mirror, remote move/delete/archive operations, native IDLE/CONDSTORE/QRESYNC guarantees or provider OAuth. Exact current limits are in MAIL_SYNC.md. Original MIME octets remain available for cryptographic parsing; HTML is not a source of reconstructed signed bytes.
 
 Ordinary user-authored replies require explicit plaintext consent. Encryption removes the body field name, disables HTMX for that form and signs/encrypts locally; an allowlisted request carries metadata and ciphertext only. An encrypted original cannot silently downgrade. Unlocking a local key and sending are separate actions; missing/changed/untrusted recipients fail closed.
 
