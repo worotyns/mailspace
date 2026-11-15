@@ -430,6 +430,7 @@ func timelineRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 		}
 		webui.RenderPeople(w, r, config.Dev, data)
 	}))
+	mux.HandleFunc("GET /attachments", protected(c.renderAttachments))
 	mux.HandleFunc("GET /sharing", protected(c.renderSharing))
 	mux.HandleFunc("POST /sharing", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
 		if !mutation(w, r, s) {
@@ -811,6 +812,112 @@ func timelineRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store
 
 // renderSharing is the owner-only grant manager. It never lists another user's
 // grants and never discloses whether a given email is provisioned.
+// attachmentMatches applies a bounded case-insensitive filter over the cached
+// attachment metadata only; it never reads body text or bytes.
+func attachmentMatches(item mailsync.CachedAttachment, account, query string) bool {
+	query = strings.ToLower(query)
+	for _, value := range []string{item.Name, item.Type, item.Subject, item.Sender, item.SenderName, account} {
+		if strings.Contains(strings.ToLower(value), query) {
+			return true
+		}
+	}
+	return false
+}
+
+// renderAttachments is the cross-message virtual attachment view. It lists
+// metadata for owned accounts plus shared accounts whose grant allows download;
+// bytes are only ever read through the existing message reader.
+func (c *timelineController) renderAttachments(w http.ResponseWriter, r *http.Request, s identity.Session) {
+	ctx := r.Context()
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if len(query) > 254 {
+		http.Error(w, "Filter too long", 400)
+		return
+	}
+	data := webui.AttachmentsData{CSRF: s.CSRF, Query: query, EmptyText: "No cached attachments yet. Attachments appear after their messages are downloaded."}
+	type scope struct{ label, sharedBy string }
+	scopes := map[string]scope{}
+	ids := []string{}
+	configured, err := c.store.Accounts(ctx, s.User.ID)
+	if err != nil {
+		http.Error(w, "Attachments unavailable", 503)
+		return
+	}
+	for _, account := range configured {
+		label := account.Name
+		if value, e := c.config.Accounts.Get(ctx, s.User.ID, account.ID); e == nil && value.Address != "" {
+			label = account.Name + " · " + value.Address
+		}
+		scopes[account.ID] = scope{label: label}
+		ids = append(ids, account.ID)
+	}
+	shared, err := c.grants.GrantedAccounts(ctx, s.User.ID)
+	if err != nil {
+		http.Error(w, "Attachments unavailable", 503)
+		return
+	}
+	for _, grant := range shared {
+		if !grant.CanDownload {
+			continue
+		}
+		if _, ok := scopes[grant.AccountID]; ok {
+			continue
+		}
+		label := grant.GrantorEmail
+		if value, e := c.config.Accounts.Get(ctx, grant.GrantorID, grant.AccountID); e == nil && value.Address != "" {
+			label = value.Address
+		}
+		scopes[grant.AccountID] = scope{label: label, sharedBy: grant.GrantorEmail}
+		ids = append(ids, grant.AccountID)
+	}
+	items, err := c.config.Sync.AttachmentList(ctx, ids, 0)
+	if err != nil {
+		http.Error(w, "Attachments unavailable", 503)
+		return
+	}
+	location, err := time.LoadLocation(s.User.Timezone)
+	if err != nil {
+		location = time.UTC
+	}
+	rows := []webui.AttachmentRow{}
+	matched := 0
+	for _, item := range items {
+		account := scopes[item.AccountID]
+		if query != "" && !attachmentMatches(item, account.label, query) {
+			continue
+		}
+		matched++
+		if len(rows) == 200 {
+			continue
+		}
+		ref := mail.SourceRef{Kind: "imap", AccountID: item.AccountID, Mailbox: item.Mailbox, UID: item.UID, Validity: item.Validity, Revision: item.Revision}
+		token := webui.EncodeSource(ref)
+		sender := item.SenderName
+		if sender == "" {
+			sender = item.Sender
+		}
+		when := item.Received.In(location).Format("2 Jan 2006 15:04")
+		parts := []string{}
+		for _, value := range []string{item.Type, item.Subject, sender, account.label, when} {
+			if value != "" {
+				parts = append(parts, value)
+			}
+		}
+		if account.sharedBy != "" {
+			parts = append(parts, "shared by "+account.sharedBy)
+		}
+		rows = append(rows, webui.AttachmentRow{Token: token, Name: item.Name, Type: item.Type, Subject: item.Subject, Sender: sender, Account: account.label, Time: when, SharedBy: account.sharedBy, Meta: strings.Join(parts, " · "), ReadURL: "/messages/read?" + url.Values{"reference": {token}}.Encode()})
+	}
+	data.Rows = rows
+	data.Total = matched
+	if matched == 0 && query != "" {
+		data.EmptyText = "No cached attachments match this filter."
+	}
+	if err = webui.RenderAttachments(w, c.config.Dev, data); err != nil {
+		http.Error(w, "Unable to render attachments", 503)
+	}
+}
+
 func (c *timelineController) renderSharing(w http.ResponseWriter, r *http.Request, s identity.Session) {
 	list, err := c.grants.List(r.Context(), s.User.ID)
 	if err != nil {

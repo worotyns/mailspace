@@ -437,6 +437,15 @@ func TestReadOnlyMailboxEndToEndAndAuthorization(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		if _, err = db.Database().ExecContext(ctx, `UPDATE mail_messages SET preview=json_set(preview,'$.Attachments',json_array(json_object('Name','report.pdf','Type','application/pdf'))) WHERE account_id=? AND mailbox='INBOX' AND uid=?`, account.ID, messages[0].UID); err != nil {
+			t.Fatal(err)
+		}
+		if listed := request("GET", "/attachments", token, "", false); listed.Code != 200 || !strings.Contains(listed.Body.String(), "report.pdf") || !strings.Contains(listed.Body.String(), "Open message") {
+			t.Fatalf("owner attachment view missing the cached attachment: %d", listed.Code)
+		}
+		if hidden := request("GET", "/attachments", other, "", false); hidden.Code != 200 || strings.Contains(hidden.Body.String(), "report.pdf") {
+			t.Fatalf("grant without download listed attachments: %d", hidden.Code)
+		}
 		sharedView := request("GET", "/", other, "", false)
 		if sharedView.Code != 200 || !strings.Contains(sharedView.Body.String(), `id="message-`+sourceIdentity.Key+`"`) || !strings.Contains(sharedView.Body.String(), "shared by alice@example.test") {
 			t.Fatalf("grantee did not see the shared message: %d %s", sharedView.Code, sharedView.Body.String())
@@ -503,6 +512,15 @@ func TestReadOnlyMailboxEndToEndAndAuthorization(t *testing.T) {
 		if raw := request("GET", "/api/messages/raw?"+url.Values{"reference": {encodedRef}}.Encode(), other, "", false); raw.Code != 200 || len(raw.Body.Bytes()) == 0 {
 			t.Fatal("download-enabled grant did not serve original bytes", raw.Code)
 		}
+		if listed := request("GET", "/attachments", other, "", false); listed.Code != 200 || !strings.Contains(listed.Body.String(), "report.pdf") || !strings.Contains(listed.Body.String(), "shared by alice@example.test") {
+			t.Fatalf("download grant did not expose the shared attachment: %d", listed.Code)
+		}
+		if filtered := request("GET", "/attachments?q=report", other, "", false); filtered.Code != 200 || !strings.Contains(filtered.Body.String(), "report.pdf") {
+			t.Fatalf("attachment filter failed: %d", filtered.Code)
+		}
+		if absent := request("GET", "/attachments?q=zzabsent", other, "", false); absent.Code != 200 || !strings.Contains(absent.Body.String(), "No cached attachments match this filter.") {
+			t.Fatalf("attachment empty filter state missing: %d", absent.Code)
+		}
 		// Revocation removes the shared view immediately.
 		if err = grants.Revoke(ctx, alice.ID, grant.ID); err != nil {
 			t.Fatal(err)
@@ -520,6 +538,9 @@ func TestReadOnlyMailboxEndToEndAndAuthorization(t *testing.T) {
 		}
 		if revoked := request("GET", "/", other, "", false); revoked.Code != 200 || strings.Contains(revoked.Body.String(), "shared by alice@example.test") {
 			t.Fatal("revoked grant still listed shared mail", revoked.Code)
+		}
+		if revoked := request("GET", "/attachments", other, "", false); revoked.Code != 200 || strings.Contains(revoked.Body.String(), "report.pdf") {
+			t.Fatal("revoked grant still listed attachments", revoked.Code)
 		}
 	})
 	t.Run("drawer and archive boundaries", func(t *testing.T) {

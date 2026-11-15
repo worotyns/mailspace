@@ -78,3 +78,5 @@ Accepted oznacza decyzję projektową, nie gotową implementację. Zmiany przez 
 - [0046 — Local full-text index over cached ordinary text](0046.md)
 
 - [0047 — Per-user read state for shared mail](0047.md)
+
+- [0048 — Virtual attachment view over cached mail](0048.md)

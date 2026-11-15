@@ -351,3 +351,14 @@ Migration 016 adds `shared_read_state(user_id, message_key, unread, updated_at)`
 Automated evidence: a `timeline` test covers inherited default state, list/resolver overlay, owner state staying unchanged, independent teammate state and input validation. The HTTP integration test covers a teammate marking shared mail read and unread (native redirect), the Unread filter following the local state, and the owner's cached `\Seen` flag staying absent. A webui test confirms a shared row keeps its local read-state toggle while archive, Space, reply, full-read and attachment controls stay hidden when download is not granted. `make check` passed.
 
 Not covered: per-user labels/Spaces and assignment for shared mail, separate send-as, and real-provider/manual acceptance remain open. Docker/actionlint remain unavailable.
+
+
+## Virtual attachment view — ADR-0048
+
+`/attachments` lists attachment metadata already parsed into cached previews (name, type, subject, sender, account, time) with a bounded filter and a link to the message reader; it lists cached attachment metadata only, never bytes. `mailsync.AttachmentList` scans at most 64 accounts, 500 cached messages and 1000 references, newest message first; the page displays at most 200 rows and distinguishes "no cached attachments yet" from "no matches". Encrypted mail carries no parsed attachments and is never listed. No bytes are copied, uploaded, cached separately or indexed, and there is no server-side preview or OCR.
+
+Team scope: the owner sees their own cached accounts; a teammate sees an attachment only when the grant enables `can_download`. A preview-only grant is omitted. Revocation removes the rows immediately, and all bytes are still read through the existing message reader with its grant check and local preview isolation.
+
+Automated evidence: a `mailsync` test covers newest-first ordering, MIME order within a message, encrypted exclusion, foreign-account scope, the result limit, and skipping a structurally invalid cached attachment array. The HTTP integration test covers the owner view, a preview-only grant listing nothing, a download grant listing the shared attachment with its `shared by` label, the filter and its empty state, and revocation removing the rows. `make check` passed. This slice adds no schema, storage or route data, so no migration or backup is required.
+
+Not covered: an optional opt-in local attachment cache, a dedicated per-attachment byte/preview endpoint, purge-on-disable semantics beyond revocation, and real-provider/manual acceptance remain open. Docker/actionlint remain unavailable.

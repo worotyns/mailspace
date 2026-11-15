@@ -34,6 +34,11 @@
       >Labels</a
     >
     <a
+      href="/attachments"
+      {{ if eq . "attachments" }}aria-current="page"{{ end }}
+      >Attachments</a
+    >
+    <a
       href="/sharing"
       {{ if eq . "sharing" }}aria-current="page"{{ end }}
       >Sharing</a

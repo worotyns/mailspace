@@ -1,0 +1,67 @@
+{{ define "attachments-page" }}
+  <!doctype html>
+  <html lang="en" class="settings-document">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width,initial-scale=1" />
+      <title>Attachments · Mailspace</title>
+      <script src="/assets/theme.js"></script>
+      <script src="/assets/forms.js" defer></script>
+      <script src="/assets/panel-child.js" defer></script>
+      <script src="/assets/toasts.js" defer></script>
+      <link rel="stylesheet" href="/assets/app.css" />
+    </head>
+    <body class="min-h-dvh bg-canvas text-ink">
+      {{ template "settings-simple-header" . }}
+      <main class="settings-main">
+        {{ template "settings-navigation" "attachments" }}
+        <h1 class="text-xl font-semibold">Attachments</h1>
+        <p class="my-3 text-sm text-muted">
+          A virtual view of attachments in your cached mail. Bytes stay in the
+          original message and are read in the message reader with its local
+          isolation; nothing is copied, uploaded or indexed. Encrypted
+          attachments are not listed because their names and bytes stay local to
+          the browser.
+        </p>
+        <form action="/attachments" method="get" class="my-4 flex gap-2">
+          <input
+            type="search"
+            name="q"
+            value="{{ .Query }}"
+            maxlength="254"
+            aria-label="Filter attachments"
+            placeholder="Filter by name, type, subject or sender…"
+            class="min-w-0 flex-1 rounded-lg border border-line bg-panel px-3 py-2 text-sm"
+          />
+          <button class="rounded-lg bg-action px-4 py-2 text-sm text-white">
+            Filter
+          </button>
+        </form>
+        {{ if .Query }}
+          <p class="mb-3 text-xs text-muted" role="status">
+            {{ .Total }} matching
+            {{ if eq .Total 1 }}attachment{{ else }}attachments{{ end }} for
+            “{{ .Query }}”.
+          </p>
+        {{ end }}
+        <div class="space-y-2">
+          {{ range .Rows }}
+            <div
+              class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line p-4"
+            >
+              <div class="min-w-0">
+                <p class="truncate text-sm font-medium">{{ .Name }}</p>
+                <p class="text-xs text-muted">{{ .Meta }}</p>
+              </div>
+              <a href="{{ .ReadURL }}" class="shrink-0 text-sm text-accent"
+                >Open message</a
+              >
+            </div>
+          {{ else }}
+            <p class="text-sm text-muted">{{ .EmptyText }}</p>
+          {{ end }}
+        </div>
+      </main>
+    </body>
+  </html>
+{{ end }}

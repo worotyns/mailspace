@@ -29,7 +29,7 @@ func appPanelPath(path string) bool {
 	case "/", "/security", "/security/authenticator/setup", "/security/authenticator/enable", "/security/authenticator/cancel", "/security/authenticator/recovery", "/security/authenticator/disable":
 		return true
 	}
-	for _, prefix := range []string{"/settings", "/profile", "/workspaces", "/accounts", "/keys", "/rules", "/labels", "/sharing", "/automation", "/secure/compose", "/messages/read", "/outbox", "/archive"} {
+	for _, prefix := range []string{"/settings", "/profile", "/workspaces", "/accounts", "/keys", "/rules", "/labels", "/sharing", "/attachments", "/automation", "/secure/compose", "/messages/read", "/outbox", "/archive"} {
 		if path == prefix || strings.HasPrefix(path, prefix+"/") {
 			return true
 		}
