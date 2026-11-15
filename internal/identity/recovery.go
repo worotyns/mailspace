@@ -28,7 +28,7 @@ func (s *Store) ResetPassword(ctx context.Context, email, password string) error
 		return err
 	}
 	defer tx.Rollback()
-	result, err := tx.ExecContext(ctx, "UPDATE users SET password_hash=? WHERE email=?", hash, normalized)
+	result, err := tx.ExecContext(ctx, "UPDATE users SET password_hash=?,auth_version=auth_version+1 WHERE email=?", hash, normalized)
 	if err != nil {
 		return err
 	}
@@ -40,6 +40,9 @@ func (s *Store) ResetPassword(ctx context.Context, email, password string) error
 		return ErrNotFound
 	}
 	if _, err = tx.ExecContext(ctx, "DELETE FROM sessions WHERE user_id=(SELECT id FROM users WHERE email=?)", normalized); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, "DELETE FROM mfa_challenges WHERE user_id=(SELECT id FROM users WHERE email=?)", normalized); err != nil {
 		return err
 	}
 	return tx.Commit()

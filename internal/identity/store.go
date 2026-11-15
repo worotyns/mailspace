@@ -66,6 +66,9 @@ var migrationEleven string
 //go:embed migrations/012_rule_expressions.sql
 var migrationTwelve string
 
+//go:embed migrations/013_authenticator_mfa.sql
+var migrationThirteen string
+
 type User struct {
 	Name     string `json:"name"`
 	Timezone string `json:"timezone"`
@@ -84,6 +87,8 @@ type Session struct {
 type Store struct {
 	db        *sql.DB
 	dummyHash string
+	authDir   string
+	now       func() time.Time
 }
 
 // Open accepts a filesystem path, never a caller-provided SQLite DSN.
@@ -121,7 +126,7 @@ func Open(path string) (*Store, error) {
 	}
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
-	store := &Store{db: db}
+	store := &Store{db: db, authDir: filepath.Join(filepath.Dir(absolute), "auth-keys"), now: time.Now}
 	if err = store.migrate(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("identity migration: %w", err)
@@ -150,7 +155,7 @@ func (s *Store) migrate() error {
 	if err = tx.QueryRowContext(ctx, "SELECT coalesce(max(version),0) FROM schema_migrations").Scan(&version); err != nil {
 		return err
 	}
-	if version > 12 {
+	if version > 13 {
 		return errors.New("database is newer than this binary; use a compatible version or restore backup")
 	}
 	if version == 0 {
@@ -249,6 +254,14 @@ func (s *Store) migrate() error {
 			return err
 		}
 	}
+	if version < 13 {
+		if _, err = tx.ExecContext(ctx, migrationThirteen); err != nil {
+			return err
+		}
+		if _, err = tx.ExecContext(ctx, "INSERT INTO schema_migrations(version,applied_at) VALUES(13,?)", time.Now().Unix()); err != nil {
+			return err
+		}
+	}
 	return tx.Commit()
 }
 func randomToken() string {
@@ -283,18 +296,23 @@ func (s *Store) CreateUser(ctx context.Context, email, password string) (User, e
 	return user, err
 }
 func (s *Store) Authenticate(ctx context.Context, email, password string) (User, error) {
+	user, _, err := s.passwordProof(ctx, email, password)
+	return user, err
+}
+func (s *Store) passwordProof(ctx context.Context, email, password string) (User, int64, error) {
 	email, err := NormalizeEmail(email)
 	if err != nil {
 		email = ""
 	}
 	if len(password) > 1024 {
-		return User{}, ErrCredentials
+		return User{}, 0, ErrCredentials
 	}
 	var user User
 	var hash string
-	err = s.db.QueryRowContext(ctx, "SELECT id,email,password_hash,display_name,timezone FROM users WHERE email=?", email).Scan(&user.ID, &user.Email, &hash, &user.Name, &user.Timezone)
+	var version int64
+	err = s.db.QueryRowContext(ctx, "SELECT id,email,password_hash,display_name,timezone,auth_version FROM users WHERE email=?", email).Scan(&user.ID, &user.Email, &hash, &user.Name, &user.Timezone, &version)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return User{}, err
+		return User{}, 0, err
 	}
 	exists := err == nil
 	if !exists {
@@ -302,32 +320,46 @@ func (s *Store) Authenticate(ctx context.Context, email, password string) (User,
 	}
 	match, err := argon2id.ComparePasswordAndHash(password, hash)
 	if err != nil {
-		return User{}, err
+		return User{}, 0, err
 	}
 	if !match || !exists {
-		return User{}, ErrCredentials
+		return User{}, 0, ErrCredentials
 	}
-	return user, nil
+	return user, version, nil
 }
 func (s *Store) NewSession(ctx context.Context, userID string) (string, Session, error) {
-	token := randomToken()
-	hash := sha256.Sum256([]byte(token))
-	session := Session{CSRF: randomToken(), ExpiresAt: time.Now().Add(SessionTTL).Truncate(time.Second)}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return "", Session{}, err
 	}
 	defer tx.Rollback()
-	if _, err = tx.ExecContext(ctx, "DELETE FROM sessions WHERE expires_at<=?", time.Now().Unix()); err != nil {
+	var enabled bool
+	if err = tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM user_mfa WHERE user_id=? AND enabled=1)", userID).Scan(&enabled); err != nil {
 		return "", Session{}, err
 	}
-	if err = tx.QueryRowContext(ctx, "SELECT id,email,display_name,timezone FROM users WHERE id=?", userID).Scan(&session.User.ID, &session.User.Email, &session.User.Name, &session.User.Timezone); err != nil {
-		return "", Session{}, ErrNotFound
+	if enabled {
+		return "", Session{}, ErrSecondFactor
 	}
-	if _, err = tx.ExecContext(ctx, "INSERT INTO sessions(token_hash,user_id,csrf_token,expires_at) VALUES(?,?,?,?)", hash[:], userID, session.CSRF, session.ExpiresAt.Unix()); err != nil {
+	token, session, err := s.newSessionTx(ctx, tx, userID)
+	if err != nil {
 		return "", Session{}, err
 	}
 	if err = tx.Commit(); err != nil {
+		return "", Session{}, err
+	}
+	return token, session, nil
+}
+func (s *Store) newSessionTx(ctx context.Context, tx *sql.Tx, userID string) (string, Session, error) {
+	token := randomToken()
+	hash := sha256.Sum256([]byte(token))
+	session := Session{CSRF: randomToken(), ExpiresAt: s.now().Add(SessionTTL).Truncate(time.Second)}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM sessions WHERE expires_at<=?", s.now().Unix()); err != nil {
+		return "", Session{}, err
+	}
+	if err := tx.QueryRowContext(ctx, "SELECT id,email,display_name,timezone FROM users WHERE id=?", userID).Scan(&session.User.ID, &session.User.Email, &session.User.Name, &session.User.Timezone); err != nil {
+		return "", Session{}, ErrNotFound
+	}
+	if _, err := tx.ExecContext(ctx, "INSERT INTO sessions(token_hash,user_id,csrf_token,expires_at) VALUES(?,?,?,?)", hash[:], userID, session.CSRF, session.ExpiresAt.Unix()); err != nil {
 		return "", Session{}, err
 	}
 	return token, session, nil
@@ -340,7 +372,7 @@ func (s *Store) Session(ctx context.Context, token string) (Session, error) {
 	hash := sha256.Sum256([]byte(token))
 	var session Session
 	var expiry int64
-	err = s.db.QueryRowContext(ctx, "SELECT users.id,users.email,sessions.csrf_token,sessions.expires_at,users.display_name,users.timezone FROM sessions JOIN users ON users.id=sessions.user_id WHERE token_hash=? AND expires_at>?", hash[:], time.Now().Unix()).Scan(&session.User.ID, &session.User.Email, &session.CSRF, &expiry, &session.User.Name, &session.User.Timezone)
+	err = s.db.QueryRowContext(ctx, "SELECT users.id,users.email,sessions.csrf_token,sessions.expires_at,users.display_name,users.timezone FROM sessions JOIN users ON users.id=sessions.user_id WHERE token_hash=? AND expires_at>?", hash[:], s.now().Unix()).Scan(&session.User.ID, &session.User.Email, &session.CSRF, &expiry, &session.User.Name, &session.User.Timezone)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Session{}, ErrNotFound
 	}
@@ -353,8 +385,15 @@ func (s *Store) RevokeSession(ctx context.Context, token string) error {
 	return err
 }
 func (s *Store) RevokeAll(ctx context.Context, userID string) error {
-	_, err := s.db.ExecContext(ctx, "DELETE FROM sessions WHERE user_id=?", userID)
-	return err
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err = s.revokeSessionsTx(ctx, tx, userID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // Accounts contain ownership metadata only at this stage, never mail credentials.

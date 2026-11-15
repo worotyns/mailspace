@@ -75,3 +75,6 @@ MS-006 secure quoting is implemented in the full browser composer (ADR-0038): ex
 
 
 Usability feedback: compact eye/download/close controls, explicit inline local PNG/JPEG/CID image previews, visible upper-right send certainty and Decision Model settings naming are implemented in ADR-0039. Remaining active feedback: inline To/Cc/Bcc and multiple recipients, displayed recipient metadata, reliable People-directory datalists. Authenticator App 2FA is newly required as MS-021 (not implemented yet); it needs its own ADR, migration, recovery and integrated authorization tests. The owner will perform manual UI checks later.
+
+
+MS-021 identity foundation is implemented in ADR-0040/schema 13, with a reviewed pinned TOTP library, separate encrypted auth keyring, session-bound enrollment, password-version checks, pending challenges, single-use TOTP/recovery and persistent rate/revocation guards. Full repository/race and production-image checks pass for this foundation. HTTP challenge/login, Settings Security UI/QR/recovery and CLI wiring are the next required slice; no usable MFA capability is claimed yet.

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Package credentialvault encrypts server-side IMAP/SMTP passwords only.
+// Package credentialvault encrypts server-side mail passwords or authentication
+// seeds. Authentication uses a separate keyring and user/purpose-bound AAD.
 // It must never receive OpenPGP private keys, key passphrases or decrypted mail.
 package credentialvault
 

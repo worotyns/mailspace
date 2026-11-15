@@ -41,3 +41,10 @@ MS-002 adds encrypted provider credentials and verified connection setup; see MA
 4. Start the binary version matching that backup. A binary refuses a newer schema version. Verify login, account ownership and session revocation using a test restore before relying on the backup.
 
 Do not copy a live SQLite file alone. Migration v1 is forward-only; no destructive down migration is provided. A future online backup command must use SQLite's consistent backup mechanism. Revoke all sessions after restoring an old backup if previously revoked sessions could otherwise reappear.
+
+
+## Authenticator App foundation (MS-021; not yet exposed in HTTP/UI)
+
+Migration 13 adds encrypted TOTP configuration, hashed one-time recovery codes and password-version-bound short-lived challenges. Existing users remain password-only until explicit enrollment. The identity service now enforces configured MFA before minting sessions and consumes proof transactionally; the login/Settings integration is the next slice. This is not yet a usable MFA setup flow or an advertised capability.
+
+TOTP seeds use a separate `auth-keys` keyring beside SQLite, created only by explicit enrollment. Back up that complete directory with SQLite; credential-keys and browser OpenPGP exports remain separate. Missing auth keys fails closed for TOTP. A matching valid recovery code is an explicit alternative factor, never password-only fallback. Rollback from schema 13 needs a pre-upgrade backup and compatible binary; do not edit migration records. A database restore can resurrect revoked authentication state or consumed recovery codes: revoke restored sessions/challenges and replace the recovery set before relying on it. An older password reset must never be mistaken for removal of 2FA.
