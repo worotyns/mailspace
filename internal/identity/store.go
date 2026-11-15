@@ -69,6 +69,9 @@ var migrationTwelve string
 //go:embed migrations/013_authenticator_mfa.sql
 var migrationThirteen string
 
+//go:embed migrations/014_source_grants.sql
+var migrationFourteen string
+
 type User struct {
 	Name     string `json:"name"`
 	Timezone string `json:"timezone"`
@@ -155,7 +158,7 @@ func (s *Store) migrate() error {
 	if err = tx.QueryRowContext(ctx, "SELECT coalesce(max(version),0) FROM schema_migrations").Scan(&version); err != nil {
 		return err
 	}
-	if version > 13 {
+	if version > 14 {
 		return errors.New("database is newer than this binary; use a compatible version or restore backup")
 	}
 	if version == 0 {
@@ -259,6 +262,14 @@ func (s *Store) migrate() error {
 			return err
 		}
 		if _, err = tx.ExecContext(ctx, "INSERT INTO schema_migrations(version,applied_at) VALUES(13,?)", time.Now().Unix()); err != nil {
+			return err
+		}
+	}
+	if version < 14 {
+		if _, err = tx.ExecContext(ctx, migrationFourteen); err != nil {
+			return err
+		}
+		if _, err = tx.ExecContext(ctx, "INSERT INTO schema_migrations(version,applied_at) VALUES(14,?)", time.Now().Unix()); err != nil {
 			return err
 		}
 	}
@@ -432,4 +443,19 @@ func (s *Store) Accounts(ctx context.Context, ownerID string) ([]Account, error)
 
 // Database is for internal composition-root wiring of reviewed SQL repositories.
 // HTTP handlers and external integrations must not receive this connection.
+// UserByEmail resolves one provisioned user by normalized email so an owner can
+// name an explicit grant recipient. It never exposes credentials.
+func (s *Store) UserByEmail(ctx context.Context, email string) (User, error) {
+	email, err := NormalizeEmail(email)
+	if err != nil {
+		return User{}, ErrInput
+	}
+	var user User
+	err = s.db.QueryRowContext(ctx, "SELECT id,email,display_name,timezone FROM users WHERE email=?", email).Scan(&user.ID, &user.Email, &user.Name, &user.Timezone)
+	if errors.Is(err, sql.ErrNoRows) {
+		return User{}, ErrNotFound
+	}
+	return user, err
+}
+
 func (s *Store) Database() *sql.DB { return s.db }

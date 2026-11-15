@@ -309,3 +309,14 @@ Sent mail shows a cached recipient display name with the address beneath; receiv
 Automated evidence: Go tests cover name/Cc parsing with address compatibility and no Bcc invention, bounded header repair with body non-leak and idempotence, the `Messages()` repair path persisting the upgrade, the two-line identity rendering with cached names, the reader To/Cc block never showing Bcc, and two-way People aggregation. Client tests cover the recipient-fragment parser and stale/aborted suggestion responses. PostgreSQL and AI compose were removed from the plan; no storage engine, model, provider or export boundary changed.
 
 Not covered: a real headless-Chrome/keyboard/mobile pass and owner manual acceptance of the recipient lines, real-provider Cc/name rendering, and recipient names for mail that predates the repair (they upgrade on the next timeline read). Docker/actionlint remain unavailable.
+
+
+## MS-009/MS-010 source-grant foundation — ADR-0045, schema 14
+
+Migration 014 adds `source_grants` (organization, account, mailbox, grantor, grantee, `can_download`, unique on account+mailbox+grantee) and a nullable `message_collections.workspace_id`. `internal/sharing` implements the deny-by-default authorization layer: only the current account owner may create or replace a grant; the grantee must be a provisioned user and a current organization member; self-grants, unknown organization/account/user and non-member grantees fail closed with no row written; a non-empty mailbox grant covers only that folder and an empty mailbox covers the account's folders. `Authorized` and `GrantedAccounts` re-check, in one query, that the grantor still owns the account and that both users are still organization members, so revocation and membership removal block the next authorization immediately. Deleting the account or organization cascades the grant away.
+
+This slice is deliberately foundation-only: no HTTP endpoint, UI, timeline/attachment/job path, model call, rule or personal read calls the service, so no organization member gains private-mail access. `can_download` is stored but not enforced. OpenPGP keys, decrypted material, provider credentials and send-as cannot be represented by a grant.
+
+Automated evidence: `go test ./internal/sharing/` covers two-user grant/authorize/revoke, foreign-grantor denial, non-member grantee denial, self-grant rejection, invalid mailbox rejection, unknown workspace/account/user fail-closed, all-folder versus folder-scoped authorization, owner-only management listing, foreign-revoke denial, immediate revocation, member-removal fail-closed and grantor-removal fail-closed. The identity migration test suite runs schema 14 and rejects a newer-than-binary database.
+
+Not covered: enforcement on any read/download/job path, grant management UI/endpoint, per-user unread/tags/assignment (MS-010) and separate send-as remain open. Docker/actionlint remain unavailable.

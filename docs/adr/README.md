@@ -72,3 +72,5 @@ Accepted oznacza decyzję projektową, nie gotową implementację. Zmiany przez 
 - [0043 — Provider-synchronized read state](0043.md)
 
 - [0044 — Cached recipient display names and honest To/Cc](0044.md)
+
+- [0045 — Team source grants foundation](0045.md)

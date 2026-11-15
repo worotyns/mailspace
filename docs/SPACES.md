@@ -20,6 +20,8 @@ A Space has a scope (private owner or organization), a name, authorized source s
 
 Match results select authorized individual message references. Original email threads are transport context, never the Space membership unit. They never create shares, alter membership or grant send-as. Private sources remain private until the owner explicitly shares particular threads or authorizes a separate shared mailbox. Team-space viewers must pass both membership and thread/source ACL. Revocation is checked on every read, attachment, search result and future live event. Unknown rule/operator/provenance fails closed.
 
+The source-grant foundation is implemented (ADR-0045, schema 14): explicit per-organization grants for one account/folder, createable only by the current account owner for a current member, with immediate revocation and membership-removal checks on every authorization call. No team read path, management UI or job uses it yet, so no member gains private-mail access from this foundation. Enforcement is the next slice; `can_download` and separate send-as are not enforced yet.
+
 Rule changes need dry-run previews before apply; trace contains rule/input ids and safe metadata, not decrypted content. Classification is idempotent and does not copy or mutate remote mail. A Space is a view, not an IMAP folder or another storage server. A future move/tag/send action requires its own explicit permission and confirmation semantics. Internal reviewed contracts only; contribution remains fork → PR → review → merge.
 
 MS-009/MS-010 cover sharing/roles/tags; MS-013 covers the optional deterministic decision engine. Their delivery must keep this distinction between relevance and permission.
