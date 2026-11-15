@@ -25,7 +25,8 @@ func (p *panelWriter) prepare() {
 func (p *panelWriter) WriteHeader(code int)          { p.prepare(); p.ResponseWriter.WriteHeader(code) }
 func (p *panelWriter) Write(raw []byte) (int, error) { p.prepare(); return p.ResponseWriter.Write(raw) }
 func appPanelPath(path string) bool {
-	if path == "/" {
+	switch path {
+	case "/", "/security", "/security/authenticator/setup", "/security/authenticator/enable", "/security/authenticator/cancel", "/security/authenticator/recovery", "/security/authenticator/disable":
 		return true
 	}
 	for _, prefix := range []string{"/settings", "/profile", "/workspaces", "/accounts", "/keys", "/rules", "/labels", "/automation", "/secure/compose", "/messages/read", "/outbox", "/archive"} {

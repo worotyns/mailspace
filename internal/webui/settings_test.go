@@ -64,12 +64,18 @@ func TestLoginBrandEmphasizesMailOnly(t *testing.T) {
 	}
 }
 
-func TestSecurityNavigationLeavesPanelBeforeSessionRotation(t *testing.T) {
-	response := httptest.NewRecorder()
-	if err := RenderAuth(response, false, "security", AuthPageData{}); err != nil {
-		t.Fatal(err)
-	}
-	if !regexp.MustCompile(`<a\s+href="/security"[^>]*target="_top"`).MatchString(response.Body.String()) {
-		t.Fatal("security changes must leave a parent document with an older session/CSRF")
+func TestSecurityNavigationStaysInPanelAndSignalsOnlyRotatedSessions(t *testing.T) {
+	for _, rotated := range []bool{false, true} {
+		response := httptest.NewRecorder()
+		if err := RenderAuth(response, false, "security", AuthPageData{Security: SecurityPageData{SessionRotated: rotated}}); err != nil {
+			t.Fatal(err)
+		}
+		link := regexp.MustCompile(`<a\s+href="/security"[^>]*>`).FindString(response.Body.String())
+		if link == "" || strings.Contains(link, `target="_top"`) {
+			t.Fatal("security navigation escapes its settings panel")
+		}
+		if strings.Contains(response.Body.String(), "data-session-rotated") != rotated {
+			t.Fatal("session change marker missing or redisplayed on normal GET")
+		}
 	}
 }

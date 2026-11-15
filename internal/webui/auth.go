@@ -31,10 +31,10 @@ type AccountForm struct {
 	SameCredentials bool
 }
 type SecurityPageData struct {
-	Enabled, Pending, RecoveryMethod, SetupUnavailable bool
-	Remaining                                          int
-	EnrollmentSecret                                   string
-	RecoveryCodes                                      []string
+	Enabled, Pending, RecoveryMethod, SetupUnavailable, SessionRotated bool
+	Remaining                                                          int
+	EnrollmentSecret                                                   string
+	RecoveryCodes                                                      []string
 }
 
 func (SecurityPageData) String() string   { return "<redacted security page>" }

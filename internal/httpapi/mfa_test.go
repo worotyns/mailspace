@@ -424,3 +424,47 @@ func TestAuthenticatorHTTPKeyLossRequiresExplicitRecovery(t *testing.T) {
 		t.Fatal("login regenerated lost auth keyring")
 	}
 }
+
+func TestAuthenticatorPanelFramingAndRotationMarker(t *testing.T) {
+	h := newMFAHTTPTest(t)
+	ctx := context.Background()
+	u, cookie, s := h.user("panel@example.test")
+	frameRequest := func(method, path string, values url.Values) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, mfaTestOrigin+path, strings.NewReader(values.Encode()))
+		req.Header.Set("Sec-Fetch-Dest", "iframe")
+		req.Header.Set("Origin", mfaTestOrigin)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.AddCookie(cookie)
+		response := httptest.NewRecorder()
+		h.handler.ServeHTTP(response, req)
+		return response
+	}
+	framed := frameRequest("GET", "/security", nil)
+	mfaStatus(t, framed, 200)
+	if !strings.Contains(framed.Header().Get("Content-Security-Policy"), "frame-ancestors 'self'") || framed.Header().Get("X-Frame-Options") != "SAMEORIGIN" {
+		t.Fatal("trusted security panel blocked")
+	}
+	setup := frameRequest("POST", "/security/authenticator/setup", url.Values{"csrf": {s.CSRF}, "password": {mfaTestPassword}})
+	mfaStatus(t, setup, 303)
+	enrollment, err := h.store.PendingMFAEnrollment(ctx, u.ID, cookie.Value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	qr := frameRequest("GET", "/security/authenticator/qr", nil)
+	mfaStatus(t, qr, 200)
+	if strings.Contains(qr.Header().Get("Content-Security-Policy"), "frame-ancestors 'self'") {
+		t.Fatal("QR resource admitted as an application document")
+	}
+	code, _ := totp.GenerateCode(enrollment.Secret, time.Now())
+	enabled := frameRequest("POST", "/security/authenticator/enable", url.Values{"csrf": {s.CSRF}, "code": {code}})
+	mfaStatus(t, enabled, 200)
+	if !strings.Contains(enabled.Body.String(), "data-session-rotated") || !strings.Contains(enabled.Header().Get("Content-Security-Policy"), "frame-ancestors 'self'") {
+		t.Fatal("factor activation escaped panel or failed to announce session rotation")
+	}
+	full := mfaCookie(t, enabled, cookie.Name)
+	normal := h.request("GET", "/security", "", nil, full)
+	mfaStatus(t, normal, 200)
+	if strings.Contains(normal.Body.String(), "data-session-rotated") {
+		t.Fatal("normal read replayed session rotation")
+	}
+}

@@ -2,6 +2,9 @@
 // Frames below contain trusted app pages only, never arbitrary URLs/mail HTML.
 const allowed =
   /^\/(settings|profile|workspaces|accounts|keys|rules|labels|automation|secure\/compose|messages\/read|outbox|archive\/preview)(\/|$)/;
+function panelPath(path) {
+  return path === "/security" || allowed.test(path);
+}
 const recordedStates = new Set([
   "pending",
   "sending",
@@ -241,7 +244,7 @@ document.addEventListener(
     )
       return;
     const url = ownURL(link.href);
-    if (!url || !allowed.test(url.pathname)) return;
+    if (!url || !panelPath(url.pathname)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     open(url);
@@ -256,6 +259,10 @@ window.addEventListener("message", (event) => {
   )
     return;
   const data = event.data;
+  if (data?.type === "mailspace:session-rotated") {
+    window.dispatchEvent(new Event("mailspace:session-rotated"));
+    return;
+  }
   if (data?.type === "mailspace:commands") {
     document.dispatchEvent(
       new KeyboardEvent("keydown", { key: "k", ctrlKey: true }),
@@ -287,7 +294,7 @@ window.addEventListener("message", (event) => {
         clearFrame();
         location.assign(url.href);
       });
-    } else if (allowed.test(url.pathname) || url.pathname === "/compose") {
+    } else if (panelPath(url.pathname) || url.pathname === "/compose") {
       guard(() => replacePanel(url));
     }
   }

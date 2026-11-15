@@ -295,3 +295,67 @@ test("panel navigation shows pending state, deduplicates pending URL and ignores
     h.dom.window.close();
   }
 });
+
+test("Security navigation replaces only the panel and trusts session-change notices only from its active same-origin child", () => {
+  const h = harness();
+  try {
+    let rotations = 0;
+    h.window.addEventListener("mailspace:session-rotated", () => rotations++);
+    h.click("#keys");
+    const previous = h.getFrame();
+    h.send({ type: "mailspace:panel-navigate", href: origin + "/security" });
+    const security = h.getFrame();
+    assert.notEqual(security, previous);
+    assert.equal(security.src, origin + "/security");
+    assert.equal(h.navigations.length, 0);
+    assert.equal(
+      h.window.document.querySelector("#app-panel-dialog").open,
+      true,
+    );
+    h.send(
+      { type: "mailspace:session-rotated" },
+      { source: previous.contentWindow },
+    );
+    assert.equal(rotations, 0);
+    h.send(
+      { type: "mailspace:session-rotated" },
+      { origin: "https://foreign.test" },
+    );
+    assert.equal(rotations, 0);
+    h.send({ type: "mailspace:session-rotated" });
+    assert.equal(rotations, 1);
+    assert.equal(h.navigations.length, 0);
+  } finally {
+    h.dom.window.close();
+  }
+});
+
+test("Security child announces a session change without sending credentials or setup/recovery contents", () => {
+  const dom = new JSDOM(`<iframe src="${origin}/security"></iframe>`, {
+    url: origin + "/",
+    runScripts: "outside-only",
+  });
+  try {
+    const child = dom.window.document.querySelector("iframe").contentWindow;
+    child.document.open();
+    child.document.write(
+      `<main data-session-rotated><code>PRIVATE_SEED_CANARY</code><input name="csrf" value="PRIVATE_TOKEN_CANARY"><input name="password" value="PRIVATE_PASSWORD_CANARY"><a id="security" href="${origin}/security">Security</a></main>`,
+    );
+    child.document.close();
+    const messages = [];
+    dom.window.postMessage = (data, target) => {
+      assert.equal(target, origin);
+      messages.push(data);
+    };
+    new child.Function(childSource)();
+    assert.deepEqual(JSON.parse(JSON.stringify(messages)), [
+      { type: "mailspace:session-rotated" },
+    ]);
+    child.document.getElementById("security").click();
+    assert.equal(messages.at(-1).type, "mailspace:panel-navigate");
+    assert.equal(messages.at(-1).href, origin + "/security");
+    assert.equal(JSON.stringify(messages).includes("PRIVATE_"), false);
+  } finally {
+    dom.window.close();
+  }
+});

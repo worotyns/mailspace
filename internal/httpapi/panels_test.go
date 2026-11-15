@@ -16,12 +16,12 @@ func TestPanelCSPOnlyAllowsSameOriginAndKeepsCryptoRestrictions(t *testing.T) {
 	if !strings.Contains(policy, "frame-ancestors 'self'") || !strings.Contains(policy, "connect-src 'none'") || response.Header().Get("X-Frame-Options") != "SAMEORIGIN" {
 		t.Fatal(policy)
 	}
-	for _, path := range []string{"/assets/app.css", "/api/messages/raw", "/keys-foreign", "https://foreign.test/keys"} {
+	for _, path := range []string{"/assets/app.css", "/api/messages/raw", "/keys-foreign", "https://foreign.test/keys", "/security-foreign", "/security/authenticator/qr", "/security/authenticator/unknown"} {
 		if appPanelPath(path) {
 			t.Fatal("non-app document framed", path)
 		}
 	}
-	for _, path := range []string{"/keys", "/secure/compose", "/accounts/new", "/settings"} {
+	for _, path := range []string{"/keys", "/secure/compose", "/accounts/new", "/settings", "/security", "/security/authenticator/enable", "/security/authenticator/recovery"} {
 		if !appPanelPath(path) {
 			t.Fatal("missing app panel", path)
 		}

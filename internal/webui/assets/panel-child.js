@@ -16,6 +16,8 @@
   }
   document.documentElement.classList.add("in-app-panel");
   const send = (data) => window.parent.postMessage(data, location.origin);
+  if (document.querySelector("[data-session-rotated]"))
+    send({ type: "mailspace:session-rotated" });
   const appPath =
     /^\/(settings|profile|workspaces|accounts|keys|rules|labels|automation|compose|secure\/compose|messages\/read|outbox|archive\/preview)(\/|$)/;
   const fields = ["to", "cc", "bcc", "subject", "body"].map((name) =>
@@ -64,7 +66,9 @@
       const url = new URL(link.href, location.href);
       if (
         url.origin === location.origin &&
-        (url.pathname === "/" || appPath.test(url.pathname))
+        (url.pathname === "/" ||
+          url.pathname === "/security" ||
+          appPath.test(url.pathname))
       ) {
         event.preventDefault();
         event.stopImmediatePropagation();

@@ -88,7 +88,7 @@ func mfaRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store,
 		}
 		return data, nil
 	}
-	securityPage := func(w http.ResponseWriter, r *http.Request, s identity.Session, status int, message string, codes identity.RecoveryCodes) {
+	securityPage := func(w http.ResponseWriter, r *http.Request, s identity.Session, status int, message string, codes identity.RecoveryCodes, rotated bool) {
 		data, err := securityData(r, s)
 		if err != nil {
 			http.Error(w, "Authenticator setup unavailable; restore auth-keys or cancel the pending setup", 503)
@@ -96,9 +96,12 @@ func mfaRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store,
 		}
 		data.Message = message
 		data.Security.RecoveryCodes = codes
+		data.Security.SessionRotated = rotated
 		render(w, status, "security", data)
 	}
-	mux.HandleFunc("GET /security", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) { securityPage(w, r, s, 200, "", nil) }))
+	mux.HandleFunc("GET /security", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
+		securityPage(w, r, s, 200, "", nil, false)
+	}))
 	mux.HandleFunc("GET /security/authenticator/qr", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {
 		cookie, _ := r.Cookie(cookieName)
 		enrollment, err := store.PendingMFAEnrollment(r.Context(), s.User.ID, cookie.Value)
@@ -171,7 +174,7 @@ func mfaRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store,
 					w.Header().Set("Retry-After", "300")
 				}
 				// Keep the explicit recovery/cancel forms available on key loss.
-				securityPage(w, r, s, status, message, nil)
+				securityPage(w, r, s, status, message, nil, false)
 				return
 			}
 			if result.Token == "" {
@@ -186,7 +189,7 @@ func mfaRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store,
 			if action == "disable" {
 				message = "Authenticator disabled. All other sessions were signed out."
 			}
-			securityPage(w, r, result.Session, 200, message, result.Codes)
+			securityPage(w, r, result.Session, 200, message, result.Codes, true)
 		}))
 	}
 	challengePage := func(w http.ResponseWriter, r *http.Request, status int, message string) {
