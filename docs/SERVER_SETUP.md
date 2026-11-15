@@ -87,7 +87,7 @@ Write inline first, then select Encrypt. Unlock in the small modal; sending is a
 
 ## 6. Persistence and backup
 
-The named volume contains the SQLite database, its possible WAL/SHM files and the credential keyring beside it. Keep them together. Ordinary mail cache/outbox and metadata are sensitive; server credential encryption is not whole-database encryption. Browser OpenPGP vault/drafts are outside this volume.
+The named volume contains the SQLite database, its possible WAL/SHM files, the credential keyring and (after Authenticator enrollment) the separate auth-keys keyring beside it. Keep them together. Ordinary mail cache/outbox and metadata are sensitive; server credential encryption is not whole-database encryption. Browser OpenPGP vault/drafts are outside this volume.
 
 For an offline backup, stop all app/provisioning processes using this volume. Use a new output filename; never overwrite your last known-good backup:
 
@@ -134,9 +134,11 @@ Operator-only local commands use the same configured volume/DB. They are not pub
 ```sh
 docker compose run --rm --no-deps mailspace user password you@example.com
 docker compose run --rm --no-deps mailspace user revoke-sessions you@example.com
+# Explicit operator recovery only if Authenticator/recovery codes are unavailable:
+docker compose run --rm --no-deps mailspace user reset-2fa you@example.com
 ```
 
-The password command prompts privately and commits the password change plus all that user's session revocations atomically. It does not change provider passwords, OpenPGP keys or their passphrases. Run `user add` again with another email to provision another isolated user. There is no public signup, MFA, SMTP invitation mail or shared-mail ACL implementation yet.
+The password command prompts privately and commits the password change plus all that user's session revocations atomically. It does not change provider passwords, OpenPGP keys or their passphrases. Run `user add` again with another email to provision another isolated user. Authenticator App 2FA is available in Settings → Security; password reset retains it. There is no public signup, SMTP invitation mail or shared-mail ACL implementation yet.
 
 ## Troubleshooting
 
@@ -154,3 +156,6 @@ See [Local rules](RULES.md). Save a sender/domain/subject rule disabled, preview
 ## Schema 10 workflow upgrade
 
 Back up the database and installation credential keyring before upgrading. Schema 12 adds bounded local rule expressions; schema 11 added metadata ordering/FK indexes on top of schema 10 local archives and the 16-color palette, without indexing message bodies. Existing labels are available again as private status metadata in Settings, filters and scoped actions; they are not shown in the sidebar. Archive does not move mail remotely. See [workflow](WORKFLOW.md) for drawer, People, command and attachment limits. Rollback requires a pre-upgrade database/keyring and matching image.
+
+
+Authenticator recovery: users should save the ten one-time codes displayed on enrollment and may explicitly select one at sign-in. QR/manual seed are local and session-bound; app time must be synchronized. `user reset-2fa` removes that user's factor/recovery codes and revokes sessions/challenges, retaining the password. Back up the complete `auth-keys` directory with SQLite; losing it prevents app-code verification, while a valid recovery code remains an explicit alternative. Litestream does not back up these files. Restoring an older DB can restore consumed codes: revoke sessions/challenges for every restored user and replace recovery sets before accepting the restored service. See [IDENTITY.md](IDENTITY.md).

@@ -16,6 +16,7 @@ func TestSettingsPagesShareNavigationAndStableContentWrapper(t *testing.T) {
 		{"identity-home", "/settings", AuthPageData{}},
 		{"account-settings", "/settings", AuthPageData{}},
 		{"profile", "/profile", AuthPageData{}},
+		{"security", "/security", AuthPageData{}},
 		{"keys", "/keys", AuthPageData{}},
 		{"workspaces", "/workspaces", AuthPageData{}},
 		{"workspace-members", "/workspaces", AuthPageData{}},
@@ -60,5 +61,15 @@ func TestLoginBrandEmphasizesMailOnly(t *testing.T) {
 	}
 	if strings.Contains(html, "settings-navigation") {
 		t.Fatal("settings navigation leaked into sign-in")
+	}
+}
+
+func TestSecurityNavigationLeavesPanelBeforeSessionRotation(t *testing.T) {
+	response := httptest.NewRecorder()
+	if err := RenderAuth(response, false, "security", AuthPageData{}); err != nil {
+		t.Fatal(err)
+	}
+	if !regexp.MustCompile(`<a\s+href="/security"[^>]*target="_top"`).MatchString(response.Body.String()) {
+		t.Fatal("security changes must leave a parent document with an older session/CSRF")
 	}
 }

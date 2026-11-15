@@ -369,3 +369,17 @@ func replaceRecoveryTx(ctx context.Context, tx *sql.Tx, user string) (RecoveryCo
 	}
 	return codes, nil
 }
+
+// CancelMFAEnrollment removes only a pending setup owned by the current session.
+func (s *Store) CancelMFAEnrollment(ctx context.Context, user, token string) error {
+	hash := sha256.Sum256([]byte(token))
+	result, err := s.db.ExecContext(ctx, `DELETE FROM user_mfa WHERE user_id=? AND enabled=0 AND setup_session=? AND EXISTS(SELECT 1 FROM sessions WHERE user_id=? AND token_hash=? AND expires_at>?)`, user, hash[:], user, hash[:], s.now().Unix())
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	if err == nil && n != 1 {
+		return ErrNotFound
+	}
+	return err
+}

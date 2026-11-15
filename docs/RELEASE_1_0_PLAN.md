@@ -64,4 +64,4 @@ ADR-0038 implements exact-source bounded quotes in the full browser composer, wi
 
 ### Added owner requirements before 1.0
 
-Complete the remaining recipient/People suggestion UI feedback and Authenticator App 2FA (MS-021). TOTP must gate session creation, with secure enrollment, recovery, replay/rate guards, encrypted seeds and ownership/migration tests. A spec is not an implementation; MFA remains unavailable until that slice is actually delivered.
+Complete the remaining recipient/People suggestion UI feedback. Authenticator App 2FA (MS-021/ADR-0040) is implemented with integrated session gating, Security enrollment/local QR, recovery, encrypted seeds, replay/rate/ownership guards and operator reset. Manual real-app/browser acceptance remains open.

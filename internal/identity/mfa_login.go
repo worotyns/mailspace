@@ -221,3 +221,10 @@ func commitMFAFailure(tx *sql.Tx, err error) error {
 	}
 	return err
 }
+
+// RevokeMFALogin cancels an unprivileged challenge; HTTP callers verify its CSRF.
+func (s *Store) RevokeMFALogin(ctx context.Context, token string) error {
+	hash := sha256.Sum256([]byte(token))
+	_, err := s.db.ExecContext(ctx, "DELETE FROM mfa_challenges WHERE token_hash=?", hash[:])
+	return err
+}

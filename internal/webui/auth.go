@@ -30,7 +30,18 @@ type AccountForm struct {
 	SMTPUser        string
 	SameCredentials bool
 }
+type SecurityPageData struct {
+	Enabled, Pending, RecoveryMethod, SetupUnavailable bool
+	Remaining                                          int
+	EnrollmentSecret                                   string
+	RecoveryCodes                                      []string
+}
+
+func (SecurityPageData) String() string   { return "<redacted security page>" }
+func (SecurityPageData) GoString() string { return "<redacted security page>" }
+
 type AuthPageData struct {
+	Security              SecurityPageData
 	Icons                 template.HTML
 	ClassifyReference     string
 	ClassifyProvider      string

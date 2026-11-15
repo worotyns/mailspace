@@ -86,3 +86,20 @@ func recoverUser(email string, reset bool) error {
 	}
 	return err
 }
+
+// resetAuthenticator is an explicit local operator recovery action, never HTTP.
+func resetAuthenticator(email string) error {
+	if _, err := identity.NormalizeEmail(email); err != nil {
+		return err
+	}
+	store, err := identity.Open(databasePath())
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+	if err := store.ResetMFA(context.Background(), email); err != nil {
+		return err
+	}
+	fmt.Println("Authenticator disabled; all user sessions and pending sign-ins revoked. The password is unchanged.")
+	return nil
+}

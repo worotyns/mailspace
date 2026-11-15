@@ -82,6 +82,9 @@ Start explicitly:
 docker compose -f compose.yaml -f compose.backup.yaml up -d --build
 ```
 
-Litestream backs up SQLite, **not installation credential-key files, browser OpenPGP keys or local drafts**. Preserve the server keyring separately on installation/rotation, and export browser keys separately. Keep a separate keyring backup and verify recovery into a fresh installation before relying on replication. Configuring a replica is not proof that backups are current; monitor and periodically restore-test them.
+Litestream backs up SQLite, **not installation credential-key files, Authenticator auth-keys files, browser OpenPGP keys or local drafts**. Preserve the server keyring separately on installation/rotation, and export browser keys separately. Keep a separate keyring backup and verify recovery into a fresh installation before relying on replication. Configuring a replica is not proof that backups are current; monitor and periodically restore-test them.
 
 If startup reports missing JEV credentials/model, verify they reach the container, not just the host `.env`. After pulling changes run `docker compose up -d --build --force-recreate mailspace`. Never paste `docker compose config` or container inspection output containing real tokens into an issue. Disable classification temporarily with blank `MAILSPACE_JEV_PROVIDER`.
+
+
+Authenticator App 2FA needs no provider or environment switch. Users explicitly enroll under Settings → Security. Its separate `auth-keys` keyring is created beside `MAILSPACE_DB` only during enrollment (image default `/app/data/auth-keys`); there is no independent path override. Preserve the complete keyring and SQLite together, independently of provider credential keys and browser exports. No external QR/SMS/email service is contacted. See [IDENTITY.md](IDENTITY.md) for recovery and schema-13 rollback.

@@ -151,6 +151,7 @@ func NewPersonal(sourceDir string, store *identity.Store, config AuthConfig) (ht
 	}
 
 	cryptoSessionRoutes(mux, config, cookieName, protected)
+	mfaRoutes(mux, config, store, protected, mutation, cookieName, secure, expectedOrigin, limiter, slots)
 
 	connectionLimiter := &loginLimiter{entries: map[string]windowEntry{}}
 	connectionSlots := make(chan struct{}, 4)
@@ -605,7 +606,7 @@ func NewPersonal(sourceDir string, store *identity.Store, config AuthConfig) (ht
 		reply(w, map[string]string{"status": "ok", "mode": "personal"})
 	})
 	mux.HandleFunc("GET /api/capabilities", func(w http.ResponseWriter, r *http.Request) {
-		reply(w, map[string]any{"mode": "personal", "synthetic": config.Synthetic, "identity": true, "workspaces": true, "spaces": hasTimeline, "unifiedTimeline": hasTimeline, "localKeyVault": true, "encryptedMimeAlpha": config.Outbox != nil && config.Sync != nil, "threadSharing": false, "mailAccounts": config.Accounts != nil, "mail": config.Sync != nil, "readOnlyMail": config.Sync != nil, "sending": config.Outbox != nil, "openpgp": false, "telemetry": false, "modules": map[string]bool{"team": false, "ai": false, "drive": false, "decisionEngine": config.Decisions != nil && config.Decisions.Available(), "fullText": false, "semanticSearch": false}})
+		reply(w, map[string]any{"mode": "personal", "synthetic": config.Synthetic, "identity": true, "authenticatorMFA": true, "workspaces": true, "spaces": hasTimeline, "unifiedTimeline": hasTimeline, "localKeyVault": true, "encryptedMimeAlpha": config.Outbox != nil && config.Sync != nil, "threadSharing": false, "mailAccounts": config.Accounts != nil, "mail": config.Sync != nil, "readOnlyMail": config.Sync != nil, "sending": config.Outbox != nil, "openpgp": false, "telemetry": false, "modules": map[string]bool{"team": false, "ai": false, "drive": false, "decisionEngine": config.Decisions != nil && config.Decisions.Available(), "fullText": false, "semanticSearch": false}})
 	})
 	mux.HandleFunc("GET /login", func(w http.ResponseWriter, r *http.Request) {
 		if _, err := sessionFor(r); err == nil {
@@ -641,12 +642,15 @@ func NewPersonal(sourceDir string, store *identity.Store, config AuthConfig) (ht
 			http.Error(w, "Invalid form", 400)
 			return
 		}
-		user, err := store.Authenticate(r.Context(), r.PostForm.Get("email"), r.PostForm.Get("password"))
+		login, err := store.PasswordLogin(r.Context(), r.PostForm.Get("email"), r.PostForm.Get("password"))
 		if err != nil {
 			if errors.Is(err, identity.ErrCredentials) {
 				w.Header().Set("Content-Type", "text/html; charset=utf-8")
 				w.WriteHeader(401)
 				render(w, "login", webui.AuthPageData{Message: "Email or password not recognized."})
+			} else if errors.Is(err, identity.ErrMFARate) {
+				w.Header().Set("Retry-After", "300")
+				http.Error(w, "Too many pending sign-ins; wait five minutes", 429)
 			} else {
 				http.Error(w, "Sign-in service unavailable", 503)
 			}
@@ -658,12 +662,22 @@ func NewPersonal(sourceDir string, store *identity.Store, config AuthConfig) (ht
 				return
 			}
 		}
-		token, session, err := store.NewSession(r.Context(), user.ID)
-		if err != nil {
-			http.Error(w, "Unable to create session", 503)
+		if old, err := r.Cookie(cookieName + "-mfa"); err == nil {
+			if err = store.RevokeMFALogin(r.Context(), old.Value); err != nil {
+				http.Error(w, "Challenge rotation failed", 503)
+				return
+			}
+			expireAuthCookie(w, cookieName+"-mfa", secure)
+		}
+		if login.Challenge != "" {
+			if _, err := r.Cookie(cookieName); err == nil {
+				clearCookie(w)
+			}
+			authCookie(w, cookieName+"-mfa", secure, login.Challenge, login.ExpiresAt, identity.MFAChallengeTTL)
+			http.Redirect(w, r, "/auth/mfa", 303)
 			return
 		}
-		http.SetCookie(w, &http.Cookie{Name: cookieName, Value: token, Path: "/", Secure: secure, HttpOnly: true, SameSite: http.SameSiteStrictMode, Expires: session.ExpiresAt, MaxAge: int(identity.SessionTTL.Seconds())})
+		authCookie(w, cookieName, secure, login.Token, login.Session.ExpiresAt, identity.SessionTTL)
 		http.Redirect(w, r, "/", 303)
 	})
 	mux.HandleFunc("GET /api/session", protected(func(w http.ResponseWriter, r *http.Request, s identity.Session) {

@@ -21,6 +21,12 @@
       {{ if eq . "accounts" }}aria-current="page"{{ end }}
       >Accounts</a
     >
+    <a
+      href="/security"
+      {{ if eq . "security" }}aria-current="page"{{ end }}
+      target="_top"
+      >Security</a
+    >
     <a href="/keys" {{ if eq . "keys" }}aria-current="page"{{ end }}>Keys</a>
     <a href="/rules" {{ if eq . "rules" }}aria-current="page"{{ end }}>Rules</a>
     <a

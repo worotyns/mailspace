@@ -31,7 +31,7 @@ The named volume persists `/app/data`; the container still runs as an unprivileg
 
 Login requires an exact configured Origin. Session cookie is HttpOnly/SameSite Strict; production is Secure with __Host- prefix. Tokens are random, digested in SQLite, expire after eight hours and can be revoked on one/all devices. Logout additionally requires the session CSRF token. APIs return 401 for anonymous requests, and account access uses owner-scoped queries. Personal mode does not expose the shared demo conversations.
 
-MS-002 adds encrypted provider credentials and verified connection setup; see MAIL_ACCOUNTS.md. Browser OpenPGP vault data remains entirely separate. Profiles/timezones and organization membership are available (SPACES.md); they never grant private-mail access. Operator-only `user password EMAIL` resets the app password and atomically revokes that user’s sessions; `user revoke-sessions EMAIL` revokes sessions without changing the password. No public password-reset mail flow, MFA or open signup is implemented. These commands do not reset provider or OpenPGP passwords.
+MS-002 adds encrypted provider credentials and verified connection setup; see MAIL_ACCOUNTS.md. Browser OpenPGP vault data remains entirely separate. Profiles/timezones and organization membership are available (SPACES.md); they never grant private-mail access. Operator-only `user password EMAIL` resets the app password and atomically revokes that user’s sessions; `user revoke-sessions EMAIL` revokes sessions without changing the password. Authenticator App 2FA is available per user under Settings → Security. No public password-reset mail flow or open signup is implemented. These commands do not reset provider or OpenPGP passwords.
 
 ## Offline backup / rollback
 
@@ -43,8 +43,20 @@ MS-002 adds encrypted provider credentials and verified connection setup; see MA
 Do not copy a live SQLite file alone. Migration v1 is forward-only; no destructive down migration is provided. A future online backup command must use SQLite's consistent backup mechanism. Revoke all sessions after restoring an old backup if previously revoked sessions could otherwise reappear.
 
 
-## Authenticator App foundation (MS-021; not yet exposed in HTTP/UI)
+## Authenticator App 2FA (MS-021, ADR-0040)
 
-Migration 13 adds encrypted TOTP configuration, hashed one-time recovery codes and password-version-bound short-lived challenges. Existing users remain password-only until explicit enrollment. The identity service now enforces configured MFA before minting sessions and consumes proof transactionally; the login/Settings integration is the next slice. This is not yet a usable MFA setup flow or an advertised capability.
+Migration 13 adds encrypted TOTP configuration, hashed one-time recovery codes and password-version-bound short-lived challenges. Existing users remain password-only until explicit enrollment. Settings → Security requires your current password to start a ten-minute, session-bound setup. Scan the locally generated QR or enter the setup key into your Authenticator app (TOTP, six digits, 30 seconds, SHA-1), then confirm the first code. No external QR service receives the seed. Save the ten recovery codes shown once on activation; they are never redisplayed. Keep them outside the browser.
+
+After activation, a password creates only a five-minute pending challenge. `/auth/mfa` requires an app code or an explicitly selected unused recovery code before any mail/API/session access. Both steps require the configured Origin; the second step also has its own CSRF token. Codes cannot be reused, including the app step used during activation. Wait for a fresh app code before the next security action. Shared failure limits survive new challenges. Native forms work without JavaScript; local enhancement clears secrets on leaving/locking the page and adapts the code keyboard.
+
+Disabling the factor or replacing recovery codes requires the current password and a valid factor. Enabling, disabling and replacing codes rotate the current session and revoke other sessions/pending sign-ins. Password reset preserves enabled 2FA. A lost app can use a saved recovery code; if neither factor is available, only an operator with local installation access can explicitly reset it:
+
+```sh
+./mailspace user reset-2fa you@example.test
+# With the configured persistent Compose volume:
+docker compose run --rm --no-deps mailspace user reset-2fa you@example.com
+```
+
+This removes the factor/recovery set and revokes all sessions and pending sign-ins. It keeps the password, mail provider credentials and browser OpenPGP keys unchanged. There is no public reset endpoint, email bypass or password-only fallback.
 
 TOTP seeds use a separate `auth-keys` keyring beside SQLite, created only by explicit enrollment. Back up that complete directory with SQLite; credential-keys and browser OpenPGP exports remain separate. Missing auth keys fails closed for TOTP. A matching valid recovery code is an explicit alternative factor, never password-only fallback. Rollback from schema 13 needs a pre-upgrade backup and compatible binary; do not edit migration records. A database restore can resurrect revoked authentication state or consumed recovery codes: revoke restored sessions/challenges and replace the recovery set before relying on it. An older password reset must never be mistaken for removal of 2FA.

@@ -19,6 +19,7 @@ Built with Go, HTMX, Tailwind and SQLite. Fully open source. No mandatory AI, in
 - Write replies inline. Explicit Send unencrypted for ordinary mail, or Encrypt and unlock a local key in a compact dialog. No silent encrypted-parent downgrade. Full composition includes local encrypted drafts, attachments and an explicit Sign only (unencrypted) option with separate readable-content consent.
 - Native text/plain first; HTML-only mail opens automatically as readable text, without tags or HTML layout. Optional isolated formatted preview blocks external resources.
 - [Local rules](docs/RULES.md): reviewed sender/domain/subject matches assign incoming cached mail to Spaces without a model.
+- Optional per-user Authenticator App 2FA in Settings → Security, with local QR, one-time recovery codes and operator-only reset.
 - Local browser keys, explicit fingerprint trust, encrypted provider credentials, no telemetry/model/index by default. Organization membership is separate from private mail access.
 
 The local preview uses the same authenticated application with synthetic mail and isolated TLS providers.

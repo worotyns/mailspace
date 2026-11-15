@@ -14,6 +14,9 @@
     const path = new URL(event.target.action, location.href).pathname;
     if (
       path === "/auth/login" ||
+      path === "/auth/mfa" ||
+      path === "/auth/mfa/cancel" ||
+      path.startsWith("/security/authenticator/") ||
       path === "/auth/logout" ||
       path === "/auth/logout-all"
     ) {

@@ -464,3 +464,38 @@ func TestMFASeedCiphertextCannotBeTransplantedAcrossUsers(t *testing.T) {
 		t.Fatal("foreign user's seed ciphertext authorized a factor", err)
 	}
 }
+
+func TestMFACancelOnlyBoundPendingAndRevokeChallenge(t *testing.T) {
+	f := newMFAFixture(t, false)
+	ctx := context.Background()
+	if _, err := f.s.BeginMFAEnrollment(ctx, f.alice.ID, f.aliceToken, mfaPassword); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.s.CancelMFAEnrollment(ctx, f.alice.ID, f.bobToken); !errors.Is(err, ErrNotFound) {
+		t.Fatal("foreign session cancelled setup")
+	}
+	if err := f.s.CancelMFAEnrollment(ctx, f.bob.ID, f.aliceToken); !errors.Is(err, ErrNotFound) {
+		t.Fatal("foreign owner cancelled setup")
+	}
+	if err := f.s.CancelMFAEnrollment(ctx, f.alice.ID, f.aliceToken); err != nil {
+		t.Fatal(err)
+	}
+	enrollment, err := f.s.BeginMFAEnrollment(ctx, f.alice.ID, f.aliceToken, mfaPassword)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := f.s.ConfirmMFAEnrollment(ctx, f.alice.ID, f.aliceToken, mfaCode(t, enrollment.Secret, f.now))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.s.CancelMFAEnrollment(ctx, f.alice.ID, result.Token); !errors.Is(err, ErrNotFound) {
+		t.Fatal("cancel disabled enabled factor")
+	}
+	login, challenge := f.challenge(t)
+	if err := f.s.RevokeMFALogin(ctx, login.Challenge); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.s.CompleteMFALogin(ctx, login.Challenge, challenge.CSRF, MFAFactor{Code: result.Codes[0], Recovery: true}); !errors.Is(err, ErrNotFound) {
+		t.Fatal("cancelled challenge accepted")
+	}
+}

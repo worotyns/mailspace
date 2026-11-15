@@ -44,13 +44,19 @@ func main() {
 			}
 			return
 		}
+		if len(os.Args) == 4 && os.Args[1] == "user" && os.Args[2] == "reset-2fa" {
+			if err := resetAuthenticator(os.Args[3]); err != nil {
+				log.Fatal(err)
+			}
+			return
+		}
 		if len(os.Args) == 4 && os.Args[1] == "user" && os.Args[2] == "add" {
 			if err := addUser(os.Args[3]); err != nil {
 				log.Fatal(err)
 			}
 			return
 		}
-		log.Fatal("Usage: mailspace | mailspace seed | mailspace user add EMAIL | mailspace user password EMAIL | mailspace user revoke-sessions EMAIL | mailspace credentials rotate")
+		log.Fatal("Usage: mailspace | mailspace seed | mailspace user add EMAIL | mailspace user password EMAIL | mailspace user revoke-sessions EMAIL | mailspace user reset-2fa EMAIL | mailspace credentials rotate")
 	}
 	addr := os.Getenv("MAILSPACE_ADDR")
 	if addr == "" {
