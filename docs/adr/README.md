@@ -61,3 +61,4 @@ Accepted oznacza decyzję projektową, nie gotową implementację. Zmiany przez 
 - [0035 — Scoped reference threading and bounded cached header repair](0035.md)
 - [0036 — Safari worker module CSP compatibility](0036.md)
 - [0037 — Explicit authored signed-only transport](0037.md)
+- [0038 — Explicit local original-message quotes](0038.md)

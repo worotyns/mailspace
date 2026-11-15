@@ -55,3 +55,8 @@ ADR-0037 connects a dedicated authored-only signed MIME endpoint to durable sing
 ### MS-006 full-composer signed-only action
 
 The full composer now exposes Sign only (unencrypted) with separate explicit consent and a truthful send button. Recipient keys are optional for that mode; verified sender/signing-key checks remain mandatory. Encrypted-source downgrade is disabled in the UI and rejected by the backend. Draft load, lock/hide and sent cleanup reset to encryption and revoke prior plaintext consent. HTTP reply-mode changes retain the selected original references. Client egress and isolated desktop/phone/short-window acceptance cover Unicode/binary attachments and single-attempt ambiguous outcomes. Signed-only implementation is complete for authored full-composer mail; real Thunderbird, secure quoting, broader compatibility/team/security/operations gates remain open.
+
+
+### MS-006 explicit local quote implementation
+
+ADR-0038 implements exact-source bounded quotes in the full browser composer, without generic decrypted export. Decrypted quotes enforce encryption across local draft v2 save/load; v1 is read conservatively. Tests cover signature states, inert HTML-only conversion, no attachment copying, stale/missing sources, pending-lock cleanup, ciphertext-only egress/persistence and foreign-signed draft injection refusal. The owner requested coding to continue and will perform the manual responsive/external-client acceptance later; those checks remain open, not passed.

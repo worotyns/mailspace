@@ -370,6 +370,24 @@
                   class="mt-1 w-full rounded-lg border border-line px-3 py-2 text-sm"
               /></label>
             </div>
+            <div class="space-y-2 text-xs">
+              <button
+                id="secure-quote-original"
+                type="button"
+                disabled
+                class="min-h-12 rounded-lg border border-line px-3 py-2 text-accent"
+                aria-describedby="secure-quote-help"
+              >
+                Quote original locally
+              </button>
+              <p id="secure-quote-help" class="text-muted">
+                Available when replying to cached mail. Quotes only the selected
+                reply source, up to 32 KiB of text. Attachments are not copied.
+                Decrypted quotes require encryption; no text is uploaded by this
+                action.
+              </p>
+              <p id="secure-quote-status" class="text-muted" role="status"></p>
+            </div>
             <label class="block text-xs"
               >Subject<input
                 id="secure-subject"

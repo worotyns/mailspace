@@ -17,6 +17,7 @@ const value = () => ({
   subject: "PRIVATE_SUBJECT_CANARY",
   body: "PRIVATE_DRAFT_BODY_CANARY",
   reply: { folder: "INBOX", uid: 7, validity: 42 },
+  encryptionRequired: false,
   requestId: "SYNTHETIC_ORIGINAL_SEND_NONCE_12345",
   attachments: [
     {
@@ -141,6 +142,112 @@ test("draft capacity and payload bounds fail closed without overwriting saved da
       { code: "message-limit" },
     );
   } finally {
+    await drafts.close();
+    await vault.close();
+  }
+});
+
+test("encrypted draft versions preserve mandatory encryption and upgrade legacy replies conservatively", async () => {
+  const owner = "SYNTHETIC_DRAFT_PROVENANCE_USER",
+    vault = new LocalVault(new VaultStore(owner)),
+    drafts = new LocalDrafts(owner);
+  const key = await vault.generate("Draft protection", from, password);
+  await vault.trust(from, key.fingerprint, key.fingerprint);
+  await vault.unlock(key.fingerprint, password);
+  const db = await openDB(`mailspace-encrypted-drafts-v1-${owner}`, 1);
+  try {
+    const id = await drafts.save(vault, account, from, {
+      ...value(),
+      encryptionRequired: true,
+    });
+    assert.equal(
+      (await drafts.load(vault, account, from, id)).encryptionRequired,
+      true,
+    );
+    const record = await db.get("drafts", id);
+    assert.equal(Object.hasOwn(record, "encryptionRequired"), false);
+    const base = { ...value(), version: 1, account, from, attachments: [] };
+    delete base.encryptionRequired;
+    const replacePayload = async (payload) => {
+      const ciphertext = await vault.encryptSigned(
+        new TextEncoder().encode(JSON.stringify(payload)),
+        from,
+        [from],
+      );
+      await db.put("drafts", { ...record, ciphertext });
+    };
+    await replacePayload(base);
+    assert.equal(
+      (await drafts.load(vault, account, from, id)).encryptionRequired,
+      true,
+    );
+    await replacePayload({
+      ...base,
+      reply: { folder: "", uid: 0, validity: 0 },
+    });
+    assert.equal(
+      (await drafts.load(vault, account, from, id)).encryptionRequired,
+      false,
+    );
+    for (const payload of [
+      { ...base, version: 2 },
+      { ...base, version: 2, encryptionRequired: "false" },
+      { ...base, version: 3, encryptionRequired: true },
+      { ...base, reply: { folder: "INBOX", uid: 7, validity: 0 } },
+      { ...base, reply: { folder: "", uid: 7, validity: 42 } },
+    ]) {
+      await replacePayload(payload);
+      await assert.rejects(drafts.load(vault, account, from, id), {
+        code: "invalid-draft",
+      });
+    }
+    await assert.rejects(
+      drafts.save(vault, account, from, {
+        ...value(),
+        encryptionRequired: "no",
+      }),
+      { code: "invalid-draft" },
+    );
+    const correspondent = new LocalVault(
+      new VaultStore("SYNTHETIC_DRAFT_FOREIGN_SIGNER"),
+    );
+    try {
+      const other = await correspondent.generate(
+        "Correspondent",
+        "correspondent@example.test",
+        password,
+      );
+      await correspondent.trust(
+        "correspondent@example.test",
+        other.fingerprint,
+        other.fingerprint,
+      );
+      await correspondent.importPublic(key.publicKey);
+      await correspondent.trust(from, key.fingerprint, key.fingerprint);
+      await correspondent.unlock(other.fingerprint, password);
+      await vault.importPublic(other.publicKey);
+      // A correspondent can encrypt to our public key, but cannot manufacture
+      // a self-authored draft by changing its unencrypted saved fingerprint.
+      const ciphertext = await correspondent.encryptSigned(
+        new TextEncoder().encode(
+          JSON.stringify({ ...base, version: 2, encryptionRequired: false }),
+        ),
+        "correspondent@example.test",
+        [from],
+      );
+      await db.put("drafts", {
+        ...record,
+        fingerprint: other.fingerprint,
+        ciphertext,
+      });
+      await assert.rejects(drafts.load(vault, account, from, id), {
+        code: "invalid-draft",
+      });
+    } finally {
+      await correspondent.close();
+    }
+  } finally {
+    db.close();
     await drafts.close();
     await vault.close();
   }

@@ -4,6 +4,7 @@ import { AttachmentViewer } from "./attachments.mjs";
 import { messageText, MailHTMLPreview } from "./mail-html.mjs";
 import { LocalDrafts } from "./drafts.mjs";
 import { extractSigned } from "./signed-mime.mjs";
+import { originalQuote } from "./quote.mjs";
 import { VaultError } from "./vault.mjs";
 import { createSessionVault } from "./session-vault.mjs";
 import {
@@ -44,6 +45,8 @@ let drafts,
   activeDraft = null,
   restoredFiles = [];
 let readMessage;
+let encryptionRequired = root.dataset.encryptionRequired === "true";
+let quoteApplied = false;
 function resetProtection() {
   if (reading) return;
   el("secure-encrypt").checked = true;
@@ -51,6 +54,7 @@ function resetProtection() {
   updateProtection();
 }
 function updateProtection() {
+  el("secure-sign-only").disabled = encryptionRequired;
   const signed = el("secure-sign-only").checked === true;
   el("secure-plaintext-consent").checked = false;
   el("secure-plaintext-consent").removeAttribute?.("aria-invalid");
@@ -60,8 +64,8 @@ function updateProtection() {
     : "Sign, encrypt and send";
   el("secure-protection-note").textContent = signed
     ? "The message, attachments and filenames will be readable on Mailspace and mail servers. No recipient keys are required."
-    : root.dataset.encryptionRequired === "true"
-      ? "This original is encrypted. Reply encryption is required."
+    : encryptionRequired
+      ? "This original or draft requires encryption. Signing only is unavailable."
       : "Message and attachments are signed and encrypted to all recipients and your own key.";
 }
 let requestId = root.dataset.requestId;
@@ -74,6 +78,14 @@ function draftButtons() {
   if (reading) return;
   for (const id of ["draft-save", "draft-load", "draft-delete"])
     el(id).disabled = !drafts || vault?.locked || submitted || busy;
+  el("secure-quote-original").disabled =
+    vault?.locked ||
+    submitted ||
+    busy ||
+    quoteApplied ||
+    !replyLocator.folder ||
+    !replyLocator.uid ||
+    !replyLocator.validity;
 }
 function showRestoredFiles() {
   if (reading) return;
@@ -103,6 +115,7 @@ async function composeSnapshot() {
     body: el("secure-body").value,
     requestId,
     reply: { ...replyLocator },
+    encryptionRequired,
     attachments: [
       ...restoredFiles,
       ...(await readAttachments(el("secure-files").files)),
@@ -133,6 +146,8 @@ function clearPrivate() {
     htmlPreview?.close();
     el("html-preview-open").hidden = true;
   } else {
+    quoteApplied = false;
+    el("secure-quote-status").textContent = "";
     resetProtection();
     el("secure-body").value = "";
     el("secure-files").value = "";
@@ -158,6 +173,12 @@ function session() {
   }
 }
 const errors = {
+  "quote-limit":
+    "The original exceeds the local 32 KiB quote limit or contains unsupported text. Nothing was quoted.",
+  "quote-source":
+    "Select an available cached original before quoting. Restored drafts keep their own original source.",
+  "quote-empty":
+    "This original has no readable text to quote. Attachments are not copied into a quote.",
   "plaintext-consent":
     "Approve sending this authored message and attachments unencrypted before using signing only.",
   "encryption-required":
@@ -207,6 +228,7 @@ async function perform(operation) {
     "mail-unlock",
     "mail-decrypt",
     "secure-send",
+    "secure-quote-original",
     "draft-save",
     "draft-load",
     "draft-delete",
@@ -321,6 +343,50 @@ try {
     drafts = new LocalDrafts(root.dataset.userId);
     await draftList();
     draftButtons();
+    el("secure-quote-original").addEventListener("click", () =>
+      perform(async (current) => {
+        if (submitted || quoteApplied) return;
+        const source = { ...replyLocator };
+        if (!source.folder || !source.uid || !source.validity)
+          throw new VaultError("quote-source");
+        request = new AbortController();
+        const query = new URLSearchParams({
+          account: root.dataset.account,
+          folder: source.folder,
+          uid: String(source.uid),
+          validity: String(source.validity),
+        });
+        notify("Fetching the selected original for a local quote…");
+        const response = await fetch("/api/mail/raw?" + query, {
+          credentials: "same-origin",
+          cache: "no-store",
+          redirect: "error",
+          signal: request.signal,
+        });
+        if (!response.ok) throw new VaultError("quote-source");
+        const quote = await originalQuote(
+          new Uint8Array(await response.arrayBuffer()),
+          vault,
+        );
+        if (current !== epoch) return;
+        const body = el("secure-body").value;
+        const combined = (body ? body + "\n\n" : "") + quote.text;
+        composeEntity(combined); // Apply the existing UTF-8/body bounds before DOM mutation.
+        encryptionRequired ||= quote.encryptionRequired;
+        resetProtection();
+        el("secure-body").value = combined;
+        quoteApplied = true;
+        el("secure-quote-status").textContent = quote.signatureState;
+        window.dispatchEvent?.(new Event("mailspace:compose-changed"));
+        notify(
+          "Original text quoted locally; attachments were not copied. " +
+            (encryptionRequired
+              ? "Encryption is required for this draft. "
+              : "") +
+            quote.signatureState,
+        );
+      }),
+    );
     el("clear-restored-attachments").addEventListener("click", () => {
       restoredFiles = [];
       showRestoredFiles();
@@ -356,6 +422,14 @@ try {
         for (const name of ["to", "cc", "bcc", "subject", "body"])
           el("secure-" + name).value = snapshot[name];
         replyLocator = snapshot.reply;
+        encryptionRequired = snapshot.encryptionRequired;
+        // Only a verified local draft may replace the page's original-source
+        // metadata. The private flag remains authoritative for decrypted quotes.
+        root.dataset.encryptionRequired = String(encryptionRequired);
+        quoteApplied = false;
+        el("secure-quote-status").textContent = replyLocator.uid
+          ? "Loaded reply draft. The original signature has not been rechecked in this session."
+          : "";
         resetProtection();
         requestId = snapshot.requestId;
         activeDraft = id;
@@ -454,7 +528,10 @@ try {
       perform(async (current) => {
         if (submitted) return;
         const signingOnly = el("secure-sign-only").checked === true;
-        if (signingOnly && root.dataset.encryptionRequired === "true")
+        if (
+          signingOnly &&
+          (encryptionRequired || root.dataset.encryptionRequired === "true")
+        )
           throw new VaultError("encryption-required");
         if (signingOnly && !el("secure-plaintext-consent").checked) {
           el("secure-plaintext-consent").setAttribute("aria-invalid", "true");

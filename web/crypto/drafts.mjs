@@ -30,12 +30,18 @@ function validate(value) {
     value.subject.length > 200 ||
     /[\r\n\0]/.test(value.subject) ||
     !Array.isArray(value.attachments) ||
+    (value.encryptionRequired !== undefined &&
+      typeof value.encryptionRequired !== "boolean") ||
     !value.reply ||
     typeof value.reply.folder !== "string" ||
     value.reply.folder.length > 1024 ||
+    /[\r\n\0]/.test(value.reply.folder) ||
     ![value.reply.uid, value.reply.validity].every(
       (n) => Number.isSafeInteger(n) && n >= 0 && n <= 4294967295,
     ) ||
+    (value.reply.folder === ""
+      ? value.reply.uid !== 0 || value.reply.validity !== 0
+      : value.reply.uid === 0 || value.reply.validity === 0) ||
     !/^[A-Za-z0-9_-]{26,64}$/.test(value.requestId)
   )
     throw new VaultError("invalid-draft");
@@ -69,7 +75,8 @@ export class LocalDrafts {
     )
       throw new VaultError("invalid-draft");
     const payload = {
-      version: 1,
+      version: 2,
+      encryptionRequired: value.encryptionRequired === true,
       account,
       from,
       to: value.to,
@@ -129,6 +136,7 @@ export class LocalDrafts {
       throw new VaultError("missing-draft");
     const result = await vault.decryptSigned(record.ciphertext, from);
     if (
+      record.fingerprint !== vault.fingerprint ||
       !result.signatures.some(
         (signature) =>
           signature.status === "valid" &&
@@ -143,7 +151,9 @@ export class LocalDrafts {
       throw new VaultError("invalid-draft");
     }
     if (
-      payload?.version !== 1 ||
+      ![1, 2].includes(payload?.version) ||
+      (payload.version === 2 &&
+        typeof payload.encryptionRequired !== "boolean") ||
       payload.account !== account ||
       payload.from !== from ||
       !Array.isArray(payload.attachments) ||
@@ -158,6 +168,11 @@ export class LocalDrafts {
       body: payload.body,
       reply: payload.reply,
       requestId: payload.requestId,
+      // Legacy reply drafts did not record whether their original was encrypted.
+      encryptionRequired:
+        payload.version === 2
+          ? payload.encryptionRequired
+          : payload.reply?.uid !== 0,
       attachments: payload.attachments.map((file) => ({
         name: file.name,
         data: decode(file.base64),

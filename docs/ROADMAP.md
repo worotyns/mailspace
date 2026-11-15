@@ -69,3 +69,6 @@ Feedback follow-up (MS-020): inline reply cancellation explicitly targets the ro
 
 
 MS-006 signed-only transport foundation (ADR-0037): authored-only, explicit-consent JSON submission now preserves canonical signed MIME through the existing outbox/SMTP/Sent pipeline. Original-source/ownership/downgrade and no-resend gates remain in force. The visible full-composer action is now implemented, with encryption as the default, explicit readable-content consent and original-message reply references. Real Thunderbird, secure quoting and the wider 1.0 compatibility gate remain open.
+
+
+MS-006 secure quoting is implemented in the full browser composer (ADR-0038): explicit exact-source local fetch/decrypt, bounded inert text, signature-state feedback and mandatory encryption for decrypted quotes. Authenticated local draft payload v2 carries that requirement across save/load and reads v1 conservatively. Manual responsive/Thunderbird acceptance is deferred to the owner on request; it is not counted as passed. The next active usability slices are compact preview controls, local attachment/CID images on demand, recipient/contact controls, visible send state and Decision Model naming.

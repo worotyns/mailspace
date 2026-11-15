@@ -19,3 +19,6 @@ A single date selects one local calendar day; an optional end date selects an in
 Archive a thread or mail with a person from Commands: review the cached selection first (500 messages maximum per pass). Labels support the same scopes, including archived mail. Decision trace supports Accept selected / Accept all shown for up to 50 saved actionable proposals; outdated results are skipped, never silently forced or reclassified.
 
 Search and combined rules share AND/OR conditions: e.g. `(subject:invoice OR subject:receipt) AND domain:example.test`. Use the adjacent rule icon to draft a disabled rule from search/person scope; date/label filters are excluded. Details and limits: [Local rules](RULES.md).
+
+
+Full reply composition offers Quote original locally for the selected cached message (32 KiB text limit). It does not copy attachments or upload plaintext. Decrypted quotes require encryption even after reopening an encrypted local draft. The original signature state is shown; restored drafts make no fresh signature claim. Version-2 local drafts require a current compatible build, and an older reply draft conservatively keeps encryption required.
