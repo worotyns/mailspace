@@ -78,3 +78,6 @@ Usability feedback: compact eye/download/close controls, explicit inline local P
 
 
 MS-021 identity foundation is implemented in ADR-0040/schema 13, with a reviewed pinned TOTP library, separate encrypted auth keyring, session-bound enrollment, password-version checks, pending challenges, single-use TOTP/recovery and persistent rate/revocation guards. Full repository/race and production-image checks pass for this foundation. HTTP challenge/login, Settings Security UI/QR/recovery and local operator CLI are now integrated. Password alone cannot open a configured MFA session. Manual real-app/responsive acceptance is left to the owner; wider 1.0 gates remain open.
+
+
+Owner acceptance follow-up is tracked in MS-022. Security now remains in the trusted settings modal with independently refreshed parent session metadata; the native empty-password submit bug is fixed. Label pickers use compact colored badge popovers, and named People/sender headers show secondary email addresses. Next active slices: automatic-on-open and manual provider read/unread flags (explicitly selected by the owner), and latest-20 timeline pagination with upward older-message loading/anchor preservation. Recipient metadata and People suggestions remain open. These changes do not close the wider 1.0 gates.

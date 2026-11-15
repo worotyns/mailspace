@@ -210,7 +210,13 @@
               href="{{ $.PeopleLink .Email }}"
               hx-get="{{ $.PeopleLink .Email }}"
               class="block truncate rounded-lg px-3 py-1.5 text-xs text-body hover:bg-hover"
-              >{{ if .Name }}{{ .Name }}{{ else }}{{ .Email }}{{ end }}</a
+              ><span class="block truncate"
+                >{{ if .Name }}{{ .Name }}{{ else }}{{ .Email }}{{ end }}</span
+              >{{ if .Name }}
+                <small class="block truncate text-[10px] text-muted"
+                  >{{ .Email }}</small
+                >
+              {{ end }}</a
             >
           {{ end }}
         {{ end }}
@@ -943,8 +949,14 @@
                     aria-label="{{ .Sender }} ({{ .Preview.Sender }})"
                     href="/?person={{ .Preview.Sender }}"
                     hx-get="/?person={{ .Preview.Sender }}"
-                    class="text-xs font-semibold"
-                    >{{ .Sender }}</a
+                    class="min-w-0 text-xs font-semibold"
+                    ><span class="block truncate">{{ .Sender }}</span
+                    >{{ if and .Preview.Name (not .Own) }}
+                      <small
+                        class="block truncate text-[10px] font-normal text-muted"
+                        >{{ .Preview.Sender }}</small
+                      >
+                    {{ end }}</a
                   ><span class="text-[10px] text-muted"
                     >{{ .AccountName }}</span
                   >
@@ -1719,6 +1731,7 @@
       <title>Organize message · Mailspace</title>
       <script src="/assets/theme.js"></script>
       <script src="/assets/forms.js" defer></script>
+      <script type="module" src="/assets/crypto/label-picker.mjs"></script>
       <script src="/assets/panel-child.js" defer></script>
       <script src="/assets/toasts.js" defer></script>
       <link rel="stylesheet" href="/assets/app.css" />
@@ -1762,6 +1775,7 @@
   <details
     id="{{ .LabelsID }}"
     class="min-w-0 max-w-full text-[10px]"
+    data-label-picker
     {{ if .LabelsOpen }}open{{ end }}
   >
     <summary
@@ -1780,6 +1794,7 @@
     </summary>
     <div
       class="mt-1 flex max-w-sm flex-wrap gap-1 rounded-lg border border-line bg-panel p-2"
+      data-label-options
       aria-label="Message labels"
     >
       {{ $m := . }}{{ range .Labels }}
@@ -1807,24 +1822,23 @@
           <button
             id="{{ $m.LabelsID }}-{{ .ID }}"
             {{ if eq $m.LabelsFocusID .ID }}autofocus{{ end }}
-            class="min-h-11 rounded-md border border-line px-3 text-xs {{ if $m.Has .ID }}
-              {{ .Tone }}
-            {{ else }}
-              text-muted hover:bg-hover
-            {{ end }}"
+            class="label-choice rounded-md p-0.5 text-xs focus-visible:outline-accent"
             aria-pressed="{{ $m.Has .ID }}"
           >
-            {{ if $m.Has .ID }}
-              ✓
-            {{ else }}
-              +
-            {{ end }}{{ .Name }}
+            <span
+              class="space-chip {{ .Tone }} {{ if $m.Has .ID }}
+                ring-1 ring-current
+              {{ else }}
+                opacity-70 hover:opacity-100
+              {{ end }}"
+              >{{ if $m.Has .ID }}✓{{ else }}+{{ end }} {{ .Name }}</span
+            >
           </button>
         </form>
       {{ end }}
       <a
         href="/labels"
-        class="flex min-h-11 items-center px-2 text-xs text-accent"
+        class="flex min-h-8 items-center px-2 text-[11px] text-accent"
         >Manage labels</a
       >
     </div>

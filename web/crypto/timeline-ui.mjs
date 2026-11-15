@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { enhanceReadableMessages } from "./message-text.mjs";
 import "./recipient-picker.mjs";
+import "./label-picker.mjs";
 import "./app-panels.mjs";
 // Plain replies use HTMX. Encrypted mode has no serializable body field and
 // intercepts submission before HTMX; the crypto module uploads ciphertext only.

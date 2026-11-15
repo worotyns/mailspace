@@ -243,3 +243,22 @@ func TestInlineRecipientGroupsKeepNativeFormsAndScopedSuggestions(t *testing.T) 
 		}
 	}
 }
+
+func TestNamedContactsShowSecondaryEmailInPeopleAndSenderHeaders(t *testing.T) {
+	data := TimelineData{Timezone: "UTC", Filter: "all"}
+	records := []timeline.Record{
+		{Identity: mail.MessageIdentity{Key: "first"}, At: time.Unix(1000, 0), Preview: mailsync.Preview{Sender: "first@example.test", Name: "Same display name"}},
+		{Identity: mail.MessageIdentity{Key: "second"}, At: time.Unix(2000, 0), Preview: mailsync.Preview{Sender: "second@example.test", Name: "Same display name"}},
+	}
+	FormatTimeline(records, nil, nil, nil, &data)
+	response := httptest.NewRecorder()
+	if err := RenderTimeline(response, httptest.NewRequest("GET", "/", nil), false, data); err != nil {
+		t.Fatal(err)
+	}
+	for _, address := range []string{"first@example.test", "second@example.test"} {
+		matches := regexp.MustCompile(`<small[^>]*>\s*`+regexp.QuoteMeta(address)+`\s*</small`).FindAllString(response.Body.String(), -1)
+		if len(matches) < 2 {
+			t.Fatal("named contact must show its address in both sidebar and message header", address)
+		}
+	}
+}

@@ -33,6 +33,7 @@ MS-009 foundation brought forward for usable organization navigation; actual mai
 | MS-020 | Core UX | P0 | [Message-level Spaces and unified timeline](issues/MS-020.md) | 003,004,005 |
 
 | MS-021 | Security | P0 | [Authenticator App 2FA](issues/MS-021.md) | 001 |
+| MS-022 | Core UX | P0 | [Owner feedback and timeline pagination](issues/MS-022.md) | 020 |
 
 ADR-0016 is the current product direction. MS-020 precedes optional provider expansion; its source/storage foundation and first unified UI/inline reply slice are implemented; the optional decision provider and team ACL integration remain open.
 

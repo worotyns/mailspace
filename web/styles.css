@@ -506,3 +506,35 @@
   background: var(--color-hover);
   color: var(--color-ink);
 }
+
+/* Label choices stay visually compact while retaining separate touch targets. */
+.label-popover {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  max-inline-size: min(22rem, calc(100vw - 1rem));
+  max-block-size: min(20rem, 60dvh);
+  overflow: auto;
+  padding: 0.5rem;
+  border: 1px solid var(--color-line);
+  border-radius: 0.75rem;
+  color: var(--color-ink);
+  background: var(--color-panel);
+  box-shadow: 0 0.5rem 2rem #0002;
+}
+.label-popover:popover-open {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+}
+.label-picker-toggle,
+.label-choice {
+  min-block-size: 2rem;
+}
+@media (pointer: coarse) {
+  .label-picker-toggle,
+  .label-choice {
+    min-block-size: 2.75rem;
+  }
+}
