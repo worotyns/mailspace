@@ -4,6 +4,8 @@ package webui
 import (
 	"bytes"
 	"net/http"
+	"net/url"
+	"strconv"
 )
 
 type AccountSummary struct {
@@ -70,20 +72,33 @@ func RenderAuth(w http.ResponseWriter, dev bool, name string, data AuthPageData)
 }
 
 type ComposeForm struct {
-	AccountID      string
-	AccountName    string
-	Address        string
-	Nonce          string
-	To             string
-	CC             string
-	BCC            string
-	Subject        string
-	Body           string
-	AllowPlaintext bool
-	ReplyFolder    string
-	ReplyValidity  uint32
-	ReplyUID       uint32
+	AccountID          string
+	AccountName        string
+	Address            string
+	Nonce              string
+	To                 string
+	CC                 string
+	BCC                string
+	Subject            string
+	Body               string
+	AllowPlaintext     bool
+	EncryptionRequired bool
+	ReplyFolder        string
+	ReplyValidity      uint32
+	ReplyUID           uint32
 }
+
+// SecureURL carries the selected original, never message text or decrypted data.
+func (f ComposeForm) SecureURL() string {
+	query := url.Values{"account": {f.AccountID}}
+	if f.ReplyUID != 0 {
+		query.Set("folder", f.ReplyFolder)
+		query.Set("validity", strconv.FormatUint(uint64(f.ReplyValidity), 10))
+		query.Set("uid", strconv.FormatUint(uint64(f.ReplyUID), 10))
+	}
+	return "/secure/compose?" + query.Encode()
+}
+
 type OutgoingRecord struct {
 	ID        string
 	Subject   string

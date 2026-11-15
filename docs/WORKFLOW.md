@@ -12,7 +12,7 @@
 
 Before upgrading to schema 12, back up SQLite and the installation credential keyring. Restore a pre-upgrade database and matching image for rollback. Browser key/draft exports remain separate.
 
-Settings, key setup and full composition open in a trusted application panel. Key setup separates your private sending key from recipient public keys; verify both bindings before Encrypt & sign. Signed-only sending and shared-worker unlocking are not implemented yet. Encrypted sending keeps the current view and provides a toast with Outbox details rather than navigating away. Server acceptance is not delivery confirmation.
+Settings, key setup and full composition open in a trusted application panel. Key setup separates your private sending key from recipient public keys; verify both bindings before Encrypt & sign. The full composer also offers Sign only (unencrypted) after separate readable-content consent; encrypted originals cannot use it. Memory-only shared-worker unlocking is implemented under ADR-0032, with a page-local fallback and no reload-lifetime guarantee. Encrypted sending keeps the current view and provides a toast with Outbox details rather than navigating away. Server acceptance is not delivery confirmation.
 
 A single date selects one local calendar day; an optional end date selects an inclusive range in your configured timezone. Consecutive lines starting with `>` (including `>>`) fold into native details controls; replies between quotes remain visible. The original MIME is unchanged.
 

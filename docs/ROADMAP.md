@@ -45,9 +45,9 @@ ADR-0019 supersedes old UI/default-demo descriptions above: one authenticated Sp
 
 Completed slices: container palette inclusion/build guard; specific Jev failure categories; native quote folding. In the compact-controls slice: guided sender/recipient key setup, contact prefill and bounded suggestions, date/range filter, trusted settings/compose panels, local archive/label bulk previews, saved-decision acceptance and metadata indexes. See ADR-0030 for exact limits.
 
-Delivered: shared AND/OR filters/rules, memory-only worker lifecycle and inline decrypt/autopreview. Still required before claiming the requested full UX/1.0 scope: signed-only sending, team-source/send-as ACLs, broader provider/browser compatibility and deployment acceptance.
+Delivered: shared AND/OR filters/rules, memory-only worker lifecycle and inline decrypt/autopreview. Still required before claiming the requested full UX/1.0 scope: team-source/send-as ACLs, broader provider/browser compatibility and deployment acceptance.
 
-Local AND/OR filters and rule drafts now share a bounded evaluator (ADR-0031/schema 12); worker sessions and inline decrypt/autopreview are implemented in ADR-0032; signed-only sending and the external-client compatibility matrix remain open.
+Local AND/OR filters and rule drafts now share a bounded evaluator (ADR-0031/schema 12); worker sessions and inline decrypt/autopreview are implemented in ADR-0032; authored signed-only sending is implemented in ADR-0037; secure quoting and the external-client compatibility matrix remain open.
 
 Labels now provide sidebar quick filters and message-header badges with an inline multi-label chooser (ADR-0033). Membership updates replace only label metadata, preserving inline decrypted previews and composer state.
 
@@ -56,7 +56,7 @@ Labels now provide sidebar quick filters and message-header badges with an inlin
 - Labels are user-defined private metadata: sidebar quick filters and per-message header toggles (ADR-0033). No built-in Todo/Done statuses or implicit exclusivity.
 - Memory-only worker sessions and inline local decryption, with explicit lock and optional per-tab autopreview (ADR-0032).
 - Bounded inert Markdown presentation and compact paragraph spacing; original MIME stays unchanged (ADR-0034).
-- Signing-only sending and full release acceptance remain outstanding; these changes do not declare 1.0 complete.
+- Authored signing-only sending is now implemented (ADR-0037); full release acceptance remains outstanding; these changes do not declare 1.0 complete.
 
 - Mobile: tap the current view title to switch Spaces, user-defined labels or activity filters; native dialog and authenticated full-page fallback under `/views`.
 
@@ -65,7 +65,7 @@ Settings share one content width, first-position section navigation, and native 
 
 Feedback follow-up: thread footer opens a scoped reply composer for the selected original; panel navigation is captured before HTMX and close/sent refresh selects only the root fragment. Panels display a bounded loading state with stable dimensions. Reply subject prefixes Re:/Odp: are normalized for display only. Encryption unlock opens before asynchronous key listing and reports worker errors visibly; native Safari acceptance remains a separate check.
 
-Feedback follow-up (MS-020): inline reply cancellation explicitly targets the root/thread fragment instead of inheriting the form's status target. Recorded plain sends now refresh the visible feed through the same event as encrypted sends; closing a thread after sending also refreshes the underlying timeline. Phone messages use the available width without an avatar gutter. Original-thread presentation keeps time, selected-source Reply and recorded SMTP state, without classification/status/Space toolbars; its sticky date divider uses the panel surface. Full local checks and live responsive/keyboard acceptance passed at 390×844, 1440×1000 and 1280×500 with synthetic mail; see VALIDATION.md. The next 1.0 implementation gate remains explicit signed-only sending.
+Feedback follow-up (MS-020): inline reply cancellation explicitly targets the root/thread fragment instead of inheriting the form's status target. Recorded plain sends now refresh the visible feed through the same event as encrypted sends; closing a thread after sending also refreshes the underlying timeline. Phone messages use the available width without an avatar gutter. Original-thread presentation keeps time, selected-source Reply and recorded SMTP state, without classification/status/Space toolbars; its sticky date divider uses the panel surface. Full local checks and live responsive/keyboard acceptance passed at 390×844, 1440×1000 and 1280×500 with synthetic mail; see VALIDATION.md. The next compatibility gates include secure quoting and real Thunderbird acceptance.
 
 
-MS-006 signed-only transport foundation (ADR-0037): authored-only, explicit-consent JSON submission now preserves canonical signed MIME through the existing outbox/SMTP/Sent pipeline. Original-source/ownership/downgrade and no-resend gates remain in force. The visible full-composer action is the next slice; this transport endpoint alone does not complete signed-only UX or the 1.0 compatibility gate.
+MS-006 signed-only transport foundation (ADR-0037): authored-only, explicit-consent JSON submission now preserves canonical signed MIME through the existing outbox/SMTP/Sent pipeline. Original-source/ownership/downgrade and no-resend gates remain in force. The visible full-composer action is now implemented, with encryption as the default, explicit readable-content consent and original-message reply references. Real Thunderbird, secure quoting and the wider 1.0 compatibility gate remain open.

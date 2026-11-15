@@ -38,6 +38,7 @@
         data-reply-folder="{{ .Compose.ReplyFolder }}"
         data-reply-validity="{{ .Compose.ReplyValidity }}"
         data-reply-uid="{{ .Compose.ReplyUID }}"
+        data-encryption-required="{{ .Compose.EncryptionRequired }}"
         data-raw-url="{{ .RawURL }}"
         data-sender="{{ .ClaimedSender }}"
         class="mx-auto max-w-3xl space-y-5 p-5 sm:p-10"
@@ -53,7 +54,7 @@
               Read encrypted mail
             {{ end }}
           {{ else }}
-            Encrypted message
+            Sign or encrypt a message
           {{ end }}
         </h1>
         <p class="text-sm text-muted">
@@ -61,8 +62,15 @@
             Text is the primary view. HTML preview is simplified, isolated and
             blocks remote resources.
           {{ else }}
-            Keys stay in this browser. Decrypted content stays local unless you
-            explicitly approve a selected excerpt for classification.
+            Keys stay in this browser.
+            {{ if .SecureRead }}
+              Decrypted content stays local unless you explicitly approve a
+              selected excerpt for classification.
+            {{ else }}
+              Signing proves integrity but does not hide content. Choose
+              encryption for confidentiality, or explicitly approve sending
+              authored content unencrypted.
+            {{ end }}
             <a href="/keys" class="text-accent"
               >Manage keys and verified contacts</a
             >. Leaving or hiding this page clears its private content. The
@@ -235,9 +243,9 @@
           </section>
         {{ else }}
           <p class="text-xs text-muted">
-            From {{ .Compose.Address }} · {{ .Compose.AccountName }}. Signed and
-            encrypted to every recipient and your own key. Subject and envelope
-            remain visible to mail servers.
+            From {{ .Compose.Address }} · {{ .Compose.AccountName }}. Choose
+            protection below. Subject and envelope remain visible to mail
+            servers.
           </p>
           <section class="space-y-3 rounded-xl border border-line bg-panel p-5">
             <h2 class="font-semibold">Encrypted local drafts</h2>
@@ -281,6 +289,54 @@
             disabled
             class="space-y-4 rounded-xl border border-line bg-panel p-5"
           >
+            <legend class="px-1 text-sm font-semibold">
+              Message and protection
+            </legend>
+            <fieldset class="space-y-2 text-sm">
+              <legend class="mb-2 font-medium">Protection</legend>
+              <label class="flex min-h-12 items-center gap-3">
+                <input
+                  id="secure-encrypt"
+                  type="radio"
+                  name="secure-protection"
+                  value="encrypted"
+                  checked
+                />
+                Sign and encrypt
+              </label>
+              <label class="flex min-h-12 items-center gap-3">
+                <input
+                  id="secure-sign-only"
+                  type="radio"
+                  name="secure-protection"
+                  value="signed"
+                  aria-describedby="secure-protection-note"
+                  {{ if .Compose.EncryptionRequired }}disabled{{ end }}
+                />
+                Sign only (unencrypted)
+              </label>
+              <p id="secure-protection-note" class="text-xs text-muted">
+                {{ if .Compose.EncryptionRequired }}
+                  This original is encrypted. Reply encryption is required.
+                {{ else }}
+                  Message and attachments are signed and encrypted to all
+                  recipients and your own key.
+                {{ end }}
+              </p>
+              <div id="secure-plaintext-consent-row" hidden>
+                <label class="flex min-h-12 items-start gap-3 py-2 text-sm">
+                  <input
+                    id="secure-plaintext-consent"
+                    type="checkbox"
+                    class="mt-1 shrink-0"
+                    aria-describedby="secure-protection-note"
+                  />
+                  I approve sending this authored message and its attachments
+                  unencrypted. Mailspace and mail servers will store readable
+                  copies. A signature does not hide their content.
+                </label>
+              </div>
+            </fieldset>
             <label class="block text-xs"
               >To<input
                 id="secure-to"
@@ -330,7 +386,7 @@
               ></textarea>
             </label>
             <label class="block text-xs"
-              >Encrypted attachments<input
+              >Attachments<input
                 id="secure-files"
                 type="file"
                 multiple
@@ -346,8 +402,8 @@
               Remove restored attachments
             </button>
             <p class="text-xs text-muted">
-              Up to 10 files, 1 MiB total. Files and filenames are encrypted in
-              this browser, with no plaintext upload.
+              Up to 10 files, 1 MiB total. The chosen protection applies to
+              their contents and filenames.
             </p>
             <button
               id="secure-send"

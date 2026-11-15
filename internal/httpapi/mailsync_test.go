@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -409,6 +410,10 @@ func TestReadOnlyMailboxEndToEndAndAuthorization(t *testing.T) {
 			if reply.Code != 200 || !strings.Contains(reply.Body.String(), `value="recipient@example.test"`) {
 				t.Fatal("reply to own sent message targeted self instead of original recipient", reply.Code)
 			}
+			secureURL := "/secure/compose?" + url.Values{"account": {account.ID}, "folder": {"Sent"}, "uid": {strconv.FormatUint(uint64(sentMessage.UID), 10)}, "validity": {strconv.FormatUint(uint64(sentMessage.Validity), 10)}}.Encode()
+			if !strings.Contains(reply.Body.String(), `href="`+html.EscapeString(secureURL)+`"`) {
+				t.Fatal("switching reply protection lost the selected original")
+			}
 		}
 	}
 	response = request("GET", "/outbox?account="+account.ID, token, "", false)
@@ -491,6 +496,10 @@ func TestReadOnlyMailboxEndToEndAndAuthorization(t *testing.T) {
 		}
 		if res := request("GET", "/secure/read?"+q, token, "", false); res.Code != 200 || strings.Contains(res.Body.String(), "<form") {
 			t.Fatal("secure reader unavailable")
+		}
+		compose := request("GET", "/secure/compose?"+q, token, "", false)
+		if compose.Code != 200 || !strings.Contains(compose.Body.String(), `data-encryption-required="true"`) || !regexp.MustCompile(`(?s)<input\s+id="secure-sign-only"[^>]*\bdisabled\b`).MatchString(compose.Body.String()) {
+			t.Fatal("encrypted original permits choosing signing only")
 		}
 		invalid := strings.Replace(q, "uid="+strconv.FormatUint(uint64(m.UID), 10), "uid=4294967295", 1)
 		if request("GET", "/api/mail/raw?"+invalid, token, "", false).Code != 404 {

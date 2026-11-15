@@ -43,10 +43,8 @@
           </p>
         {{ end }}
         <p class="mt-5 text-sm">
-          <a
-            href="/secure/compose?account={{ .Compose.AccountID }}"
-            class="font-medium text-accent"
-            >Compose with OpenPGP encryption →</a
+          <a href="{{ .Compose.SecureURL }}" class="font-medium text-accent"
+            >Compose with OpenPGP signing or encryption →</a
           >
         </p>
         <form action="/outbox/send" method="post" class="mt-6 space-y-4">

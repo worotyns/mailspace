@@ -109,6 +109,7 @@ func cryptoRoutes(mux *http.ServeMux, config AuthConfig, store *identity.Store, 
 			form.ReplyFolder = r.URL.Query().Get("folder")
 			form.ReplyUID = uint32(uid)
 			form.ReplyValidity = uint32(validity)
+			form.EncryptionRequired = parent.Encrypted
 			form.To = parent.Sender
 			if parent.ReplyTo != "" {
 				form.To = parent.ReplyTo

@@ -30,13 +30,13 @@ See [ADR-0021](adr/0021.md) and [AUTOMATION.md](AUTOMATION.md). After local decr
 
 ## Detached signing foundation
 
-`LocalVault.signDetached` snapshots its input, revalidates the explicitly bound sender/signing key and rejects lock or binding changes. `signedEntity` preserves canonical seven-bit MIME bytes under multipart/signed with checked SHA-512 signatures. This is a local-only foundation (ADR-0028), not a signed-only sending feature. It grants no new decrypted-content export permission; plaintext submission and encrypted-parent downgrade remain unavailable through this helper.
+`LocalVault.signDetached` snapshots its input, revalidates the explicitly bound sender/signing key and rejects lock or binding changes. `signedEntity` preserves canonical seven-bit MIME bytes under multipart/signed with checked SHA-512 signatures. ADR-0028 introduced this local foundation. The explicit authored transport and composer action are now defined in ADR-0037 below; the helper alone never grants decrypted-content export or encrypted-parent downgrade permission.
 
 ## Memory-only session and inline preview (ADR-0032)
 
 An available SharedWorker holds the unlocked key in memory across same-origin page views. It checks the authenticated session before and after private operations and locks after five minutes without real activity, session expiry or explicit Lock. No passphrase or unlocked key is persisted. Dedicated-worker and page-local fallbacks remain available; these may ask again after navigation. Browser worker lifetime is not guaranteed. Explicit Lock applies across connected views; closing or hiding a view clears its decrypted DOM and attachments without unnecessarily locking the shared session. This replaces the earlier controller-wide lock-on-every-navigation behavior.
 
-Encrypted timeline messages decrypt inline after explicit Preview locally. Optional autopreview is off by default and only scans visible encrypted messages with an already unlocked key. The preference is held in tab memory, resets on a full reload, and grants no classifier/export permission. Signing-only sending remains unavailable; the detached-signing helper is still a local foundation.
+Encrypted timeline messages decrypt inline after explicit Preview locally. Optional autopreview is off by default and only scans visible encrypted messages with an already unlocked key. The preference is held in tab memory, resets on a full reload, and grants no classifier/export permission. Explicit authored signing-only sending is available in the full composer under ADR-0037; inline replies still use ordinary or encrypted sending.
 
 Ordinary and decrypted text presentation follows ADR-0034: fixed DOM from bounded Markdown tokens, folded quotes, no generated HTML/resources/navigation. It does not change original MIME or signature bytes.
 
@@ -45,3 +45,10 @@ Unlock feedback is visible before asynchronous worker/key metadata loading. A fa
 
 
 If a SharedWorker's module fails during initial loading, an argument-free list request may recover once in a fresh dedicated worker under ADR-0032. That worker performs the same authentication checks and starts locked. Private operations, login refusals and timeouts are never replayed. Dedicated mode is tab-local; a reload may ask for the passphrase again.
+
+
+## Explicit authored signed-only mail (ADR-0037)
+
+The full composer defaults to Sign and encrypt. Sign only (unencrypted) reveals a separate, initially unchecked consent explaining that authored text, attachments and filenames will be stored/sent readably. The action says Sign and send unencrypted. Recipient keys are not needed for signing only; the sender fingerprint/signing-key checks remain mandatory. An encrypted original disables this option and is also rejected at the server boundary. Switching from ordinary reply composition preserves the selected source/account/UIDVALIDITY instead of starting an unrelated message.
+
+The body, attachments, keys and passphrase remain unnamed inside hx-disable, with form-action none. Only the explicitly selected JSON contract is submitted. No decrypted-reader selection, original body, automatic quote, generic body field or fallback enters signed submission. Own locally encrypted authored drafts remain encrypted at rest; loading one resets protection to encryption and clears any previous plaintext consent. Lock, hide and successful send also clear consent and return to encryption. Unknown sends stay submitted and require checking Outbox; no automatic retry or downgrade occurs.

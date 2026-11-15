@@ -10,6 +10,7 @@ import {
   composeEntity,
   readAttachments,
   encryptedEntity,
+  signedEntity,
   extractEncrypted,
   parseLocalMime,
 } from "./mime.mjs";
@@ -43,6 +44,26 @@ let drafts,
   activeDraft = null,
   restoredFiles = [];
 let readMessage;
+function resetProtection() {
+  if (reading) return;
+  el("secure-encrypt").checked = true;
+  el("secure-sign-only").checked = false;
+  updateProtection();
+}
+function updateProtection() {
+  const signed = el("secure-sign-only").checked === true;
+  el("secure-plaintext-consent").checked = false;
+  el("secure-plaintext-consent").removeAttribute?.("aria-invalid");
+  el("secure-plaintext-consent-row").hidden = !signed;
+  el("secure-send").textContent = signed
+    ? "Sign and send unencrypted"
+    : "Sign, encrypt and send";
+  el("secure-protection-note").textContent = signed
+    ? "The message, attachments and filenames will be readable on Mailspace and mail servers. No recipient keys are required."
+    : root.dataset.encryptionRequired === "true"
+      ? "This original is encrypted. Reply encryption is required."
+      : "Message and attachments are signed and encrypted to all recipients and your own key.";
+}
 let requestId = root.dataset.requestId;
 let replyLocator = {
   folder: root.dataset.replyFolder,
@@ -112,6 +133,7 @@ function clearPrivate() {
     htmlPreview?.close();
     el("html-preview-open").hidden = true;
   } else {
+    resetProtection();
     el("secure-body").value = "";
     el("secure-files").value = "";
     restoredFiles = [];
@@ -136,13 +158,18 @@ function session() {
   }
 }
 const errors = {
+  "plaintext-consent":
+    "Approve sending this authored message and attachments unencrypted before using signing only.",
+  "encryption-required":
+    "This original is encrypted. Keep encryption enabled for the reply.",
   locked: "Unlock your local key to continue.",
   "bad-passphrase": "The key passphrase was not accepted.",
   "untrusted-recipient":
     "A recipient or your own address has no verified key. Import the public key and compare its full fingerprint in Local keys first.",
   "sender-key-mismatch":
     "The unlocked key does not match the verified key for the From address.",
-  "unusable-key": "A key is expired, revoked or unsuitable for encryption.",
+  "unusable-key":
+    "A key is expired, revoked or unsuitable for the selected protection.",
   "key-changed":
     "A recipient key changed. Compare and verify its fingerprint before sending.",
   "subject-limit": "Shorten the subject before saving or sending this message.",
@@ -167,7 +194,7 @@ const errors = {
   "invalid-draft":
     "This local draft could not be authenticated or does not match this account. It was not restored or sent.",
   "attachment-limit":
-    "Choose up to 10 files, with at most 1 MiB total. Attachments are encrypted locally before upload.",
+    "Choose up to 10 files, with at most 1 MiB total. The chosen protection applies to attachments.",
   "invalid-attachment-name":
     "Use attachment names up to 180 UTF-8 bytes without path separators or control characters.",
   "message-limit": "This message exceeds the supported size limit.",
@@ -192,14 +219,17 @@ async function perform(operation) {
   draftButtons();
   if (!reading) el("secure-compose-fields").disabled = true;
   const current = epoch;
+  let invalidControl;
   try {
     session();
     await operation(current);
   } catch (error) {
+    if (error.code === "plaintext-consent")
+      invalidControl = el("secure-plaintext-consent");
     if (current === epoch)
       notify(
         errors[error.code] ||
-          "The operation could not finish. No private content was uploaded. Check Outbox if a send was already submitted.",
+          "The operation could not finish. If a send was submitted, check Outbox before any new send.",
       );
   } finally {
     busy = false;
@@ -212,6 +242,7 @@ async function perform(operation) {
     el("mail-passphrase").value = "";
     if (!reading)
       el("secure-compose-fields").disabled = vault?.locked || submitted;
+    invalidControl?.focus();
   }
 }
 function recipients(value) {
@@ -280,6 +311,12 @@ try {
     );
   }
   if (!reading) {
+    resetProtection();
+    for (const id of ["secure-encrypt", "secure-sign-only"])
+      el(id).addEventListener("change", updateProtection);
+    el("secure-plaintext-consent").addEventListener("input", () =>
+      el("secure-plaintext-consent").removeAttribute("aria-invalid"),
+    );
     el("secure-compose-fields").disabled = snapshot.locked || submitted;
     drafts = new LocalDrafts(root.dataset.userId);
     await draftList();
@@ -319,6 +356,7 @@ try {
         for (const name of ["to", "cc", "bcc", "subject", "body"])
           el("secure-" + name).value = snapshot[name];
         replyLocator = snapshot.reply;
+        resetProtection();
         requestId = snapshot.requestId;
         activeDraft = id;
         restoredFiles = snapshot.attachments;
@@ -415,6 +453,13 @@ try {
     el("secure-send").addEventListener("click", () =>
       perform(async (current) => {
         if (submitted) return;
+        const signingOnly = el("secure-sign-only").checked === true;
+        if (signingOnly && root.dataset.encryptionRequired === "true")
+          throw new VaultError("encryption-required");
+        if (signingOnly && !el("secure-plaintext-consent").checked) {
+          el("secure-plaintext-consent").setAttribute("aria-invalid", "true");
+          throw new VaultError("plaintext-consent");
+        }
         const metadata = {
           account: root.dataset.account,
           requestId,
@@ -436,41 +481,58 @@ try {
         if (new TextEncoder().encode(metadata.subject).length > 200)
           throw new VaultError("subject-limit");
         el("secure-compose-fields").disabled = true;
-        notify("Signing and encrypting locally…");
+        notify(
+          signingOnly ? "Signing locally…" : "Signing and encrypting locally…",
+        );
         const body = el("secure-body").value;
         const attachments = [
           ...restoredFiles,
           ...(await readAttachments(el("secure-files").files)),
         ];
-        const encrypted = await vault.encryptSigned(
-          composeEntity(body, attachments),
-          root.dataset.from,
-          to,
-        );
+        const entity = composeEntity(body, attachments);
+        let protection;
+        if (signingOnly) {
+          const signed = await vault.signDetached(entity, root.dataset.from);
+          protection = {
+            signedMime: signedEntity(signed.data, signed.signature),
+            provenance: "authored",
+            allowPlaintext: true,
+          };
+        } else {
+          const encrypted = await vault.encryptSigned(
+            entity,
+            root.dataset.from,
+            to,
+          );
+          protection = { encryptedMime: encryptedEntity(encrypted) };
+        }
         if (current !== epoch) return;
-        // Deliberate allowlist: body, passphrase, private key and decrypted MIME never
-        // enter the request. Metadata is visible to SMTP independently of encryption.
+        // Only the chosen authored transport enters this request. Keys,
+        // passphrases and decrypted messages have no source in this composer.
         const payload = JSON.stringify({
           ...metadata,
-          encryptedMime: encryptedEntity(encrypted),
+          ...protection,
         });
         session();
         submitted = true;
         request = new AbortController();
         notify(
-          "Submitting ciphertext once. Check Outbox before any new send if the connection is interrupted.",
+          "Submitting once. Check Outbox before any new send if the connection is interrupted.",
         );
-        const response = await fetch("/api/outbox/encrypted", {
-          method: "POST",
-          credentials: "same-origin",
-          redirect: "error",
-          headers: {
-            "Content-Type": "application/json",
-            "X-CSRF-Token": root.dataset.csrf,
+        const response = await fetch(
+          signingOnly ? "/api/outbox/signed" : "/api/outbox/encrypted",
+          {
+            method: "POST",
+            credentials: "same-origin",
+            redirect: "error",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRF-Token": root.dataset.csrf,
+            },
+            body: payload,
+            signal: request.signal,
           },
-          body: payload,
-          signal: request.signal,
-        });
+        );
         if (!response.ok) throw new Error("submission failed");
         const result = await response.json();
         if (

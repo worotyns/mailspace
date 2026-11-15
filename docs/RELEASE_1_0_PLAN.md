@@ -50,3 +50,8 @@ The next implementation slice is an explicit signed-only send contract and actio
 ### MS-006 authored signed transport foundation
 
 ADR-0037 connects a dedicated authored-only signed MIME endpoint to durable single-attempt SMTP/Sent transport. Application-generated Unicode and binary attachment octets are preserved and verified with GnuPG after delivery through the synthetic provider. Consent/provenance, structural MIME, ownership/CSRF, encrypted-original refusal, stale source and unchanged legacy nonce hashes are covered. Next is the visible full-composer action and client egress acceptance; Thunderbird and secure quoting remain open.
+
+
+### MS-006 full-composer signed-only action
+
+The full composer now exposes Sign only (unencrypted) with separate explicit consent and a truthful send button. Recipient keys are optional for that mode; verified sender/signing-key checks remain mandatory. Encrypted-source downgrade is disabled in the UI and rejected by the backend. Draft load, lock/hide and sent cleanup reset to encryption and revoke prior plaintext consent. HTTP reply-mode changes retain the selected original references. Client egress and isolated desktop/phone/short-window acceptance cover Unicode/binary attachments and single-attempt ambiguous outcomes. Signed-only implementation is complete for authored full-composer mail; real Thunderbird, secure quoting, broader compatibility/team/security/operations gates remain open.
